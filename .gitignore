@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+kaggle.json
+legacy_probe/_staged/
+runs/**/requests.jsonl
