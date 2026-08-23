@@ -1,0 +1,1388 @@
+4.2s 1 0.00s - Debugger warning: It seems that frozen modules are being used, which may
+4.2s 2 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+4.2s 3 0.00s - to python to disable frozen modules.
+4.2s 4 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+4.5s 5 0.00s - Debugger warning: It seems that frozen modules are being used, which may
+4.5s 6 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+4.5s 7 0.00s - to python to disable frozen modules.
+4.5s 8 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+5.2s 9 taaf.kaggle: TRUE_SUBMISSION=False
+7.4s 10 taaf.kaggle: source bundle = /kaggle/input/datasets/stephenkaskin/taaf-kaggle-source-duck-virelai-r0
+7.4s 11 taaf.kaggle: input paths = {"driessmit1/arc3-vllm-h100-wheelhouse-v3": "/kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3", "driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot": "/kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot", "stephenkaskin/taaf-kaggle-source-duck-virelai-r0": "/kaggle/input/datasets/stephenkaskin/taaf-kaggle-source-duck-virelai-r0"}
+7.4s 12 taaf.kaggle: wrote /usr/local/lib/python3.12/dist-packages/taaf_kaggle_sources.pth (3 source roots)
+7.4s 13 taaf.kaggle: setup command: "$PYTHON" - <<'PYSETUP'
+7.4s 14 import json
+7.4s 15 import os
+7.4s 16 import shutil
+7.4s 17 import subprocess
+7.4s 18 import sys
+7.4s 19 import time
+7.4s 20 import urllib.request
+7.4s 21 from pathlib import Path
+7.4s 22 
+7.4s 23 WHEELHOUSE_OWNER = 'driessmit1'
+7.4s 24 WHEELHOUSE_SLUG = 'arc3-vllm-h100-wheelhouse-v3'
+7.4s 25 MODEL_OWNER = 'driessmit1'
+7.4s 26 MODEL_SLUG = 'vrfai-qwen3-6-27b-fp8-hf-snapshot'
+7.4s 27 SERVED_MODEL_NAME = 'vrfai/Qwen3.6-27B-FP8'
+7.4s 28 VLLM_HOST = '127.0.0.1'
+7.4s 29 VLLM_PORT = 1234
+7.4s 30 VLLM_BASE_URL = f'http://{VLLM_HOST}:{VLLM_PORT}/v1'
+7.4s 31 VLLM_MAX_MODEL_LEN = 65536
+7.4s 32 ANALYZER_CONTEXT_WINDOW = 32768
+7.4s 33 VLLM_TENSOR_PARALLEL_SIZE = 1
+7.4s 34 WORKING_DIR = Path(os.environ['TAAF_KAGGLE_WORKING_DIR'])
+7.4s 35 SITE_PACKAGES = WORKING_DIR / 'vllm-site-packages'
+7.4s 36 VLLM_SERVER_LOG = WORKING_DIR / 'vllm-openai-server.log'
+7.4s 37 VLLM_SERVER_PID = WORKING_DIR / 'vllm-openai-server.pid'
+7.4s 38 INSTALL_STAMP = SITE_PACKAGES / f'.{WHEELHOUSE_SLUG}'
+7.4s 39 STAMP_TEXT = 'vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n'
+7.4s 40 
+7.4s 41 GPU_NAME_PATTERNS = {'rtx-pro-6000': ('rtx pro 6000',), 'h100': ('h100',), 'l4': ('l4',)}
+7.4s 42 
+7.4s 43 
+7.4s 44 def taaf_kaggle_input_paths() -> dict[str, Path]:
+7.4s 45 raw = os.getenv('TAAF_KAGGLE_INPUT_PATHS', '').strip()
+7.4s 46 if not raw:
+7.4s 47 return {}
+7.4s 48 data = json.loads(raw)
+7.4s 49 if not isinstance(data, dict):
+7.4s 50 raise RuntimeError('TAAF_KAGGLE_INPUT_PATHS must contain a JSON object.')
+7.4s 51 return {str(ref): Path(str(path)) for ref, path in data.items()}
+7.4s 52 
+7.4s 53 
+7.4s 54 def resolve_kaggle_dataset_path(owner: str, slug: str) -> Path:
+7.4s 55 mapped = taaf_kaggle_input_paths().get(f'{owner}/{slug}')
+7.4s 56 if mapped is not None:
+7.4s 57 return mapped
+7.4s 58 for dataset_path in (Path('/kaggle/input') / slug, Path('/kaggle/input/datasets') / owner / slug):
+7.4s 59 if dataset_path.exists():
+7.4s 60 return dataset_path
+7.4s 61 return Path('/kaggle/input') / slug
+7.4s 62 
+7.4s 63 
+7.4s 64 WHEELHOUSE = resolve_kaggle_dataset_path(WHEELHOUSE_OWNER, WHEELHOUSE_SLUG)
+7.4s 65 MODEL_PATH = resolve_kaggle_dataset_path(MODEL_OWNER, MODEL_SLUG)
+7.4s 66 
+7.4s 67 
+7.4s 68 def assert_expected_cuda_gpu() -> None:
+7.4s 69 if not Path('/kaggle/input').exists():
+7.4s 70 return
+7.4s 71 assert shutil.which('nvidia-smi'), 'CUDA GPU check failed: nvidia-smi is not available.'
+7.4s 72 result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], capture_output=True, text=True)
+7.4s 73 assert result.returncode == 0, f'nvidia-smi failed: {result.stderr.strip()}'
+7.4s 74 gpu_names = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+7.4s 75 assert gpu_names, 'nvidia-smi did not report any CUDA GPUs.'
+7.4s 76 expected_gpu_type = os.getenv('KAGGLE_GPU_TYPE', 'rtx-pro-6000').strip().lower()
+7.4s 77 expected_count = os.getenv('KAGGLE_GPU_COUNT', '1')
+7.4s 78 if expected_count.isdigit():
+7.4s 79 assert len(gpu_names) == int(expected_count), f'Expected {expected_count} CUDA GPU(s), found {gpu_names}'
+7.4s 80 patterns = GPU_NAME_PATTERNS.get(expected_gpu_type, (expected_gpu_type.replace('-', ' '),))
+7.4s 81 mismatched = [name for name in gpu_names if not any(pattern in name.lower() for pattern in patterns)]
+7.4s 82 assert not mismatched, f'Expected GPU type {expected_gpu_type!r}, found {gpu_names}'
+7.4s 83 print(f'CUDA GPU check passed for {expected_gpu_type} x{expected_count}: {gpu_names}', flush=True)
+7.4s 84 
+7.4s 85 
+7.4s 86 def vllm_env() -> dict[str, str]:
+7.4s 87 env = os.environ.copy()
+7.4s 88 existing = env.get('PYTHONPATH', '')
+7.4s 89 env['PYTHONPATH'] = str(SITE_PACKAGES) if not existing else f'{SITE_PACKAGES}{os.pathsep}{existing}'
+7.4s 90 env.update(
+7.4s 91 {
+7.4s 92 'USE_TF': '0',
+7.4s 93 'TRANSFORMERS_NO_TF': '1',
+7.4s 94 'TRANSFORMERS_NO_TORCHVISION': '1',
+7.4s 95 'VLLM_NO_USAGE_STATS': '1',
+7.4s 96 }
+7.4s 97 )
+7.4s 98 return env
+7.4s 99 
+7.4s 100 
+7.4s 101 def cached_install_is_usable() -> bool:
+7.4s 102 if not INSTALL_STAMP.exists() or INSTALL_STAMP.read_text(encoding='utf-8') != STAMP_TEXT:
+7.4s 103 return False
+7.4s 104 result = subprocess.run(
+7.4s 105 [sys.executable, '-c', "import vllm, torch; print(f'Cached vLLM {vllm.__version__}, torch {torch.__version__}')"],
+7.4s 106 env=vllm_env(),
+7.4s 107 text=True,
+7.4s 108 )
+7.4s 109 return result.returncode == 0
+7.4s 110 
+7.4s 111 
+7.4s 112 def install_vllm_wheelhouse() -> None:
+7.4s 113 requirements = WHEELHOUSE / 'requirements.lock'
+7.4s 114 if not requirements.exists():
+7.4s 115 raise FileNotFoundError(f'Missing wheelhouse lock file: {requirements}')
+7.4s 116 if cached_install_is_usable():
+7.4s 117 print(f'Using cached vLLM target install at {SITE_PACKAGES}', flush=True)
+7.4s 118 return
+7.4s 119 shutil.rmtree(SITE_PACKAGES, ignore_errors=True)
+7.4s 120 SITE_PACKAGES.mkdir(parents=True, exist_ok=True)
+7.4s 121 cmd = [
+7.4s 122 sys.executable,
+7.4s 123 '-m',
+7.4s 124 'pip',
+7.4s 125 'install',
+7.4s 126 '--no-index',
+7.4s 127 '--find-links',
+7.4s 128 str(WHEELHOUSE),
+7.4s 129 '--requirement',
+7.4s 130 str(requirements),
+7.4s 131 '--target',
+7.4s 132 str(SITE_PACKAGES),
+7.4s 133 '--upgrade',
+7.4s 134 '--ignore-installed',
+7.4s 135 '--only-binary',
+7.4s 136 ':all:',
+7.4s 137 '--no-compile',
+7.4s 138 '--disable-pip-version-check',
+7.4s 139 '--no-warn-conflicts',
+7.4s 140 ]
+7.4s 141 print('Installing vLLM wheelhouse into', SITE_PACKAGES, flush=True)
+7.4s 142 subprocess.run(cmd, check=True)
+7.4s 143 INSTALL_STAMP.write_text(STAMP_TEXT, encoding='utf-8')
+7.4s 144 
+7.4s 145 
+7.4s 146 def request_json(url: str, payload: dict | None = None, timeout: int = 30) -> dict:
+7.4s 147 data = None if payload is None else json.dumps(payload).encode('utf-8')
+7.4s 148 request = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+7.4s 149 with urllib.request.urlopen(request, timeout=timeout) as response:
+7.4s 150 return json.loads(response.read().decode('utf-8'))
+7.4s 151 
+7.4s 152 
+7.4s 153 def tail_server_log(lines: int = 80) -> str:
+7.4s 154 if not VLLM_SERVER_LOG.exists():
+7.4s 155 return ''
+7.4s 156 return '\n'.join(VLLM_SERVER_LOG.read_text(encoding='utf-8', errors='replace').splitlines()[-lines:])
+7.4s 157 
+7.4s 158 
+7.4s 159 def wait_for_vllm_server(timeout_seconds: int = 900) -> None:
+7.4s 160 deadline = time.monotonic() + timeout_seconds
+7.4s 161 url = f'{VLLM_BASE_URL}/models'
+7.4s 162 while time.monotonic() < deadline:
+7.4s 163 if VLLM_SERVER_PID.exists():
+7.4s 164 try:
+7.4s 165 os.kill(int(VLLM_SERVER_PID.read_text().strip()), 0)
+7.4s 166 except OSError as exc:
+7.4s 167 raise RuntimeError(f'vLLM server process is not alive: {exc}\n{tail_server_log()}') from exc
+7.4s 168 try:
+7.4s 169 models = request_json(url, timeout=5)
+7.4s 170 print('vLLM server ready:', models, flush=True)
+7.4s 171 return
+7.4s 172 except Exception:
+7.4s 173 time.sleep(5)
+7.4s 174 raise TimeoutError(f'Timed out waiting for vLLM server at {url}.\nLast server log lines:\n{tail_server_log()}')
+7.4s 175 
+7.4s 176 
+7.4s 177 def start_vllm_server() -> None:
+7.4s 178 install_vllm_wheelhouse()
+7.4s 179 VLLM_SERVER_LOG.parent.mkdir(parents=True, exist_ok=True)
+7.4s 180 VLLM_SERVER_PID.unlink(missing_ok=True)
+7.4s 181 log_handle = VLLM_SERVER_LOG.open('w', encoding='utf-8')
+7.4s 182 cmd = [
+7.4s 183 sys.executable,
+7.4s 184 '-m',
+7.4s 185 'vllm.entrypoints.openai.api_server',
+7.4s 186 '--model',
+7.4s 187 str(MODEL_PATH),
+7.4s 188 '--served-model-name',
+7.4s 189 SERVED_MODEL_NAME,
+7.4s 190 '--host',
+7.4s 191 VLLM_HOST,
+7.4s 192 '--port',
+7.4s 193 str(VLLM_PORT),
+7.4s 194 '--tensor-parallel-size',
+7.4s 195 str(VLLM_TENSOR_PARALLEL_SIZE),
+7.4s 196 '--enable-auto-tool-choice',
+7.4s 197 '--tool-call-parser',
+7.4s 198 'qwen3_coder',
+7.4s 199 '--generation-config',
+7.4s 200 'vllm',
+7.4s 201 '--enable-prefix-caching',
+7.4s 202 '--default-chat-template-kwargs',
+7.4s 203 '{"preserve_thinking": true}',
+7.4s 204 '--reasoning-parser',
+7.4s 205 'qwen3',
+7.4s 206 '--max-model-len',
+7.4s 207 str(VLLM_MAX_MODEL_LEN),
+7.4s 208 ]
+7.4s 209 print('Starting vLLM OpenAI server:', ' '.join(cmd), flush=True)
+7.4s 210 process = subprocess.Popen(cmd, env=vllm_env(), stdout=log_handle, stderr=subprocess.STDOUT, text=True)
+7.4s 211 VLLM_SERVER_PID.write_text(str(process.pid), encoding='utf-8')
+7.4s 212 wait_for_vllm_server()
+7.4s 213 
+7.4s 214 
+7.4s 215 def run_vllm_api_smoke_test() -> None:
+7.4s 216 payload = {
+7.4s 217 'model': SERVED_MODEL_NAME,
+7.4s 218 'messages': [{'role': 'user', 'content': 'Answer in one short sentence: what is 2 + 2?'}],
+7.4s 219 'temperature': 0.0,
+7.4s 220 'max_tokens': 96,
+7.4s 221 'chat_template_kwargs': {'enable_thinking': False},
+7.4s 222 }
+7.4s 223 response = request_json(f'{VLLM_BASE_URL}/chat/completions', payload=payload, timeout=120)
+7.4s 224 generated = response['choices'][0]['message'].get('content', '').strip()
+7.4s 225 print('\n' + '=' * 88, flush=True)
+7.4s 226 print('VLLM OPENAI SERVER QWEN SMOKE TEST REAL MODEL OUTPUT', flush=True)
+7.4s 227 print('Generated:', generated, flush=True)
+7.4s 228 print('=' * 88 + '\n', flush=True)
+7.4s 229 
+7.4s 230 
+7.4s 231 print(f'vLLM wheelhouse path: {WHEELHOUSE}', flush=True)
+7.4s 232 print(f'Qwen model path: {MODEL_PATH}', flush=True)
+7.4s 233 assert_expected_cuda_gpu()
+7.4s 234 missing = [str(path) for path in (WHEELHOUSE, MODEL_PATH) if not path.exists()]
+7.4s 235 if missing:
+7.4s 236 raise FileNotFoundError('Missing attached dataset path(s): ' + ', '.join(missing))
+7.4s 237 start_vllm_server()
+7.4s 238 run_vllm_api_smoke_test()
+7.4s 239 setup_env = {
+7.4s 240 'USE_TF': '0',
+7.4s 241 'TRANSFORMERS_NO_TF': '1',
+7.4s 242 'TRANSFORMERS_NO_TORCHVISION': '1',
+7.4s 243 'VLLM_NO_USAGE_STATS': '1',
+7.4s 244 'PYTHONPATH': str(SITE_PACKAGES) + os.pathsep + os.environ.get('PYTHONPATH', ''),
+7.4s 245 'LOCAL_ANALYZER_BASE_URL': VLLM_BASE_URL,
+7.4s 246 'OPENAI_BASE_URL': VLLM_BASE_URL,
+7.4s 247 'LOCAL_ANALYZER_PROVIDER': 'vllm',
+7.4s 248 'OPENAI_PROVIDER': 'vllm',
+7.4s 249 'LOCAL_ANALYZER_MODEL_ID': SERVED_MODEL_NAME,
+7.4s 250 'INFERENCE_ANALYZER_MODEL': SERVED_MODEL_NAME,
+7.4s 251 'LOCAL_ANALYZER_APP_NAME': 'ARC3 Agent Harness',
+7.4s 252 'LOCAL_ANALYZER_CONTEXT_WINDOW': str(ANALYZER_CONTEXT_WINDOW),
+7.4s 253 'LOCAL_ANALYZER_MAX_OUTPUT': '0',
+7.4s 254 'LOCAL_ANALYZER_TOOL_STEPS': '0',
+7.4s 255 'LOCAL_ANALYZER_TOOL_TIMEOUT': '30',
+7.4s 256 'LOCAL_ANALYZER_TOOL_OUTPUT_TOKENS': '1024',
+7.4s 257 'LOCAL_ANALYZER_YIELD_SECONDS': '60',
+7.4s 258 'LOCAL_ANALYZER_TEMPERATURE': '0.6',
+7.4s 259 'LOCAL_ANALYZER_TOP_P': '0.95',
+7.4s 260 'LOCAL_ANALYZER_TOP_K': '20',
+7.4s 261 'LOCAL_ANALYZER_ENABLE_THINKING': 'true',
+7.4s 262 'MULTIMODAL_CONTEXT': 'current_grid',
+7.4s 263 'MULTIMODAL_UPSCALE': '4',
+7.4s 264 }
+7.4s 265 setup_env_path = Path(os.environ['TAAF_KAGGLE_SETUP_ENV'])
+7.4s 266 existing_setup_env = {}
+7.4s 267 if setup_env_path.exists():
+7.4s 268 existing_setup_env = json.loads(setup_env_path.read_text(encoding='utf-8'))
+7.4s 269 if not isinstance(existing_setup_env, dict):
+7.4s 270 raise RuntimeError('TAAF_KAGGLE_SETUP_ENV must contain a JSON object.')
+7.4s 271 existing_setup_env.update(setup_env)
+7.4s 272 setup_env_path.write_text(json.dumps(existing_setup_env, indent=2), encoding='utf-8')
+7.4s 273 
+7.4s 274 PYSETUP
+7.5s 275 vLLM wheelhouse path: /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3
+7.5s 276 Qwen model path: /kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot
+7.5s 277 CUDA GPU check passed for rtx-pro-6000 x1: ['NVIDIA RTX PRO 6000 Blackwell Server Edition']
+7.5s 278 Installing vLLM wheelhouse into /kaggle/working/vllm-site-packages
+7.6s 279 vLLM wheelhouse path: /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3
+7.6s 280 Qwen model path: /kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot
+7.6s 281 CUDA GPU check passed for rtx-pro-6000 x1: ['NVIDIA RTX PRO 6000 Blackwell Server Edition']
+7.6s 282 Installing vLLM wheelhouse into /kaggle/working/vllm-site-packages
+7.8s 283 Looking in links: /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3
+7.8s 284 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/aiohappyeyeballs-2.6.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 1))
+7.8s 285 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/aiohttp-3.13.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 2))
+7.9s 286 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/aiosignal-1.4.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 3))
+7.9s 287 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/annotated_doc-0.0.4-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 4))
+7.9s 288 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/annotated_types-0.7.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 5))
+7.9s 289 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/anthropic-0.97.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 6))
+7.9s 290 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/anyio-4.13.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 7))
+7.9s 291 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/apache_tvm_ffi-0.1.10-cp312-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 8))
+8.0s 292 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/astor-0.8.1-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 9))
+8.0s 293 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/attrs-26.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 10))
+8.0s 294 Looking in links: /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3
+8.0s 295 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/aiohappyeyeballs-2.6.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 1))
+8.0s 296 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/aiohttp-3.13.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 2))
+8.0s 297 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/aiosignal-1.4.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 3))
+8.0s 298 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/annotated_doc-0.0.4-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 4))
+8.0s 299 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/annotated_types-0.7.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 5))
+8.0s 300 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/anthropic-0.97.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 6))
+8.0s 301 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/anyio-4.13.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 7))
+8.0s 302 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/apache_tvm_ffi-0.1.10-cp312-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 8))
+8.0s 303 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/astor-0.8.1-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 9))
+8.0s 304 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/attrs-26.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 10))
+8.0s 305 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/blake3-1.0.8-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 11))
+8.0s 306 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cachetools-7.0.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 12))
+8.0s 307 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cbor2-6.0.1-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 13))
+8.1s 308 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/certifi-2026.4.22-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 14))
+8.1s 309 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cffi-2.0.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 15))
+8.1s 310 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/charset_normalizer-3.4.7-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 16))
+8.1s 311 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/click-8.3.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 17))
+8.1s 312 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cloudpickle-3.1.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 18))
+8.1s 313 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/compressed_tensors-0.14.0.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 19))
+8.1s 314 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cryptography-47.0.0-cp311-abi3-manylinux_2_34_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 20))
+8.2s 315 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cuda_bindings-12.9.4-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 21))
+8.2s 316 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/blake3-1.0.8-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 11))
+8.2s 317 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cachetools-7.0.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 12))
+8.2s 318 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cbor2-6.0.1-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 13))
+8.2s 319 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/certifi-2026.4.22-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 14))
+8.2s 320 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cffi-2.0.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 15))
+8.2s 321 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/charset_normalizer-3.4.7-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 16))
+8.2s 322 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/click-8.3.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 17))
+8.2s 323 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cloudpickle-3.1.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 18))
+8.2s 324 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/compressed_tensors-0.14.0.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 19))
+8.2s 325 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cryptography-47.0.0-cp311-abi3-manylinux_2_34_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 20))
+8.2s 326 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cuda_bindings-12.9.4-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 21))
+8.4s 327 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cuda_pathfinder-1.5.4-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 22))
+8.4s 328 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cuda_python-12.9.4-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 23))
+8.4s 329 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/depyf-0.20.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 24))
+8.4s 330 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/dill-0.4.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 25))
+8.4s 331 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/diskcache-5.6.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 26))
+8.5s 332 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/distro-1.9.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 27))
+8.5s 333 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/dnspython-2.8.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 28))
+8.5s 334 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/docstring_parser-0.18.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 29))
+8.5s 335 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/einops-0.8.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 30))
+8.5s 336 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/email_validator-2.3.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 31))
+8.5s 337 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastapi_cli-0.0.24-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 32))
+8.5s 338 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastapi_cloud_cli-0.17.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 33))
+8.5s 339 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastapi-0.136.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 34))
+8.5s 340 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastar-0.11.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 35))
+8.6s 341 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/filelock-3.29.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 36))
+8.6s 342 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/flashinfer_cubin-0.6.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 37))
+8.6s 343 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cuda_pathfinder-1.5.4-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 22))
+8.6s 344 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/cuda_python-12.9.4-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 23))
+8.6s 345 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/depyf-0.20.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 24))
+8.6s 346 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/dill-0.4.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 25))
+8.6s 347 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/diskcache-5.6.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 26))
+8.6s 348 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/distro-1.9.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 27))
+8.6s 349 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/dnspython-2.8.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 28))
+8.6s 350 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/docstring_parser-0.18.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 29))
+8.6s 351 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/einops-0.8.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 30))
+8.6s 352 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/email_validator-2.3.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 31))
+8.6s 353 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastapi_cli-0.0.24-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 32))
+8.6s 354 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastapi_cloud_cli-0.17.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 33))
+8.6s 355 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastapi-0.136.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 34))
+8.6s 356 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fastar-0.11.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 35))
+8.6s 357 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/filelock-3.29.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 36))
+8.6s 358 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/flashinfer_cubin-0.6.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 37))
+11.7s 359 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/flashinfer_python-0.6.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 38))
+11.7s 360 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 39))
+11.7s 361 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fsspec-2026.4.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 40))
+11.8s 362 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/gguf-0.18.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 41))
+11.8s 363 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/googleapis_common_protos-1.74.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 42))
+11.8s 364 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/grpcio-1.80.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 43))
+11.8s 365 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/h11-0.16.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 44))
+11.8s 366 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/hf_xet-1.4.3-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 45))
+11.9s 367 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httpcore-1.0.9-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 46))
+11.9s 368 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/flashinfer_python-0.6.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 38))
+11.9s 369 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 39))
+11.9s 370 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/fsspec-2026.4.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 40))
+11.9s 371 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/gguf-0.18.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 41))
+11.9s 372 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/googleapis_common_protos-1.74.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 42))
+11.9s 373 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/grpcio-1.80.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 43))
+11.9s 374 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/h11-0.16.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 44))
+11.9s 375 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/hf_xet-1.4.3-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 45))
+11.9s 376 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httpcore-1.0.9-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 46))
+11.9s 377 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httptools-0.7.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 47))
+11.9s 378 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httpx_sse-0.4.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 48))
+11.9s 379 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httpx-0.28.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 49))
+11.9s 380 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/huggingface_hub-0.36.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 50))
+11.9s 381 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/idna-3.13-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 51))
+11.9s 382 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/ijson-3.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 52))
+11.9s 383 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/importlib_metadata-8.7.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 53))
+12.0s 384 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/interegular-0.3.3-py37-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 54))
+12.0s 385 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jinja2-3.1.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 55))
+12.0s 386 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jiter-0.14.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 56))
+12.0s 387 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jmespath-1.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 57))
+12.0s 388 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jsonschema_specifications-2025.9.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 58))
+12.0s 389 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jsonschema-4.26.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 59))
+12.0s 390 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/lark-1.2.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 60))
+12.0s 391 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/llguidance-1.3.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 61))
+12.1s 392 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/llvmlite-0.44.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 62))
+12.1s 393 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httptools-0.7.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 47))
+12.1s 394 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httpx_sse-0.4.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 48))
+12.1s 395 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/httpx-0.28.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 49))
+12.1s 396 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/huggingface_hub-0.36.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 50))
+12.1s 397 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/idna-3.13-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 51))
+12.1s 398 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/ijson-3.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 52))
+12.1s 399 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/importlib_metadata-8.7.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 53))
+12.1s 400 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/interegular-0.3.3-py37-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 54))
+12.1s 401 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jinja2-3.1.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 55))
+12.1s 402 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jiter-0.14.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 56))
+12.1s 403 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jmespath-1.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 57))
+12.1s 404 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jsonschema_specifications-2025.9.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 58))
+12.1s 405 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/jsonschema-4.26.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 59))
+12.1s 406 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/lark-1.2.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 60))
+12.1s 407 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/llguidance-1.3.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 61))
+12.1s 408 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/llvmlite-0.44.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 62))
+12.4s 409 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/lm_format_enforcer-0.11.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 63))
+12.5s 410 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/loguru-0.7.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 64))
+12.5s 411 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/markdown_it_py-4.0.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 65))
+12.5s 412 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 66))
+12.5s 413 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mcp-1.27.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 67))
+12.5s 414 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mdurl-0.1.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 68))
+12.5s 415 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mistral_common-1.11.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 69))
+12.5s 416 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/model_hosting_container_standards-0.1.14-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 70))
+12.5s 417 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mpmath-1.3.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 71))
+12.6s 418 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/msgspec-0.21.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 72))
+12.6s 419 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 73))
+12.6s 420 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/networkx-3.6.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 74))
+12.6s 421 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/ninja-1.13.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 75))
+12.6s 422 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/numba-0.61.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 76))
+12.6s 423 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 77))
+12.6s 424 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/lm_format_enforcer-0.11.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 63))
+12.6s 425 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/loguru-0.7.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 64))
+12.6s 426 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/markdown_it_py-4.0.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 65))
+12.6s 427 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 66))
+12.6s 428 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mcp-1.27.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 67))
+12.6s 429 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mdurl-0.1.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 68))
+12.6s 430 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mistral_common-1.11.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 69))
+12.6s 431 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/model_hosting_container_standards-0.1.14-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 70))
+12.6s 432 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/mpmath-1.3.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 71))
+12.6s 433 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/msgspec-0.21.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 72))
+12.6s 434 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 73))
+12.6s 435 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/networkx-3.6.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 74))
+12.6s 436 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/ninja-1.13.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 75))
+12.6s 437 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/numba-0.61.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 76))
+12.6s 438 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 77))
+12.8s 439 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 78))
+13.0s 440 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 78))
+15.7s 441 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cuda_cupti_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 79))
+15.7s 442 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cuda_nvrtc_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 80))
+15.9s 443 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cuda_cupti_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 79))
+15.9s 444 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cuda_nvrtc_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 80))
+16.1s 445 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cuda_runtime_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 81))
+16.1s 446 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 82))
+16.3s 447 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cuda_runtime_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 81))
+16.3s 448 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 82))
+19.6s 449 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cudnn_frontend-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 83))
+19.7s 450 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 84))
+19.8s 451 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cudnn_frontend-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 83))
+19.8s 452 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 84))
+20.9s 453 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cufile_cu12-1.13.1.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 85))
+20.9s 454 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_curand_cu12-10.3.9.90-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 86))
+21.1s 455 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cufile_cu12-1.13.1.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 85))
+21.1s 456 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_curand_cu12-10.3.9.90-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 86))
+21.3s 457 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 87))
+21.5s 458 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 87))
+22.7s 459 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 88))
+22.9s 460 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 88))
+24.1s 461 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 89))
+24.3s 462 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 89))
+25.4s 463 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cutlass_dsl_libs_base-4.5.0.dev0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 90))
+25.6s 464 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cutlass_dsl_libs_base-4.5.0.dev0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 90))
+25.8s 465 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cutlass_dsl-4.5.0.dev0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 91))
+25.8s 466 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_ml_py-13.595.45-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 92))
+25.8s 467 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nccl_cu12-2.27.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 93))
+26.0s 468 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_cutlass_dsl-4.5.0.dev0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 91))
+26.0s 469 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_ml_py-13.595.45-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 92))
+26.0s 470 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nccl_cu12-2.27.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 93))
+27.2s 471 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nvjitlink_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 94))
+27.4s 472 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 95))
+27.4s 473 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nvjitlink_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 94))
+27.4s 474 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 95))
+28.0s 475 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 96))
+28.0s 476 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/openai_harmony-0.0.8-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 97))
+28.1s 477 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/openai-2.33.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 98))
+28.1s 478 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opencv_python_headless-4.13.0.92-cp37-abi3-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 99))
+28.2s 479 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 96))
+28.2s 480 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/openai_harmony-0.0.8-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 97))
+28.2s 481 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/openai-2.33.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 98))
+28.2s 482 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opencv_python_headless-4.13.0.92-cp37-abi3-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 99))
+28.4s 483 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_api-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 100))
+28.4s 484 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp_proto_common-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 101))
+28.4s 485 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp_proto_grpc-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 102))
+28.5s 486 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp_proto_http-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 103))
+28.5s 487 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 104))
+28.5s 488 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_proto-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 105))
+28.5s 489 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_sdk-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 106))
+28.5s 490 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_semantic_conventions_ai-0.5.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 107))
+28.5s 491 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_semantic_conventions-0.62b1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 108))
+28.5s 492 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/outlines_core-0.2.11-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 109))
+28.5s 493 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/packaging-26.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 110))
+28.5s 494 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/partial_json_parser-0.2.1.1.post7-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 111))
+28.5s 495 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pillow-12.2.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 112))
+28.6s 496 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/prometheus_client-0.25.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 113))
+28.6s 497 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/prometheus_fastapi_instrumentator-7.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 114))
+28.6s 498 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/propcache-0.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 115))
+28.6s 499 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 116))
+28.6s 500 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 117))
+28.6s 501 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/py_cpuinfo-9.0.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 118))
+28.6s 502 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_api-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 100))
+28.6s 503 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp_proto_common-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 101))
+28.6s 504 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp_proto_grpc-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 102))
+28.6s 505 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp_proto_http-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 103))
+28.6s 506 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_exporter_otlp-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 104))
+28.6s 507 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_proto-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 105))
+28.6s 508 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_sdk-1.41.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 106))
+28.6s 509 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_semantic_conventions_ai-0.5.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 107))
+28.6s 510 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/opentelemetry_semantic_conventions-0.62b1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 108))
+28.6s 511 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/outlines_core-0.2.11-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 109))
+28.6s 512 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/packaging-26.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 110))
+28.6s 513 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/partial_json_parser-0.2.1.1.post7-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 111))
+28.6s 514 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pillow-12.2.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 112))
+28.6s 515 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/prometheus_client-0.25.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 113))
+28.6s 516 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/prometheus_fastapi_instrumentator-7.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 114))
+28.6s 517 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/propcache-0.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 115))
+28.6s 518 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 116))
+28.6s 519 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 117))
+28.6s 520 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/py_cpuinfo-9.0.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 118))
+28.6s 521 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pybase64-1.4.3-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 119))
+28.6s 522 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pycountry-26.2.16-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 120))
+28.7s 523 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pycparser-3.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 121))
+28.7s 524 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 122))
+28.7s 525 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic_extra_types-2.11.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 123))
+28.7s 526 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic_settings-2.14.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 124))
+28.7s 527 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic-2.13.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 125))
+28.7s 528 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pygments-2.20.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 126))
+28.8s 529 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pyjwt-2.12.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 127))
+28.8s 530 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/python_dotenv-1.2.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 128))
+28.8s 531 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/python_json_logger-4.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 129))
+28.8s 532 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/python_multipart-0.0.27-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 130))
+28.8s 533 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 131))
+28.8s 534 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pyzmq-27.1.0-cp312-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 132))
+28.8s 535 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/quack_kernels-0.4.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 133))
+28.8s 536 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/referencing-0.37.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 134))
+28.8s 537 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/regex-2026.4.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 135))
+28.8s 538 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pybase64-1.4.3-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 119))
+28.8s 539 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pycountry-26.2.16-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 120))
+28.8s 540 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pycparser-3.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 121))
+28.8s 541 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 122))
+28.8s 542 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic_extra_types-2.11.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 123))
+28.8s 543 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic_settings-2.14.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 124))
+28.8s 544 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pydantic-2.13.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 125))
+28.8s 545 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pygments-2.20.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 126))
+28.8s 546 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pyjwt-2.12.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 127))
+28.8s 547 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/python_dotenv-1.2.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 128))
+28.8s 548 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/python_json_logger-4.1.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 129))
+28.8s 549 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/python_multipart-0.0.27-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 130))
+28.8s 550 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 131))
+28.8s 551 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/pyzmq-27.1.0-cp312-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 132))
+28.8s 552 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/quack_kernels-0.4.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 133))
+28.8s 553 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/referencing-0.37.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 134))
+28.8s 554 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/regex-2026.4.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 135))
+28.8s 555 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requests-2.33.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 136))
+28.9s 556 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rich_toolkit-0.19.7-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 137))
+28.9s 557 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rich-15.0.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 138))
+28.9s 558 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rignore-0.7.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 139))
+28.9s 559 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rpds_py-0.30.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 140))
+28.9s 560 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/safetensors-0.7.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 141))
+28.9s 561 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sentencepiece-0.2.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 142))
+28.9s 562 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sentry_sdk-2.58.0-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 143))
+28.9s 563 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/setproctitle-1.3.7-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 144))
+28.9s 564 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/setuptools-80.10.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 145))
+29.0s 565 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/shellingham-1.5.4-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 146))
+29.0s 566 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/six-1.17.0-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 147))
+29.0s 567 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sniffio-1.3.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 148))
+29.0s 568 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sse_starlette-3.4.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 149))
+29.0s 569 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/starlette-0.52.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 150))
+29.0s 570 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/supervisor-4.3.0-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 151))
+29.0s 571 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sympy-1.14.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 152))
+29.0s 572 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requests-2.33.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 136))
+29.0s 573 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rich_toolkit-0.19.7-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 137))
+29.0s 574 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rich-15.0.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 138))
+29.0s 575 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rignore-0.7.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 139))
+29.0s 576 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/rpds_py-0.30.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 140))
+29.0s 577 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/safetensors-0.7.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 141))
+29.0s 578 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sentencepiece-0.2.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 142))
+29.0s 579 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sentry_sdk-2.58.0-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 143))
+29.0s 580 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/setproctitle-1.3.7-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 144))
+29.0s 581 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/setuptools-80.10.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 145))
+29.0s 582 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/shellingham-1.5.4-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 146))
+29.0s 583 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/six-1.17.0-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 147))
+29.0s 584 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sniffio-1.3.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 148))
+29.0s 585 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sse_starlette-3.4.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 149))
+29.0s 586 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/starlette-0.52.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 150))
+29.0s 587 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/supervisor-4.3.0-py2.py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 151))
+29.0s 588 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/sympy-1.14.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 152))
+29.1s 589 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tabulate-0.10.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 153))
+29.1s 590 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tiktoken-0.12.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 154))
+29.1s 591 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tokenizers-0.22.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 155))
+29.1s 592 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torch_c_dlpack_ext-0.1.5-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 156))
+29.1s 593 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torch-2.10.0-3-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 157))
+29.3s 594 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tabulate-0.10.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 153))
+29.3s 595 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tiktoken-0.12.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 154))
+29.3s 596 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tokenizers-0.22.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 155))
+29.3s 597 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torch_c_dlpack_ext-0.1.5-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 156))
+29.3s 598 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torch-2.10.0-3-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 157))
+33.2s 599 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torchaudio-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 158))
+33.3s 600 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torchvision-0.25.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 159))
+33.3s 601 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tqdm-4.67.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 160))
+33.3s 602 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/transformers-4.57.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 161))
+33.4s 603 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torchaudio-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 158))
+33.4s 604 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/torchvision-0.25.0-cp312-cp312-manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 159))
+33.4s 605 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/tqdm-4.67.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 160))
+33.4s 606 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/transformers-4.57.6-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 161))
+33.5s 607 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/triton-3.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 162))
+33.7s 608 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/triton-3.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 162))
+34.4s 609 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/typer-0.25.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 163))
+34.4s 610 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/typing_extensions-4.15.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 164))
+34.4s 611 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/typing_inspection-0.4.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 165))
+34.4s 612 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/urllib3-2.6.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 166))
+34.4s 613 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/uvicorn-0.46.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 167))
+34.4s 614 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 168))
+34.4s 615 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/vllm-0.19.0-cp38-abi3-manylinux_2_31_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 169))
+34.6s 616 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/typer-0.25.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 163))
+34.6s 617 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/typing_extensions-4.15.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 164))
+34.6s 618 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/typing_inspection-0.4.2-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 165))
+34.6s 619 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/urllib3-2.6.3-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 166))
+34.6s 620 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/uvicorn-0.46.0-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 167))
+34.6s 621 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 168))
+34.6s 622 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/vllm-0.19.0-cp38-abi3-manylinux_2_31_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 169))
+36.4s 623 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/watchfiles-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 170))
+36.4s 624 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/websockets-16.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 171))
+36.4s 625 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/xgrammar-0.1.34-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 172))
+36.6s 626 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/watchfiles-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 170))
+36.6s 627 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/websockets-16.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 171))
+36.6s 628 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/xgrammar-0.1.34-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 172))
+36.6s 629 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/yarl-1.23.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 173))
+36.6s 630 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/zipp-3.23.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 174))
+36.8s 631 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/yarl-1.23.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 173))
+36.8s 632 Processing /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/zipp-3.23.1-py3-none-any.whl (from -r /kaggle/input/datasets/driessmit1/arc3-vllm-h100-wheelhouse-v3/requirements.lock (line 174))
+37.0s 633 Installing collected packages: supervisor, py-cpuinfo, nvidia-ml-py, nvidia-cusparselt-cu12, mpmath, zipp, websockets, uvloop, urllib3, typing-extensions, triton, tqdm, tabulate, sympy, sniffio, six, shellingham, setuptools, setproctitle, sentencepiece, safetensors, rpds-py, rignore, regex, pyzmq, pyyaml, python-multipart, python-json-logger, python-dotenv, pyjwt, pygments, pycparser, pycountry, pybase64, psutil, protobuf, propcache, prometheus-client, pillow, partial-json-parser, packaging, outlines-core, nvidia-nvtx-cu12, nvidia-nvshmem-cu12, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufile-cu12, nvidia-cudnn-frontend, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, numpy, ninja, networkx, multidict, msgspec, mdurl, markupsafe, loguru, llvmlite, llguidance, lark, jmespath, jiter, interegular, ijson, idna, httpx-sse, httptools, hf-xet, h11, fsspec, frozenlist, flashinfer-cubin, filelock, fastar, einops, docstring-parser, dnspython, distro, diskcache, dill, cuda-pathfinder, cloudpickle, click, charset-normalizer, certifi, cbor2, cachetools, blake3, attrs, astor, annotated-types, annotated-doc, aiohappyeyeballs, yarl, uvicorn, typing-inspection, sentry-sdk, requests, referencing, pydantic-core, opentelemetry-proto, opencv-python-headless, nvidia-cusparse-cu12, nvidia-cufft-cu12, nvidia-cudnn-cu12, numba, markdown-it-py, jinja2, importlib-metadata, httpcore, grpcio, googleapis-common-protos, email-validator, depyf, cuda-bindings, cffi, apache-tvm-ffi, anyio, aiosignal, watchfiles, tiktoken, starlette, rich, pydantic, opentelemetry-exporter-otlp-proto-common, opentelemetry-api, nvidia-cusolver-cu12, jsonschema-specifications, huggingface-hub, httpx, gguf, cuda-python, cryptography, aiohttp, typer, torch, tokenizers, sse-starlette, rich-toolkit, pydantic-settings, pydantic-extra-types, prometheus-fastapi-instrumentator, opentelemetry-semantic-conventions, openai-harmony, openai, nvidia-cutlass-dsl-libs-base, lm-format-enforcer, jsonschema, fastapi, anthropic, transformers, torchvision, torchaudio, torch-c-dlpack-ext, opentelemetry-sdk, nvidia-cutlass-dsl, model-hosting-container-standards, mcp, fastapi-cloud-cli, fastapi-cli, xgrammar, quack-kernels, opentelemetry-semantic-conventions-ai, opentelemetry-exporter-otlp-proto-http, opentelemetry-exporter-otlp-proto-grpc, mistral-common, flashinfer-python, compressed-tensors, opentelemetry-exporter-otlp, vllm
+37.2s 634 Installing collected packages: supervisor, py-cpuinfo, nvidia-ml-py, nvidia-cusparselt-cu12, mpmath, zipp, websockets, uvloop, urllib3, typing-extensions, triton, tqdm, tabulate, sympy, sniffio, six, shellingham, setuptools, setproctitle, sentencepiece, safetensors, rpds-py, rignore, regex, pyzmq, pyyaml, python-multipart, python-json-logger, python-dotenv, pyjwt, pygments, pycparser, pycountry, pybase64, psutil, protobuf, propcache, prometheus-client, pillow, partial-json-parser, packaging, outlines-core, nvidia-nvtx-cu12, nvidia-nvshmem-cu12, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufile-cu12, nvidia-cudnn-frontend, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, numpy, ninja, networkx, multidict, msgspec, mdurl, markupsafe, loguru, llvmlite, llguidance, lark, jmespath, jiter, interegular, ijson, idna, httpx-sse, httptools, hf-xet, h11, fsspec, frozenlist, flashinfer-cubin, filelock, fastar, einops, docstring-parser, dnspython, distro, diskcache, dill, cuda-pathfinder, cloudpickle, click, charset-normalizer, certifi, cbor2, cachetools, blake3, attrs, astor, annotated-types, annotated-doc, aiohappyeyeballs, yarl, uvicorn, typing-inspection, sentry-sdk, requests, referencing, pydantic-core, opentelemetry-proto, opencv-python-headless, nvidia-cusparse-cu12, nvidia-cufft-cu12, nvidia-cudnn-cu12, numba, markdown-it-py, jinja2, importlib-metadata, httpcore, grpcio, googleapis-common-protos, email-validator, depyf, cuda-bindings, cffi, apache-tvm-ffi, anyio, aiosignal, watchfiles, tiktoken, starlette, rich, pydantic, opentelemetry-exporter-otlp-proto-common, opentelemetry-api, nvidia-cusolver-cu12, jsonschema-specifications, huggingface-hub, httpx, gguf, cuda-python, cryptography, aiohttp, typer, torch, tokenizers, sse-starlette, rich-toolkit, pydantic-settings, pydantic-extra-types, prometheus-fastapi-instrumentator, opentelemetry-semantic-conventions, openai-harmony, openai, nvidia-cutlass-dsl-libs-base, lm-format-enforcer, jsonschema, fastapi, anthropic, transformers, torchvision, torchaudio, torch-c-dlpack-ext, opentelemetry-sdk, nvidia-cutlass-dsl, model-hosting-container-standards, mcp, fastapi-cloud-cli, fastapi-cli, xgrammar, quack-kernels, opentelemetry-semantic-conventions-ai, opentelemetry-exporter-otlp-proto-http, opentelemetry-exporter-otlp-proto-grpc, mistral-common, flashinfer-python, compressed-tensors, opentelemetry-exporter-otlp, vllm
+87.0s 635 Successfully installed aiohappyeyeballs-2.6.1 aiohttp-3.13.5 aiosignal-1.4.0 annotated-doc-0.0.4 annotated-types-0.7.0 anthropic-0.97.0 anyio-4.13.0 apache-tvm-ffi-0.1.10 astor-0.8.1 attrs-26.1.0 blake3-1.0.8 cachetools-7.0.6 cbor2-6.0.1 certifi-2026.4.22 cffi-2.0.0 charset-normalizer-3.4.7 click-8.3.3 cloudpickle-3.1.2 compressed-tensors-0.14.0.1 cryptography-47.0.0 cuda-bindings-12.9.4 cuda-pathfinder-1.5.4 cuda-python-12.9.4 depyf-0.20.0 dill-0.4.1 diskcache-5.6.3 distro-1.9.0 dnspython-2.8.0 docstring-parser-0.18.0 einops-0.8.2 email-validator-2.3.0 fastapi-0.136.1 fastapi-cli-0.0.24 fastapi-cloud-cli-0.17.1 fastar-0.11.0 filelock-3.29.0 flashinfer-cubin-0.6.6 flashinfer-python-0.6.6 frozenlist-1.8.0 fsspec-2026.4.0 gguf-0.18.0 googleapis-common-protos-1.74.0 grpcio-1.80.0 h11-0.16.0 hf-xet-1.4.3 httpcore-1.0.9 httptools-0.7.1 httpx-0.28.1 httpx-sse-0.4.3 huggingface-hub-0.36.2 idna-3.13 ijson-3.5.0 importlib-metadata-8.7.1 interegular-0.3.3 jinja2-3.1.6 jiter-0.14.0 jmespath-1.1.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 lark-1.2.2 llguidance-1.3.0 llvmlite-0.44.0 lm-format-enforcer-0.11.3 loguru-0.7.3 markdown-it-py-4.0.0 markupsafe-3.0.3 mcp-1.27.0 mdurl-0.1.2 mistral-common-1.11.1 model-hosting-container-standards-0.1.14 mpmath-1.3.0 msgspec-0.21.1 multidict-6.7.1 networkx-3.6.1 ninja-1.13.0 numba-0.61.2 numpy-2.2.6 nvidia-cublas-cu12-12.8.4.1 nvidia-cuda-cupti-cu12-12.8.90 nvidia-cuda-nvrtc-cu12-12.8.93 nvidia-cuda-runtime-cu12-12.8.90 nvidia-cudnn-cu12-9.10.2.21 nvidia-cudnn-frontend-1.18.0 nvidia-cufft-cu12-11.3.3.83 nvidia-cufile-cu12-1.13.1.3 nvidia-curand-cu12-10.3.9.90 nvidia-cusolver-cu12-11.7.3.90 nvidia-cusparse-cu12-12.5.8.93 nvidia-cusparselt-cu12-0.7.1 nvidia-cutlass-dsl-4.5.0.dev0 nvidia-cutlass-dsl-libs-base-4.5.0.dev0 nvidia-ml-py-13.595.45 nvidia-nccl-cu12-2.27.5 nvidia-nvjitlink-cu12-12.8.93 nvidia-nvshmem-cu12-3.4.5 nvidia-nvtx-cu12-12.8.90 openai-2.33.0 openai-harmony-0.0.8 opencv-python-headless-4.13.0.92 opentelemetry-api-1.41.1 opentelemetry-exporter-otlp-1.41.1 opentelemetry-exporter-otlp-proto-common-1.41.1 opentelemetry-exporter-otlp-proto-grpc-1.41.1 opentelemetry-exporter-otlp-proto-http-1.41.1 opentelemetry-proto-1.41.1 opentelemetry-sdk-1.41.1 opentelemetry-semantic-conventions-0.62b1 opentelemetry-semantic-conventions-ai-0.5.1 outlines-core-0.2.11 packaging-26.2 partial-json-parser-0.2.1.1.post7 pillow-12.2.0 prometheus-client-0.25.0 prometheus-fastapi-instrumentator-7.1.0 propcache-0.4.1 protobuf-6.33.6 psutil-7.2.2 py-cpuinfo-9.0.0 pybase64-1.4.3 pycountry-26.2.16 pycparser-3.0 pydantic-2.13.3 pydantic-core-2.46.3 pydantic-extra-types-2.11.1 pydantic-settings-2.14.0 pygments-2.20.0 pyjwt-2.12.1 python-dotenv-1.2.2 python-json-logger-4.1.0 python-multipart-0.0.27 pyyaml-6.0.3 pyzmq-27.1.0 quack-kernels-0.4.1 referencing-0.37.0 regex-2026.4.4 requests-2.33.1 rich-15.0.0 rich-toolkit-0.19.7 rignore-0.7.6 rpds-py-0.30.0 safetensors-0.7.0 sentencepiece-0.2.1 sentry-sdk-2.58.0 setproctitle-1.3.7 setuptools-80.10.2 shellingham-1.5.4 six-1.17.0 sniffio-1.3.1 sse-starlette-3.4.1 starlette-0.52.1 supervisor-4.3.0 sympy-1.14.0 tabulate-0.10.0 tiktoken-0.12.0 tokenizers-0.22.2 torch-2.10.0 torch-c-dlpack-ext-0.1.5 torchaudio-2.10.0 torchvision-0.25.0 tqdm-4.67.3 transformers-4.57.6 triton-3.6.0 typer-0.25.1 typing-extensions-4.15.0 typing-inspection-0.4.2 urllib3-2.6.3 uvicorn-0.46.0 uvloop-0.22.1 vllm-0.19.0 watchfiles-1.1.1 websockets-16.0 xgrammar-0.1.34 yarl-1.23.0 zipp-3.23.1
+87.3s 636 Successfully installed aiohappyeyeballs-2.6.1 aiohttp-3.13.5 aiosignal-1.4.0 annotated-doc-0.0.4 annotated-types-0.7.0 anthropic-0.97.0 anyio-4.13.0 apache-tvm-ffi-0.1.10 astor-0.8.1 attrs-26.1.0 blake3-1.0.8 cachetools-7.0.6 cbor2-6.0.1 certifi-2026.4.22 cffi-2.0.0 charset-normalizer-3.4.7 click-8.3.3 cloudpickle-3.1.2 compressed-tensors-0.14.0.1 cryptography-47.0.0 cuda-bindings-12.9.4 cuda-pathfinder-1.5.4 cuda-python-12.9.4 depyf-0.20.0 dill-0.4.1 diskcache-5.6.3 distro-1.9.0 dnspython-2.8.0 docstring-parser-0.18.0 einops-0.8.2 email-validator-2.3.0 fastapi-0.136.1 fastapi-cli-0.0.24 fastapi-cloud-cli-0.17.1 fastar-0.11.0 filelock-3.29.0 flashinfer-cubin-0.6.6 flashinfer-python-0.6.6 frozenlist-1.8.0 fsspec-2026.4.0 gguf-0.18.0 googleapis-common-protos-1.74.0 grpcio-1.80.0 h11-0.16.0 hf-xet-1.4.3 httpcore-1.0.9 httptools-0.7.1 httpx-0.28.1 httpx-sse-0.4.3 huggingface-hub-0.36.2 idna-3.13 ijson-3.5.0 importlib-metadata-8.7.1 interegular-0.3.3 jinja2-3.1.6 jiter-0.14.0 jmespath-1.1.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 lark-1.2.2 llguidance-1.3.0 llvmlite-0.44.0 lm-format-enforcer-0.11.3 loguru-0.7.3 markdown-it-py-4.0.0 markupsafe-3.0.3 mcp-1.27.0 mdurl-0.1.2 mistral-common-1.11.1 model-hosting-container-standards-0.1.14 mpmath-1.3.0 msgspec-0.21.1 multidict-6.7.1 networkx-3.6.1 ninja-1.13.0 numba-0.61.2 numpy-2.2.6 nvidia-cublas-cu12-12.8.4.1 nvidia-cuda-cupti-cu12-12.8.90 nvidia-cuda-nvrtc-cu12-12.8.93 nvidia-cuda-runtime-cu12-12.8.90 nvidia-cudnn-cu12-9.10.2.21 nvidia-cudnn-frontend-1.18.0 nvidia-cufft-cu12-11.3.3.83 nvidia-cufile-cu12-1.13.1.3 nvidia-curand-cu12-10.3.9.90 nvidia-cusolver-cu12-11.7.3.90 nvidia-cusparse-cu12-12.5.8.93 nvidia-cusparselt-cu12-0.7.1 nvidia-cutlass-dsl-4.5.0.dev0 nvidia-cutlass-dsl-libs-base-4.5.0.dev0 nvidia-ml-py-13.595.45 nvidia-nccl-cu12-2.27.5 nvidia-nvjitlink-cu12-12.8.93 nvidia-nvshmem-cu12-3.4.5 nvidia-nvtx-cu12-12.8.90 openai-2.33.0 openai-harmony-0.0.8 opencv-python-headless-4.13.0.92 opentelemetry-api-1.41.1 opentelemetry-exporter-otlp-1.41.1 opentelemetry-exporter-otlp-proto-common-1.41.1 opentelemetry-exporter-otlp-proto-grpc-1.41.1 opentelemetry-exporter-otlp-proto-http-1.41.1 opentelemetry-proto-1.41.1 opentelemetry-sdk-1.41.1 opentelemetry-semantic-conventions-0.62b1 opentelemetry-semantic-conventions-ai-0.5.1 outlines-core-0.2.11 packaging-26.2 partial-json-parser-0.2.1.1.post7 pillow-12.2.0 prometheus-client-0.25.0 prometheus-fastapi-instrumentator-7.1.0 propcache-0.4.1 protobuf-6.33.6 psutil-7.2.2 py-cpuinfo-9.0.0 pybase64-1.4.3 pycountry-26.2.16 pycparser-3.0 pydantic-2.13.3 pydantic-core-2.46.3 pydantic-extra-types-2.11.1 pydantic-settings-2.14.0 pygments-2.20.0 pyjwt-2.12.1 python-dotenv-1.2.2 python-json-logger-4.1.0 python-multipart-0.0.27 pyyaml-6.0.3 pyzmq-27.1.0 quack-kernels-0.4.1 referencing-0.37.0 regex-2026.4.4 requests-2.33.1 rich-15.0.0 rich-toolkit-0.19.7 rignore-0.7.6 rpds-py-0.30.0 safetensors-0.7.0 sentencepiece-0.2.1 sentry-sdk-2.58.0 setproctitle-1.3.7 setuptools-80.10.2 shellingham-1.5.4 six-1.17.0 sniffio-1.3.1 sse-starlette-3.4.1 starlette-0.52.1 supervisor-4.3.0 sympy-1.14.0 tabulate-0.10.0 tiktoken-0.12.0 tokenizers-0.22.2 torch-2.10.0 torch-c-dlpack-ext-0.1.5 torchaudio-2.10.0 torchvision-0.25.0 tqdm-4.67.3 transformers-4.57.6 triton-3.6.0 typer-0.25.1 typing-extensions-4.15.0 typing-inspection-0.4.2 urllib3-2.6.3 uvicorn-0.46.0 uvloop-0.22.1 vllm-0.19.0 watchfiles-1.1.1 websockets-16.0 xgrammar-0.1.34 yarl-1.23.0 zipp-3.23.1
+93.7s 637 Starting vLLM OpenAI server: /usr/bin/python3 -m vllm.entrypoints.openai.api_server --model /kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot --served-model-name vrfai/Qwen3.6-27B-FP8 --host 127.0.0.1 --port 1234 --tensor-parallel-size 1 --enable-auto-tool-choice --tool-call-parser qwen3_coder --generation-config vllm --enable-prefix-caching --default-chat-template-kwargs {"preserve_thinking": true} --reasoning-parser qwen3 --max-model-len 65536
+93.9s 638 Starting vLLM OpenAI server: /usr/bin/python3 -m vllm.entrypoints.openai.api_server --model /kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot --served-model-name vrfai/Qwen3.6-27B-FP8 --host 127.0.0.1 --port 1234 --tensor-parallel-size 1 --enable-auto-tool-choice --tool-call-parser qwen3_coder --generation-config vllm --enable-prefix-caching --default-chat-template-kwargs {"preserve_thinking": true} --reasoning-parser qwen3 --max-model-len 65536
+503.8s 639 vLLM server ready: {'object': 'list', 'data': [{'id': 'vrfai/Qwen3.6-27B-FP8', 'object': 'model', 'created': 1787509412, 'owned_by': 'vllm', 'root': '/kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot', 'parent': None, 'max_model_len': 65536, 'permission': [{'id': 'modelperm-89de963c13173666', 'object': 'model_permission', 'created': 1787509412, 'allow_create_engine': False, 'allow_sampling': True, 'allow_logprobs': True, 'allow_search_indices': False, 'allow_view': True, 'allow_fine_tuning': False, 'organization': '*', 'group': None, 'is_blocking': False}]}]}
+504.0s 640 vLLM server ready: {'object': 'list', 'data': [{'id': 'vrfai/Qwen3.6-27B-FP8', 'object': 'model', 'created': 1787509412, 'owned_by': 'vllm', 'root': '/kaggle/input/datasets/driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot', 'parent': None, 'max_model_len': 65536, 'permission': [{'id': 'modelperm-89de963c13173666', 'object': 'model_permission', 'created': 1787509412, 'allow_create_engine': False, 'allow_sampling': True, 'allow_logprobs': True, 'allow_search_indices': False, 'allow_view': True, 'allow_fine_tuning': False, 'organization': '*', 'group': None, 'is_blocking': False}]}]}
+526.1s 641 
+526.1s 642 ========================================================================================
+526.1s 643 VLLM OPENAI SERVER QWEN SMOKE TEST REAL MODEL OUTPUT
+526.1s 644 Generated: 2 + 2 equals 4.
+526.1s 645 ========================================================================================
+526.1s 646 
+526.1s 647 
+526.1s 648 ========================================================================================
+526.1s 649 VLLM OPENAI SERVER QWEN SMOKE TEST REAL MODEL OUTPUT
+526.1s 650 Generated: 2 + 2 equals 4.
+526.1s 651 ========================================================================================
+526.1s 652 
+527.2s 653 benchmark.label : duck-virelai-r0-dryrun
+527.2s 654 benchmark.solver: HarnessSolver(label='duck-harness', runtime_environment=None, job_dir=None, soft_end_time=None, minimal_diagnostics=False, model='local', analyzer_timeout=900.0, max_actions_per_game=None, max_runtime_s_per_game=7920.0, concurrency=28, save_request_logs=False, start_local_server=False, local_server_config='', local_server_api_key_file='', local_server_repo_dir='/home/claude/duck-virelai/baseline/duck-harness/ARC3-Inference', local_server_port=None, local_server_tensor_parallel_size=None, local_server_count=1, cancel_drain_timeout_s=120.0)
+527.2s 655 benchmark.passes: 1
+527.2s 656 benchmark.games : 25
+527.2s 657 git status:
+527.2s 658 ARC3-Inference                   7143ad5     DIRTY  main                      CORRECTIVE: complete the baseline freeze — first freeze sil…
+527.2s 659 tufa-arc-agi-framework           7143ad5     DIRTY  main                      CORRECTIVE: complete the baseline freeze — first freeze sil…
+1130.5s 660 benchmark: regenerated diagnostics in /kaggle/working in 2.45s
+1130.5s 661 benchmark: duck-virelai-r0-dryrun
+1130.5s 662 solver:    duck-harness
+1130.5s 663 games:     25
+1130.5s 664 passes:    1
+1130.5s 665 runs:      25 (won: 0)
+1130.5s 666 started:   2026-08-23 18:23:56
+1130.5s 667 ended:     in progress
+1130.5s 668 mean score:    0.11
+1130.5s 669 median score:  0.00
+1130.5s 670 total actions: 200
+1130.5s 671 total tokens:  136975
+1130.5s 672 generated tokens/sec: 227.09 (job wallclock)
+1130.5s 673 total wallclock: 11705.3s
+1130.5s 674 
+1130.5s 675 per-game (mean across passes):
+1130.5s 676 ar25-0c556536: score=0.00, levels=0.0/8, actions=8, tokens=6388
+1130.5s 677 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=10, tokens=6036
+1130.5s 678 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=10, tokens=6390
+1130.5s 679 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=24, tokens=6496
+1130.5s 680 dc22-fdcac232: score=0.00, levels=0.0/6, actions=3, tokens=4394
+1130.5s 681 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=2, tokens=3413
+1130.5s 682 g50t-5849a774: score=0.00, levels=0.0/7, actions=1, tokens=4627
+1130.5s 683 ka59-38d34dbb: score=0.00, levels=0.0/7, actions=4, tokens=5194
+1130.5s 684 lf52-271a04aa: score=0.00, levels=0.0/10, actions=2, tokens=5479
+1130.5s 685 lp85-305b61c3: score=0.00, levels=0.0/8, actions=2, tokens=5341
+1130.5s 686 ls20-9607627b: score=0.00, levels=0.0/7, actions=4, tokens=5703
+1130.5s 687 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=14, tokens=4769
+1130.5s 688 r11l-495a7899: score=0.00, levels=0.0/6, actions=3, tokens=5897
+1130.5s 689 re86-8af5384d: score=0.00, levels=0.0/8, actions=8, tokens=4469
+1130.5s 690 s5i5-18d95033: score=0.00, levels=0.0/8, actions=3, tokens=5687
+1130.5s 691 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=25, tokens=6107
+1130.5s 692 sc25-635fd71a: score=0.00, levels=0.0/6, actions=19, tokens=5202
+1130.5s 693 sk48-d8078629: score=0.00, levels=0.0/8, actions=15, tokens=5304
+1130.5s 694 sp80-589a99af: score=0.00, levels=0.0/6, actions=22, tokens=6407
+1130.5s 695 su15-1944f8ab: score=0.00, levels=0.0/9, actions=2, tokens=5364
+1130.5s 696 tn36-ef4dde99: score=0.00, levels=0.0/7, actions=3, tokens=5305
+1130.5s 697 tr87-cd924810: score=0.00, levels=0.0/6, actions=5, tokens=4769
+1130.5s 698 tu93-0768757b: score=0.00, levels=0.0/9, actions=1, tokens=5686
+1130.5s 699 vc33-5430563c: score=0.00, levels=0.0/7, actions=4, tokens=6252
+1130.5s 700 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=6, tokens=6296
+1130.5s 701 
+1733.2s 702 benchmark: regenerated diagnostics in /kaggle/working in 2.59s
+1733.2s 703 benchmark: duck-virelai-r0-dryrun
+1733.2s 704 solver:    duck-harness
+1733.2s 705 games:     25
+1733.2s 706 passes:    1
+1733.2s 707 runs:      25 (won: 0)
+1733.2s 708 started:   2026-08-23 18:23:56
+1733.2s 709 ended:     in progress
+1733.2s 710 mean score:    0.20
+1733.2s 711 median score:  0.00
+1733.2s 712 total actions: 438
+1733.2s 713 total tokens:  257611
+1733.2s 714 generated tokens/sec: 213.63 (job wallclock)
+1733.2s 715 total wallclock: 27157.0s
+1733.2s 716 
+1733.2s 717 per-game (mean across passes):
+1733.2s 718 ar25-0c556536: score=0.00, levels=0.0/8, actions=16, tokens=10186
+1733.2s 719 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=31, tokens=10607
+1733.2s 720 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=18, tokens=11010
+1733.2s 721 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=42, tokens=10733
+1733.2s 722 dc22-fdcac232: score=0.00, levels=0.0/6, actions=5, tokens=9987
+1733.2s 723 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=4, tokens=8723
+1733.2s 724 g50t-5849a774: score=0.00, levels=0.0/7, actions=2, tokens=9777
+1733.2s 725 ka59-38d34dbb: score=0.00, levels=0.0/7, actions=19, tokens=10914
+1733.2s 726 lf52-271a04aa: score=0.00, levels=0.0/10, actions=4, tokens=10048
+1733.2s 727 lp85-305b61c3: score=0.00, levels=0.0/8, actions=4, tokens=9851
+1733.2s 728 ls20-9607627b: score=0.00, levels=0.0/7, actions=11, tokens=10470
+1733.2s 729 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=58, tokens=9326
+1733.2s 730 r11l-495a7899: score=0.00, levels=0.0/6, actions=6, tokens=9881
+1733.2s 731 re86-8af5384d: score=0.00, levels=0.0/8, actions=15, tokens=9809
+1733.2s 732 s5i5-18d95033: score=0.00, levels=0.0/8, actions=9, tokens=10633
+1733.2s 733 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=28, tokens=10736
+1733.2s 734 sc25-635fd71a: score=0.00, levels=0.0/6, actions=27, tokens=10167
+1733.2s 735 sk48-d8078629: score=0.00, levels=0.0/8, actions=20, tokens=10975
+1733.2s 736 sp80-589a99af: score=0.00, levels=0.0/6, actions=39, tokens=9895
+1733.2s 737 su15-1944f8ab: score=2.22, levels=1.0/9, actions=20, tokens=10496
+1733.2s 738 tn36-ef4dde99: score=0.00, levels=0.0/7, actions=8, tokens=10330
+1733.2s 739 tr87-cd924810: score=0.00, levels=0.0/6, actions=18, tokens=10605
+1733.2s 740 tu93-0768757b: score=0.00, levels=0.0/9, actions=8, tokens=11183
+1733.2s 741 vc33-5430563c: score=0.00, levels=0.0/7, actions=12, tokens=10650
+1733.2s 742 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=14, tokens=10619
+1733.2s 743 
+2335.8s 744 benchmark: regenerated diagnostics in /kaggle/working in 2.51s
+2335.8s 745 benchmark: duck-virelai-r0-dryrun
+2335.8s 746 solver:    duck-harness
+2335.8s 747 games:     25
+2335.8s 748 passes:    1
+2335.8s 749 runs:      25 (won: 0)
+2335.8s 750 started:   2026-08-23 18:23:56
+2335.8s 751 ended:     in progress
+2335.8s 752 mean score:    0.20
+2335.8s 753 median score:  0.00
+2335.8s 754 total actions: 793
+2335.8s 755 total tokens:  371489
+2335.8s 756 generated tokens/sec: 205.41 (job wallclock)
+2335.8s 757 total wallclock: 41002.9s
+2335.8s 758 
+2335.8s 759 per-game (mean across passes):
+2335.8s 760 ar25-0c556536: score=0.00, levels=0.0/8, actions=41, tokens=15812
+2335.8s 761 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=56, tokens=15390
+2335.8s 762 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=19, tokens=13052
+2335.8s 763 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=65, tokens=15789
+2335.8s 764 dc22-fdcac232: score=0.00, levels=0.0/6, actions=7, tokens=15504
+2335.8s 765 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=12, tokens=15888
+2335.8s 766 g50t-5849a774: score=0.00, levels=0.0/7, actions=4, tokens=13652
+2335.8s 767 ka59-38d34dbb: score=0.00, levels=0.0/7, actions=25, tokens=15515
+2335.8s 768 lf52-271a04aa: score=0.00, levels=0.0/10, actions=8, tokens=15793
+2335.8s 769 lp85-305b61c3: score=0.00, levels=0.0/8, actions=4, tokens=9851
+2335.8s 770 ls20-9607627b: score=0.00, levels=0.0/7, actions=36, tokens=16018
+2335.8s 771 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=96, tokens=13940
+2335.8s 772 r11l-495a7899: score=0.00, levels=0.0/6, actions=11, tokens=15690
+2335.8s 773 re86-8af5384d: score=0.00, levels=0.0/8, actions=22, tokens=12412
+2335.8s 774 s5i5-18d95033: score=0.00, levels=0.0/8, actions=16, tokens=15662
+2335.8s 775 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=37, tokens=14321
+2335.8s 776 sc25-635fd71a: score=0.00, levels=0.0/6, actions=37, tokens=15769
+2335.8s 777 sk48-d8078629: score=0.00, levels=0.0/8, actions=60, tokens=13795
+2335.8s 778 sp80-589a99af: score=0.00, levels=0.0/6, actions=48, tokens=15977
+2335.8s 779 su15-1944f8ab: score=2.22, levels=1.0/9, actions=26, tokens=15318
+2335.8s 780 tn36-ef4dde99: score=0.00, levels=0.0/7, actions=17, tokens=16181
+2335.8s 781 tr87-cd924810: score=0.00, levels=0.0/6, actions=71, tokens=14340
+2335.8s 782 tu93-0768757b: score=0.00, levels=0.0/9, actions=14, tokens=15978
+2335.8s 783 vc33-5430563c: score=0.00, levels=0.0/7, actions=41, tokens=14638
+2335.8s 784 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=20, tokens=15204
+2335.8s 785 
+2938.4s 786 benchmark: regenerated diagnostics in /kaggle/working in 2.51s
+2938.4s 787 benchmark: duck-virelai-r0-dryrun
+2938.4s 788 solver:    duck-harness
+2938.4s 789 games:     25
+2938.4s 790 passes:    1
+2938.4s 791 runs:      25 (won: 0)
+2938.4s 792 started:   2026-08-23 18:23:56
+2938.4s 793 ended:     in progress
+2938.4s 794 mean score:    0.39
+2938.4s 795 median score:  0.00
+2938.4s 796 total actions: 1122
+2938.4s 797 total tokens:  498326
+2938.4s 798 generated tokens/sec: 206.68 (job wallclock)
+2938.4s 799 total wallclock: 55538.9s
+2938.4s 800 
+2938.4s 801 per-game (mean across passes):
+2938.4s 802 ar25-0c556536: score=0.00, levels=0.0/8, actions=46, tokens=19762
+2938.4s 803 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=103, tokens=20130
+2938.4s 804 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=30, tokens=21417
+2938.4s 805 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=87, tokens=20862
+2938.4s 806 dc22-fdcac232: score=0.00, levels=0.0/6, actions=12, tokens=21653
+2938.4s 807 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=27, tokens=20934
+2938.4s 808 g50t-5849a774: score=0.00, levels=0.0/7, actions=5, tokens=16987
+2938.4s 809 ka59-38d34dbb: score=0.00, levels=0.0/7, actions=34, tokens=20777
+2938.4s 810 lf52-271a04aa: score=0.00, levels=0.0/10, actions=12, tokens=21185
+2938.4s 811 lp85-305b61c3: score=0.00, levels=0.0/8, actions=5, tokens=17162
+2938.4s 812 ls20-9607627b: score=0.00, levels=0.0/7, actions=60, tokens=18560
+2938.4s 813 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=110, tokens=19171
+2938.4s 814 r11l-495a7899: score=4.76, levels=1.0/6, actions=15, tokens=20956
+2938.4s 815 re86-8af5384d: score=0.00, levels=0.0/8, actions=34, tokens=18697
+2938.4s 816 s5i5-18d95033: score=0.00, levels=0.0/8, actions=26, tokens=21199
+2938.4s 817 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=51, tokens=21579
+2938.4s 818 sc25-635fd71a: score=0.00, levels=0.0/6, actions=58, tokens=21183
+2938.4s 819 sk48-d8078629: score=0.00, levels=0.0/8, actions=65, tokens=17922
+2938.4s 820 sp80-589a99af: score=0.00, levels=0.0/6, actions=70, tokens=21143
+2938.4s 821 su15-1944f8ab: score=2.22, levels=1.0/9, actions=33, tokens=21031
+2938.4s 822 tn36-ef4dde99: score=0.00, levels=0.0/7, actions=19, tokens=20234
+2938.4s 823 tr87-cd924810: score=0.00, levels=0.0/6, actions=129, tokens=20602
+2938.4s 824 tu93-0768757b: score=0.00, levels=0.0/9, actions=14, tokens=15978
+2938.4s 825 vc33-5430563c: score=0.00, levels=0.0/7, actions=52, tokens=19980
+2938.4s 826 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=25, tokens=19222
+2938.4s 827 
+3540.6s 828 benchmark: regenerated diagnostics in /kaggle/working in 2.13s
+3540.6s 829 benchmark: duck-virelai-r0-dryrun
+3540.6s 830 solver:    duck-harness
+3540.6s 831 games:     25
+3540.6s 832 passes:    1
+3540.6s 833 runs:      25 (won: 0)
+3540.6s 834 started:   2026-08-23 18:23:56
+3540.6s 835 ended:     in progress
+3540.6s 836 mean score:    0.48
+3540.6s 837 median score:  0.00
+3540.6s 838 total actions: 1376
+3540.6s 839 total tokens:  621700
+3540.6s 840 generated tokens/sec: 206.32 (job wallclock)
+3540.6s 841 total wallclock: 69379.1s
+3540.6s 842 
+3540.6s 843 per-game (mean across passes):
+3540.6s 844 ar25-0c556536: score=0.00, levels=0.0/8, actions=69, tokens=26857
+3540.6s 845 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=128, tokens=26182
+3540.6s 846 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=37, tokens=25767
+3540.6s 847 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=115, tokens=26043
+3540.6s 848 dc22-fdcac232: score=0.00, levels=0.0/6, actions=14, tokens=24093
+3540.6s 849 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=38, tokens=24807
+3540.6s 850 g50t-5849a774: score=0.00, levels=0.0/7, actions=5, tokens=16987
+3540.6s 851 ka59-38d34dbb: score=0.00, levels=0.0/7, actions=49, tokens=25908
+3540.6s 852 lf52-271a04aa: score=0.00, levels=0.0/10, actions=17, tokens=26846
+3540.6s 853 lp85-305b61c3: score=0.00, levels=0.0/8, actions=6, tokens=23095
+3540.6s 854 ls20-9607627b: score=0.00, levels=0.0/7, actions=67, tokens=25504
+3540.6s 855 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=129, tokens=25804
+3540.6s 856 r11l-495a7899: score=4.76, levels=1.0/6, actions=18, tokens=25945
+3540.6s 857 re86-8af5384d: score=0.00, levels=0.0/8, actions=34, tokens=18697
+3540.6s 858 s5i5-18d95033: score=0.00, levels=0.0/8, actions=32, tokens=26556
+3540.6s 859 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=55, tokens=23626
+3540.6s 860 sc25-635fd71a: score=1.16, levels=1.0/6, actions=75, tokens=26166
+3540.6s 861 sk48-d8078629: score=0.00, levels=0.0/8, actions=93, tokens=26811
+3540.6s 862 sp80-589a99af: score=0.00, levels=0.0/6, actions=81, tokens=26493
+3540.6s 863 su15-1944f8ab: score=2.22, levels=1.0/9, actions=43, tokens=26325
+3540.6s 864 tn36-ef4dde99: score=0.00, levels=0.0/7, actions=28, tokens=26889
+3540.6s 865 tr87-cd924810: score=0.00, levels=0.0/6, actions=129, tokens=20602
+3540.6s 866 tu93-0768757b: score=1.02, levels=1.0/9, actions=28, tokens=24948
+3540.6s 867 vc33-5430563c: score=0.00, levels=0.0/7, actions=57, tokens=26954
+3540.6s 868 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=29, tokens=23795
+3540.6s 869 
+3797.4s 870 analyzer request failed at action 35: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=900.0)
+3797.4s 871 
+3797.4s 872 analyzer request failed at action 35: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=900.0)
+4143.3s 873 benchmark: regenerated diagnostics in /kaggle/working in 2.54s
+4143.3s 874 benchmark: duck-virelai-r0-dryrun
+4143.3s 875 solver:    duck-harness
+4143.3s 876 games:     25
+4143.3s 877 passes:    1
+4143.3s 878 runs:      25 (won: 0)
+4143.3s 879 started:   2026-08-23 18:23:56
+4143.3s 880 ended:     in progress
+4143.3s 881 mean score:    0.86
+4143.3s 882 median score:  0.00
+4143.3s 883 total actions: 1608
+4143.3s 884 total tokens:  763296
+4143.3s 885 generated tokens/sec: 211.09 (job wallclock)
+4143.3s 886 total wallclock: 86063.1s
+4143.3s 887 
+4143.3s 888 per-game (mean across passes):
+4143.3s 889 ar25-0c556536: score=0.00, levels=0.0/8, actions=71, tokens=28589
+4143.3s 890 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=144, tokens=31525
+4143.3s 891 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=43, tokens=31596
+4143.3s 892 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=137, tokens=32005
+4143.3s 893 dc22-fdcac232: score=0.00, levels=0.0/6, actions=15, tokens=32291
+4143.3s 894 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=38, tokens=24807
+4143.3s 895 g50t-5849a774: score=0.00, levels=0.0/7, actions=8, tokens=31383
+4143.3s 896 ka59-38d34dbb: score=0.00, levels=0.0/7, actions=68, tokens=31951
+4143.3s 897 lf52-271a04aa: score=0.00, levels=0.0/10, actions=19, tokens=31469
+4143.3s 898 lp85-305b61c3: score=2.78, levels=1.0/8, actions=11, tokens=31388
+4143.3s 899 ls20-9607627b: score=0.00, levels=0.0/7, actions=94, tokens=31307
+4143.3s 900 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=134, tokens=29179
+4143.3s 901 r11l-495a7899: score=4.76, levels=1.0/6, actions=20, tokens=31906
+4143.3s 902 re86-8af5384d: score=0.00, levels=0.0/8, actions=43, tokens=24338
+4143.3s 903 s5i5-18d95033: score=0.00, levels=0.0/8, actions=41, tokens=29170
+4143.3s 904 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=72, tokens=31589
+4143.3s 905 sc25-635fd71a: score=5.39, levels=2.0/6, actions=83, tokens=32259
+4143.3s 906 sk48-d8078629: score=0.00, levels=0.0/8, actions=101, tokens=30733
+4143.3s 907 sp80-589a99af: score=0.00, levels=0.0/6, actions=93, tokens=31663
+4143.3s 908 su15-1944f8ab: score=2.22, levels=1.0/9, actions=47, tokens=30463
+4143.3s 909 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=38, tokens=31085
+4143.3s 910 tr87-cd924810: score=0.00, levels=0.0/6, actions=165, tokens=30726
+4143.3s 911 tu93-0768757b: score=1.02, levels=1.0/9, actions=33, tokens=28553
+4143.3s 912 vc33-5430563c: score=0.00, levels=0.0/7, actions=58, tokens=31388
+4143.3s 913 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=32, tokens=31933
+4143.3s 914 
+4747.6s 915 benchmark: regenerated diagnostics in /kaggle/working in 4.18s
+4747.6s 916 benchmark: duck-virelai-r0-dryrun
+4747.6s 917 solver:    duck-harness
+4747.6s 918 games:     25
+4747.6s 919 passes:    1
+4747.6s 920 runs:      25 (won: 0)
+4747.6s 921 started:   2026-08-23 18:23:56
+4747.6s 922 ended:     in progress
+4747.6s 923 mean score:    0.91
+4747.6s 924 median score:  0.00
+4747.6s 925 total actions: 1904
+4747.6s 926 total tokens:  888814
+4747.6s 927 generated tokens/sec: 210.60 (job wallclock)
+4747.6s 928 total wallclock: 100602.2s
+4747.6s 929 
+4747.6s 930 per-game (mean across passes):
+4747.6s 931 ar25-0c556536: score=0.00, levels=0.0/8, actions=90, tokens=34810
+4747.6s 932 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=149, tokens=35437
+4747.6s 933 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=50, tokens=36636
+4747.6s 934 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=153, tokens=36507
+4747.6s 935 dc22-fdcac232: score=0.00, levels=0.0/6, actions=21, tokens=37472
+4747.6s 936 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=43, tokens=36844
+4747.6s 937 g50t-5849a774: score=0.00, levels=0.0/7, actions=28, tokens=37574
+4747.6s 938 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=79, tokens=36984
+4747.6s 939 lf52-271a04aa: score=0.00, levels=0.0/10, actions=22, tokens=37191
+4747.6s 940 lp85-305b61c3: score=2.78, levels=1.0/8, actions=12, tokens=34822
+4747.6s 941 ls20-9607627b: score=0.00, levels=0.0/7, actions=125, tokens=37356
+4747.6s 942 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=163, tokens=36723
+4747.6s 943 r11l-495a7899: score=4.76, levels=1.0/6, actions=25, tokens=37474
+4747.6s 944 re86-8af5384d: score=0.85, levels=1.0/8, actions=47, tokens=25336
+4747.6s 945 s5i5-18d95033: score=0.00, levels=0.0/8, actions=51, tokens=33653
+4747.6s 946 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=92, tokens=37388
+4747.6s 947 sc25-635fd71a: score=5.39, levels=2.0/6, actions=104, tokens=37228
+4747.6s 948 sk48-d8078629: score=0.00, levels=0.0/8, actions=110, tokens=35725
+4747.6s 949 sp80-589a99af: score=0.00, levels=0.0/6, actions=98, tokens=36962
+4747.6s 950 su15-1944f8ab: score=2.22, levels=1.0/9, actions=51, tokens=33498
+4747.6s 951 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=47, tokens=37141
+4747.6s 952 tr87-cd924810: score=0.00, levels=0.0/6, actions=208, tokens=33071
+4747.6s 953 tu93-0768757b: score=1.02, levels=1.0/9, actions=33, tokens=28553
+4747.6s 954 vc33-5430563c: score=0.00, levels=0.0/7, actions=63, tokens=37524
+4747.6s 955 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=40, tokens=36905
+4747.6s 956 
+5350.0s 957 benchmark: regenerated diagnostics in /kaggle/working in 2.39s
+5350.0s 958 benchmark: duck-virelai-r0-dryrun
+5350.0s 959 solver:    duck-harness
+5350.0s 960 games:     25
+5350.0s 961 passes:    1
+5350.0s 962 runs:      25 (won: 0)
+5350.0s 963 started:   2026-08-23 18:23:56
+5350.0s 964 ended:     in progress
+5350.0s 965 mean score:    0.94
+5350.0s 966 median score:  0.00
+5350.0s 967 total actions: 2184
+5350.0s 968 total tokens:  1020192
+5350.0s 969 generated tokens/sec: 211.54 (job wallclock)
+5350.0s 970 total wallclock: 115780.1s
+5350.0s 971 
+5350.0s 972 per-game (mean across passes):
+5350.0s 973 ar25-0c556536: score=0.00, levels=0.0/8, actions=94, tokens=40975
+5350.0s 974 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=171, tokens=42025
+5350.0s 975 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=66, tokens=40913
+5350.0s 976 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=177, tokens=41986
+5350.0s 977 dc22-fdcac232: score=0.00, levels=0.0/6, actions=26, tokens=42271
+5350.0s 978 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=45, tokens=41176
+5350.0s 979 g50t-5849a774: score=0.00, levels=0.0/7, actions=38, tokens=40782
+5350.0s 980 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=79, tokens=36984
+5350.0s 981 lf52-271a04aa: score=0.00, levels=0.0/10, actions=22, tokens=37191
+5350.0s 982 lp85-305b61c3: score=2.78, levels=1.0/8, actions=14, tokens=42537
+5350.0s 983 ls20-9607627b: score=0.00, levels=0.0/7, actions=141, tokens=41289
+5350.0s 984 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=184, tokens=42366
+5350.0s 985 r11l-495a7899: score=4.76, levels=1.0/6, actions=28, tokens=40227
+5350.0s 986 re86-8af5384d: score=0.85, levels=1.0/8, actions=66, tokens=32137
+5350.0s 987 s5i5-18d95033: score=0.00, levels=0.0/8, actions=52, tokens=41284
+5350.0s 988 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=106, tokens=41761
+5350.0s 989 sc25-635fd71a: score=5.39, levels=2.0/6, actions=114, tokens=41959
+5350.0s 990 sk48-d8078629: score=0.00, levels=0.0/8, actions=113, tokens=41325
+5350.0s 991 sp80-589a99af: score=0.64, levels=1.0/6, actions=106, tokens=41882
+5350.0s 992 su15-1944f8ab: score=2.22, levels=1.0/9, actions=54, tokens=39301
+5350.0s 993 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=91, tokens=41747
+5350.0s 994 tr87-cd924810: score=0.00, levels=0.0/6, actions=248, tokens=40122
+5350.0s 995 tu93-0768757b: score=1.02, levels=1.0/9, actions=34, tokens=43068
+5350.0s 996 vc33-5430563c: score=0.00, levels=0.0/7, actions=67, tokens=42314
+5350.0s 997 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=48, tokens=42570
+5350.0s 998 
+5953.3s 999 benchmark: regenerated diagnostics in /kaggle/working in 3.20s
+5953.3s 1000 benchmark: duck-virelai-r0-dryrun
+5953.3s 1001 solver:    duck-harness
+5953.3s 1002 games:     25
+5953.3s 1003 passes:    1
+5953.3s 1004 runs:      25 (won: 0)
+5953.3s 1005 started:   2026-08-23 18:23:56
+5953.3s 1006 ended:     in progress
+5953.3s 1007 mean score:    0.95
+5953.3s 1008 median score:  0.00
+5953.3s 1009 total actions: 2566
+5953.3s 1010 total tokens:  1146074
+5953.3s 1011 generated tokens/sec: 211.22 (job wallclock)
+5953.3s 1012 total wallclock: 130466.2s
+5953.3s 1013 
+5953.3s 1014 per-game (mean across passes):
+5953.3s 1015 ar25-0c556536: score=0.24, levels=1.0/8, actions=120, tokens=45766
+5953.3s 1016 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=189, tokens=46412
+5953.3s 1017 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=83, tokens=47313
+5953.3s 1018 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=191, tokens=46653
+5953.3s 1019 dc22-fdcac232: score=0.00, levels=0.0/6, actions=30, tokens=48079
+5953.3s 1020 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=53, tokens=44637
+5953.3s 1021 g50t-5849a774: score=0.00, levels=0.0/7, actions=47, tokens=47160
+5953.3s 1022 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=99, tokens=45626
+5953.3s 1023 lf52-271a04aa: score=0.00, levels=0.0/10, actions=22, tokens=37191
+5953.3s 1024 lp85-305b61c3: score=2.78, levels=1.0/8, actions=14, tokens=42537
+5953.3s 1025 ls20-9607627b: score=0.00, levels=0.0/7, actions=194, tokens=46311
+5953.3s 1026 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=254, tokens=46880
+5953.3s 1027 r11l-495a7899: score=4.76, levels=1.0/6, actions=30, tokens=47603
+5953.3s 1028 re86-8af5384d: score=0.85, levels=1.0/8, actions=99, tokens=37480
+5953.3s 1029 s5i5-18d95033: score=0.00, levels=0.0/8, actions=56, tokens=46624
+5953.3s 1030 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=137, tokens=47776
+5953.3s 1031 sc25-635fd71a: score=5.39, levels=2.0/6, actions=138, tokens=46984
+5953.3s 1032 sk48-d8078629: score=0.00, levels=0.0/8, actions=116, tokens=47389
+5953.3s 1033 sp80-589a99af: score=0.64, levels=1.0/6, actions=121, tokens=47838
+5953.3s 1034 su15-1944f8ab: score=2.22, levels=1.0/9, actions=62, tokens=46838
+5953.3s 1035 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=94, tokens=47511
+5953.3s 1036 tr87-cd924810: score=0.00, levels=0.0/6, actions=258, tokens=43632
+5953.3s 1037 tu93-0768757b: score=1.02, levels=1.0/9, actions=35, tokens=46333
+5953.3s 1038 vc33-5430563c: score=0.00, levels=0.0/7, actions=70, tokens=47460
+5953.3s 1039 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=54, tokens=48041
+5953.3s 1040 
+6555.9s 1041 benchmark: regenerated diagnostics in /kaggle/working in 2.48s
+6555.9s 1042 benchmark: duck-virelai-r0-dryrun
+6555.9s 1043 solver:    duck-harness
+6555.9s 1044 games:     25
+6555.9s 1045 passes:    1
+6555.9s 1046 runs:      25 (won: 0)
+6555.9s 1047 started:   2026-08-23 18:23:56
+6555.9s 1048 ended:     in progress
+6555.9s 1049 mean score:    0.95
+6555.9s 1050 median score:  0.00
+6555.9s 1051 total actions: 2843
+6555.9s 1052 total tokens:  1253902
+6555.9s 1053 generated tokens/sec: 207.99 (job wallclock)
+6555.9s 1054 total wallclock: 142787.9s
+6555.9s 1055 
+6555.9s 1056 per-game (mean across passes):
+6555.9s 1057 ar25-0c556536: score=0.24, levels=1.0/8, actions=134, tokens=52749
+6555.9s 1058 bp35-0a0ad940: score=0.00, levels=0.0/9, actions=237, tokens=51726
+6555.9s 1059 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=101, tokens=51710
+6555.9s 1060 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=197, tokens=51227
+6555.9s 1061 dc22-fdcac232: score=0.00, levels=0.0/6, actions=36, tokens=53117
+6555.9s 1062 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=53, tokens=44637
+6555.9s 1063 g50t-5849a774: score=0.00, levels=0.0/7, actions=57, tokens=51795
+6555.9s 1064 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=102, tokens=53202
+6555.9s 1065 lf52-271a04aa: score=0.00, levels=0.0/10, actions=22, tokens=37191
+6555.9s 1066 lp85-305b61c3: score=2.78, levels=1.0/8, actions=14, tokens=42537
+6555.9s 1067 ls20-9607627b: score=0.00, levels=0.0/7, actions=216, tokens=51091
+6555.9s 1068 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=304, tokens=50394
+6555.9s 1069 r11l-495a7899: score=4.76, levels=1.0/6, actions=31, tokens=50692
+6555.9s 1070 re86-8af5384d: score=0.85, levels=1.0/8, actions=99, tokens=37480
+6555.9s 1071 s5i5-18d95033: score=0.00, levels=0.0/8, actions=67, tokens=52991
+6555.9s 1072 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=156, tokens=52649
+6555.9s 1073 sc25-635fd71a: score=5.39, levels=2.0/6, actions=150, tokens=52385
+6555.9s 1074 sk48-d8078629: score=0.00, levels=0.0/8, actions=118, tokens=53123
+6555.9s 1075 sp80-589a99af: score=0.64, levels=1.0/6, actions=137, tokens=52938
+6555.9s 1076 su15-1944f8ab: score=2.22, levels=1.0/9, actions=65, tokens=52381
+6555.9s 1077 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=94, tokens=47511
+6555.9s 1078 tr87-cd924810: score=0.00, levels=0.0/6, actions=282, tokens=51618
+6555.9s 1079 tu93-0768757b: score=1.02, levels=1.0/9, actions=40, tokens=53606
+6555.9s 1080 vc33-5430563c: score=0.00, levels=0.0/7, actions=71, tokens=51986
+6555.9s 1081 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=60, tokens=53166
+6555.9s 1082 
+7158.6s 1083 benchmark: regenerated diagnostics in /kaggle/working in 2.64s
+7158.6s 1084 benchmark: duck-virelai-r0-dryrun
+7158.6s 1085 solver:    duck-harness
+7158.6s 1086 games:     25
+7158.6s 1087 passes:    1
+7158.6s 1088 runs:      25 (won: 0)
+7158.6s 1089 started:   2026-08-23 18:23:56
+7158.6s 1090 ended:     in progress
+7158.6s 1091 mean score:    1.15
+7158.6s 1092 median score:  0.00
+7158.6s 1093 total actions: 3148
+7158.6s 1094 total tokens:  1416485
+7158.6s 1095 generated tokens/sec: 213.61 (job wallclock)
+7158.6s 1096 total wallclock: 161079.4s
+7158.6s 1097 
+7158.6s 1098 per-game (mean across passes):
+7158.6s 1099 ar25-0c556536: score=0.24, levels=1.0/8, actions=135, tokens=55491
+7158.6s 1100 bp35-0a0ad940: score=0.01, levels=1.0/9, actions=279, tokens=55816
+7158.6s 1101 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=119, tokens=57989
+7158.6s 1102 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=200, tokens=57395
+7158.6s 1103 dc22-fdcac232: score=0.00, levels=0.0/6, actions=70, tokens=57580
+7158.6s 1104 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=55, tokens=59037
+7158.6s 1105 g50t-5849a774: score=0.00, levels=0.0/7, actions=71, tokens=58716
+7158.6s 1106 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=107, tokens=58575
+7158.6s 1107 lf52-271a04aa: score=0.00, levels=0.0/10, actions=23, tokens=55820
+7158.6s 1108 lp85-305b61c3: score=2.78, levels=1.0/8, actions=16, tokens=56858
+7158.6s 1109 ls20-9607627b: score=0.00, levels=0.0/7, actions=226, tokens=56309
+7158.6s 1110 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=328, tokens=57341
+7158.6s 1111 r11l-495a7899: score=4.76, levels=1.0/6, actions=32, tokens=53851
+7158.6s 1112 re86-8af5384d: score=0.85, levels=1.0/8, actions=100, tokens=50834
+7158.6s 1113 s5i5-18d95033: score=0.00, levels=0.0/8, actions=76, tokens=57730
+7158.6s 1114 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=176, tokens=58013
+7158.6s 1115 sc25-635fd71a: score=5.39, levels=2.0/6, actions=182, tokens=57565
+7158.6s 1116 sk48-d8078629: score=0.00, levels=0.0/8, actions=119, tokens=56419
+7158.6s 1117 sp80-589a99af: score=0.64, levels=1.0/6, actions=157, tokens=57308
+7158.6s 1118 su15-1944f8ab: score=2.22, levels=1.0/9, actions=70, tokens=57766
+7158.6s 1119 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=95, tokens=57109
+7158.6s 1120 tr87-cd924810: score=0.00, levels=0.0/6, actions=317, tokens=55475
+7158.6s 1121 tu93-0768757b: score=6.08, levels=2.0/9, actions=48, tokens=57268
+7158.6s 1122 vc33-5430563c: score=0.00, levels=0.0/7, actions=71, tokens=51986
+7158.6s 1123 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=76, tokens=58234
+7158.6s 1124 
+7425.4s 1125 analyzer request failed at action 72: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=900.0)
+7425.4s 1126 
+7425.4s 1127 analyzer request failed at action 72: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=900.0)
+7761.2s 1128 benchmark: regenerated diagnostics in /kaggle/working in 2.45s
+7761.2s 1129 benchmark: duck-virelai-r0-dryrun
+7761.2s 1130 solver:    duck-harness
+7761.2s 1131 games:     25
+7761.2s 1132 passes:    1
+7761.2s 1133 runs:      25 (won: 0)
+7761.2s 1134 started:   2026-08-23 18:23:56
+7761.2s 1135 ended:     in progress
+7761.2s 1136 mean score:    1.15
+7761.2s 1137 median score:  0.00
+7761.2s 1138 total actions: 3417
+7761.2s 1139 total tokens:  1541274
+7761.2s 1140 generated tokens/sec: 213.06 (job wallclock)
+7761.2s 1141 total wallclock: 174701.9s
+7761.2s 1142 
+7761.2s 1143 per-game (mean across passes):
+7761.2s 1144 ar25-0c556536: score=0.24, levels=1.0/8, actions=143, tokens=61740
+7761.2s 1145 bp35-0a0ad940: score=0.01, levels=1.0/9, actions=354, tokens=61513
+7761.2s 1146 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=127, tokens=64633
+7761.2s 1147 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=206, tokens=63904
+7761.2s 1148 dc22-fdcac232: score=0.00, levels=0.0/6, actions=73, tokens=63911
+7761.2s 1149 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=59, tokens=65024
+7761.2s 1150 g50t-5849a774: score=0.00, levels=0.0/7, actions=79, tokens=61492
+7761.2s 1151 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=112, tokens=63314
+7761.2s 1152 lf52-271a04aa: score=0.00, levels=0.0/10, actions=23, tokens=55820
+7761.2s 1153 lp85-305b61c3: score=2.78, levels=1.0/8, actions=16, tokens=56858
+7761.2s 1154 ls20-9607627b: score=0.00, levels=0.0/7, actions=242, tokens=62901
+7761.2s 1155 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=364, tokens=63189
+7761.2s 1156 r11l-495a7899: score=4.76, levels=1.0/6, actions=37, tokens=64555
+7761.2s 1157 re86-8af5384d: score=0.85, levels=1.0/8, actions=115, tokens=56893
+7761.2s 1158 s5i5-18d95033: score=0.00, levels=0.0/8, actions=89, tokens=63738
+7761.2s 1159 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=190, tokens=62181
+7761.2s 1160 sc25-635fd71a: score=5.39, levels=2.0/6, actions=193, tokens=60098
+7761.2s 1161 sk48-d8078629: score=0.00, levels=0.0/8, actions=123, tokens=63167
+7761.2s 1162 sp80-589a99af: score=0.64, levels=1.0/6, actions=168, tokens=63727
+7761.2s 1163 su15-1944f8ab: score=2.22, levels=1.0/9, actions=78, tokens=64454
+7761.2s 1164 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=101, tokens=64146
+7761.2s 1165 tr87-cd924810: score=0.00, levels=0.0/6, actions=317, tokens=55475
+7761.2s 1166 tu93-0768757b: score=6.08, levels=2.0/9, actions=48, tokens=57268
+7761.2s 1167 vc33-5430563c: score=0.00, levels=0.0/7, actions=73, tokens=56334
+7761.2s 1168 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=87, tokens=64939
+7761.2s 1169 
+8364.0s 1170 benchmark: regenerated diagnostics in /kaggle/working in 2.65s
+8364.0s 1171 benchmark: duck-virelai-r0-dryrun
+8364.0s 1172 solver:    duck-harness
+8364.0s 1173 games:     25
+8364.0s 1174 passes:    1
+8364.0s 1175 runs:      25 (won: 0)
+8364.0s 1176 started:   2026-08-23 18:23:56
+8364.0s 1177 ended:     in progress
+8364.0s 1178 mean score:    1.22
+8364.0s 1179 median score:  0.01
+8364.0s 1180 total actions: 3656
+8364.0s 1181 total tokens:  1694194
+8364.0s 1182 generated tokens/sec: 216.19 (job wallclock)
+8364.0s 1183 total wallclock: 191157.2s
+8364.0s 1184 
+8364.0s 1185 per-game (mean across passes):
+8364.0s 1186 ar25-0c556536: score=0.24, levels=1.0/8, actions=147, tokens=70609
+8364.0s 1187 bp35-0a0ad940: score=0.01, levels=1.0/9, actions=378, tokens=66842
+8364.0s 1188 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=146, tokens=69986
+8364.0s 1189 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=210, tokens=68475
+8364.0s 1190 dc22-fdcac232: score=0.00, levels=0.0/6, actions=76, tokens=69416
+8364.0s 1191 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=60, tokens=70051
+8364.0s 1192 g50t-5849a774: score=0.00, levels=0.0/7, actions=83, tokens=67796
+8364.0s 1193 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=131, tokens=68479
+8364.0s 1194 lf52-271a04aa: score=1.82, levels=1.0/10, actions=30, tokens=70293
+8364.0s 1195 lp85-305b61c3: score=2.78, levels=1.0/8, actions=16, tokens=56858
+8364.0s 1196 ls20-9607627b: score=0.00, levels=0.0/7, actions=260, tokens=66784
+8364.0s 1197 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=378, tokens=67340
+8364.0s 1198 r11l-495a7899: score=4.76, levels=1.0/6, actions=40, tokens=69228
+8364.0s 1199 re86-8af5384d: score=0.85, levels=1.0/8, actions=128, tokens=61773
+8364.0s 1200 s5i5-18d95033: score=0.00, levels=0.0/8, actions=103, tokens=70110
+8364.0s 1201 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=211, tokens=69640
+8364.0s 1202 sc25-635fd71a: score=5.39, levels=2.0/6, actions=207, tokens=67779
+8364.0s 1203 sk48-d8078629: score=0.00, levels=0.0/8, actions=126, tokens=69884
+8364.0s 1204 sp80-589a99af: score=0.64, levels=1.0/6, actions=189, tokens=69441
+8364.0s 1205 su15-1944f8ab: score=2.22, levels=1.0/9, actions=82, tokens=70253
+8364.0s 1206 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=107, tokens=67325
+8364.0s 1207 tr87-cd924810: score=0.00, levels=0.0/6, actions=324, tokens=67687
+8364.0s 1208 tu93-0768757b: score=6.08, levels=2.0/9, actions=55, tokens=66899
+8364.0s 1209 vc33-5430563c: score=0.00, levels=0.0/7, actions=74, tokens=61734
+8364.0s 1210 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=95, tokens=69512
+8364.0s 1211 
+8447.9s 1212 analyzer request failed at action 56: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=533.9699217830002)
+8447.9s 1213 
+8447.9s 1214 analyzer request failed at action 56: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=533.9699217830002)
+8448.0s 1215 analyzer request failed at action 76: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=14.773487469999054)
+8448.0s 1216 
+8448.0s 1217 analyzer request failed at action 76: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=14.773487469999054)
+8448.0s 1218 analyzer request failed at action 31: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=23.57494306499939)
+8448.0s 1219 
+8448.0s 1220 analyzer request failed at action 31: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=23.57494306499939)
+8448.0s 1221 analyzer request failed at action 17: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=79.8254368830003)
+8448.0s 1222 
+8448.0s 1223 analyzer request failed at action 17: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=79.8254368830003)
+8448.0s 1224 analyzer request failed at action 84: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=51.60777754299943)
+8448.0s 1225 
+8448.0s 1226 analyzer request failed at action 84: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=51.60777754299943)
+8448.0s 1227 analyzer request failed at action 212: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=46.34754250700007)
+8448.0s 1228 
+8448.0s 1229 analyzer request failed at action 212: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=46.34754250700007)
+8448.1s 1230 analyzer request failed at action 132: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=326.11741037699994)
+8448.1s 1231 
+8448.1s 1232 analyzer request failed at action 132: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=326.11741037699994)
+8448.1s 1233 analyzer request failed at action 147: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=118.88548070099932)
+8448.1s 1234 
+8448.1s 1235 analyzer request failed at action 147: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=118.88548070099932)
+8448.1s 1236 analyzer request failed at action 379: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=45.971850903000814)
+8448.1s 1237 
+8448.1s 1238 analyzer request failed at action 379: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=45.971850903000814)
+8448.1s 1239 analyzer request failed at action 208: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=290.31619292399955)
+8448.1s 1240 
+8448.1s 1241 analyzer request failed at action 208: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=290.31619292399955)
+8448.1s 1242 analyzer request failed at action 62: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=39.39370323700041)
+8448.1s 1243 
+8448.1s 1244 analyzer request failed at action 62: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=39.39370323700041)
+8448.1s 1245 analyzer request failed at action 96: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=197.06665652100128)
+8448.1s 1246 
+8448.1s 1247 analyzer request failed at action 96: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=197.06665652100128)
+8448.1s 1248 analyzer request failed at action 129: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=176.9360039760004)
+8448.1s 1249 
+8448.1s 1250 analyzer request failed at action 129: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=176.9360039760004)
+8448.1s 1251 analyzer request failed at action 78: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=54.16930581500037)
+8448.1s 1252 
+8448.1s 1253 analyzer request failed at action 78: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=54.16930581500037)
+8448.1s 1254 analyzer request failed at action 89: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=26.44195566899998)
+8448.1s 1255 
+8448.1s 1256 analyzer request failed at action 89: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=26.44195566899998)
+8448.1s 1257 analyzer request failed at action 379: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=106.53984687900083)
+8448.1s 1258 
+8448.1s 1259 analyzer request failed at action 379: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=106.53984687900083)
+8448.1s 1260 analyzer request failed at action 148: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=100.6513104960004)
+8448.1s 1261 
+8448.1s 1262 analyzer request failed at action 148: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=100.6513104960004)
+8448.1s 1263 analyzer request failed at action 325: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=5.427246537999963)
+8448.1s 1264 
+8448.1s 1265 analyzer request failed at action 325: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=5.427246537999963)
+8448.2s 1266 [finished] tu93-0768757b state=gave_up level=2/9 score=6.08 actions=55 tokens=66899 per-level=28/19,15/16,12/34,0/42,0/123,0/80,0/14,0/23,0/111 note="tokens=66899"
+8448.2s 1267 [finished] vc33-5430563c state=gave_up level=0/7 score=0.00 actions=75 tokens=62707 per-level=75/7,0/18,0/44,0/61,0/131,0/34,0/152 note="tokens=62707"
+8448.2s 1268 [finished] lf52-271a04aa state=gave_up level=1/10 score=1.82 actions=30 tokens=70293 per-level=29/32,1/81,0/60,0/71,0/205,0/148,0/244,0/109,0/164,0/225 note="tokens=71167"
+8448.2s 1269 [finished] lp85-305b61c3 state=gave_up level=1/8 score=2.78 actions=16 tokens=56858 per-level=10/17,6/38,0/31,0/16,0/41,0/60,0/26,0/159 note="tokens=71084"
+8448.2s 1270 [finished] su15-1944f8ab state=gave_up level=1/9 score=2.22 actions=83 tokens=71198 per-level=18/22,65/42,0/26,0/115,0/36,0/31,0/8,0/40,0/41 note="tokens=71198"
+8448.2s 1271 [finished] cn04-2fe56bfb state=gave_up level=0/6 score=0.00 actions=211 tokens=70001 per-level=211/29,0/54,0/85,0/300,0/208,0/113 note="tokens=70001"
+8448.2s 1272 [finished] ka59-38d34dbb state=gave_up level=1/7 score=0.45 actions=131 tokens=68479 per-level=79/28,52/109,0/51,0/51,0/33,0/132,0/326 note="tokens=68479"
+8448.2s 1273 [finished] cd82-fb555c5d state=gave_up level=0/6 score=0.00 actions=146 tokens=69986 per-level=146/55,0/8,0/41,0/21,0/23,0/23 note="tokens=69986"
+8448.2s 1274 [finished] ft09-0d8bbf25 state=gave_up level=0/6 score=0.00 actions=61 tokens=71134 per-level=61/43,0/12,0/23,0/28,0/65,0/37 note="tokens=71134"
+8448.2s 1275 [finished] bp35-0a0ad940 state=gave_up level=1/9 score=0.01 actions=378 tokens=66842 per-level=269/21,109/48,0/44,0/38,0/33,0/87,0/86,0/131,0/163 note="tokens=68267"
+8448.2s 1276 [finished] sc25-635fd71a state=gave_up level=2/6 score=5.39 actions=207 tokens=67779 per-level=73/36,9/6,125/32,0/83,0/143,0/50 note="tokens=67779"
+8448.2s 1277 [finished] wa30-ee6fef47 state=gave_up level=0/9 score=0.00 actions=95 tokens=69512 per-level=95/71,0/119,0/183,0/98,0/368,0/68,0/79,0/442,0/415 note="tokens=69512"
+8448.2s 1278 [finished] dc22-fdcac232 state=gave_up level=0/6 score=0.00 actions=77 tokens=70813 per-level=77/59,0/102,0/67,0/98,0/324,0/578 note="tokens=70813"
+8448.2s 1279 [finished] re86-8af5384d state=gave_up level=1/8 score=0.85 actions=128 tokens=61773 per-level=47/26,81/42,0/86,0/108,0/189,0/139,0/424,0/241 note="tokens=61773"
+8448.2s 1280 [finished] m0r0-492f87ba state=gave_up level=0/6 score=0.00 actions=378 tokens=67340 per-level=378/30,0/111,0/203,0/26,0/500,0/237 note="tokens=68406"
+8448.2s 1281 [finished] ar25-0c556536 state=gave_up level=1/8 score=0.24 actions=147 tokens=70609 per-level=108/32,39/50,0/75,0/37,0/89,0/159,0/233,0/73 note="tokens=70609"
+8448.2s 1282 [finished] tr87-cd924810 state=gave_up level=0/6 score=0.00 actions=324 tokens=67687 per-level=324/54,0/58,0/40,0/45,0/71,0/146 note="tokens=70414"
+8448.2s 1283 [finished] g50t-5849a774 state=gave_up level=0/7 score=0.00 actions=88 tokens=71106 per-level=88/78,0/175,0/179,0/230,0/96,0/54,0/67 note="tokens=71106"
+8448.2s 1284 analyzer request failed at action 212: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=130.85641645000032)
+8448.2s 1285 
+8448.2s 1286 analyzer request failed at action 212: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=130.85641645000032)
+8448.4s 1287 [finished] sb26-7fbdac44 state=gave_up level=1/8 score=2.78 actions=211 tokens=69640 per-level=10/18,201/28,0/18,0/19,0/31,0/23,0/58,0/18 note="tokens=69640"
+8448.4s 1288 [finished] sk48-d8078629 state=gave_up level=0/8 score=0.00 actions=127 tokens=71482 per-level=127/61,0/177,0/101,0/103,0/230,0/181,0/125,0/92 note="tokens=71482"
+8448.8s 1289 [finished] r11l-495a7899 state=gave_up level=1/6 score=4.76 actions=40 tokens=69228 per-level=15/22,25/33,0/51,0/26,0/52,0/49 note="tokens=71380"
+8450.0s 1290 [finished] sp80-589a99af state=gave_up level=1/6 score=0.64 actions=189 tokens=69441 per-level=106/39,83/58,0/25,0/148,0/96,0/152 note="tokens=70589"
+8460.0s 1291 [finished] tn36-ef4dde99 state=gave_up level=1/7 score=2.53 actions=107 tokens=67325 per-level=38/32,69/72,0/26,0/40,0/30,0/55,0/62 note="tokens=71328"
+8466.1s 1292 analyzer request failed at action 266: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=69.92319450700052)
+8466.1s 1293 
+8466.1s 1294 analyzer request failed at action 266: HTTPConnectionPool(host='127.0.0.1', port=1234): Read timed out. (read timeout=69.92319450700052)
+8466.3s 1295 [finished] ls20-9607627b state=gave_up level=0/7 score=0.00 actions=265 tokens=69572 per-level=265/22,0/123,0/73,0/84,0/96,0/192,0/186 note="tokens=69735"
+8494.7s 1296 [finished] s5i5-18d95033 state=gave_up level=0/8 score=0.00 actions=104 tokens=70591 per-level=104/20,0/89,0/106,0/54,0/162,0/38,0/86,0/83 note="tokens=72803"
+8500.1s 1297 benchmark: regenerated diagnostics in /kaggle/working in 5.34s
+8500.1s 1298 benchmark: duck-virelai-r0-dryrun
+8500.1s 1299 solver:    duck-harness
+8500.1s 1300 games:     25
+8500.1s 1301 passes:    1
+8500.1s 1302 runs:      25 (won: 0)
+8500.1s 1303 started:   2026-08-23 18:23:56
+8500.1s 1304 ended:     2026-08-23 20:36:43
+8500.1s 1305 duration:  2h 12m 47s
+8500.1s 1306 mean score:    1.22
+8500.1s 1307 median score:  0.01
+8500.1s 1308 total actions: 3673
+8500.1s 1309 total tokens:  1708295
+8500.1s 1310 generated tokens/sec: 214.41 (job wallclock)
+8500.1s 1311 total wallclock: 198094.6s
+8500.1s 1312 
+8500.1s 1313 per-game (mean across passes):
+8500.1s 1314 ar25-0c556536: score=0.24, levels=1.0/8, actions=147, tokens=70609
+8500.1s 1315 bp35-0a0ad940: score=0.01, levels=1.0/9, actions=378, tokens=66842
+8500.1s 1316 cd82-fb555c5d: score=0.00, levels=0.0/6, actions=146, tokens=69986
+8500.1s 1317 cn04-2fe56bfb: score=0.00, levels=0.0/6, actions=211, tokens=70001
+8500.1s 1318 dc22-fdcac232: score=0.00, levels=0.0/6, actions=77, tokens=70813
+8500.1s 1319 ft09-0d8bbf25: score=0.00, levels=0.0/6, actions=61, tokens=71134
+8500.1s 1320 g50t-5849a774: score=0.00, levels=0.0/7, actions=88, tokens=71106
+8500.1s 1321 ka59-38d34dbb: score=0.45, levels=1.0/7, actions=131, tokens=68479
+8500.1s 1322 lf52-271a04aa: score=1.82, levels=1.0/10, actions=30, tokens=70293
+8500.1s 1323 lp85-305b61c3: score=2.78, levels=1.0/8, actions=16, tokens=56858
+8500.1s 1324 ls20-9607627b: score=0.00, levels=0.0/7, actions=265, tokens=69572
+8500.1s 1325 m0r0-492f87ba: score=0.00, levels=0.0/6, actions=378, tokens=67340
+8500.1s 1326 r11l-495a7899: score=4.76, levels=1.0/6, actions=40, tokens=69228
+8500.1s 1327 re86-8af5384d: score=0.85, levels=1.0/8, actions=128, tokens=61773
+8500.1s 1328 s5i5-18d95033: score=0.00, levels=0.0/8, actions=104, tokens=70591
+8500.1s 1329 sb26-7fbdac44: score=2.78, levels=1.0/8, actions=211, tokens=69640
+8500.1s 1330 sc25-635fd71a: score=5.39, levels=2.0/6, actions=207, tokens=67779
+8500.1s 1331 sk48-d8078629: score=0.00, levels=0.0/8, actions=127, tokens=71482
+8500.1s 1332 sp80-589a99af: score=0.64, levels=1.0/6, actions=189, tokens=69441
+8500.1s 1333 su15-1944f8ab: score=2.22, levels=1.0/9, actions=83, tokens=71198
+8500.1s 1334 tn36-ef4dde99: score=2.53, levels=1.0/7, actions=107, tokens=67325
+8500.1s 1335 tr87-cd924810: score=0.00, levels=0.0/6, actions=324, tokens=67687
+8500.1s 1336 tu93-0768757b: score=6.08, levels=2.0/9, actions=55, tokens=66899
+8500.1s 1337 vc33-5430563c: score=0.00, levels=0.0/7, actions=75, tokens=62707
+8500.1s 1338 wa30-ee6fef47: score=0.00, levels=0.0/9, actions=95, tokens=69512
+8500.1s 1339 
+8500.1s 1340 diagnostics: /kaggle/working/diagnostics.html
+8500.1s 1341 taaf.kaggle: teardown command: "$PYTHON" - <<'PYTEARDOWN'
+8500.1s 1342 import os
+8500.1s 1343 import shutil
+8500.1s 1344 import signal
+8500.1s 1345 import time
+8500.1s 1346 from pathlib import Path
+8500.1s 1347 
+8500.1s 1348 WORKING_DIR = Path(os.environ['TAAF_KAGGLE_WORKING_DIR'])
+8500.1s 1349 pid_path = WORKING_DIR / 'vllm-openai-server.pid'
+8500.1s 1350 site_packages = WORKING_DIR / 'vllm-site-packages'
+8500.1s 1351 if pid_path.exists():
+8500.1s 1352 try:
+8500.1s 1353 pid = int(pid_path.read_text(encoding='utf-8').strip())
+8500.1s 1354 print('Stopping vLLM server', flush=True)
+8500.1s 1355 os.kill(pid, signal.SIGTERM)
+8500.1s 1356 deadline = time.monotonic() + 30
+8500.1s 1357 while time.monotonic() < deadline:
+8500.1s 1358 try:
+8500.1s 1359 os.kill(pid, 0)
+8500.1s 1360 except OSError:
+8500.1s 1361 break
+8500.1s 1362 time.sleep(1)
+8500.1s 1363 else:
+8500.1s 1364 os.kill(pid, signal.SIGKILL)
+8500.1s 1365 except Exception as exc:
+8500.1s 1366 print(f'Could not stop vLLM server cleanly: {exc!r}', flush=True)
+8500.1s 1367 pid_path.unlink(missing_ok=True)
+8500.1s 1368 shutil.rmtree(site_packages, ignore_errors=True)
+8500.1s 1369 print(f'Removed temporary vLLM install at {site_packages}', flush=True)
+8500.1s 1370 
+8500.1s 1371 PYTEARDOWN
+8500.1s 1372 Stopping vLLM server
+8500.3s 1373 Stopping vLLM server
+8503.2s 1374 Removed temporary vLLM install at /kaggle/working/vllm-site-packages
+8503.2s 1375 Removed temporary vLLM install at /kaggle/working/vllm-site-packages
+8503.3s 1376 /usr/local/lib/python3.12/dist-packages/IPython/core/display.py:724: UserWarning: Consider using IPython.display.IFrame instead
+8503.3s 1377 warnings.warn("Consider using IPython.display.IFrame instead")
+8503.3s 1378 
+8503.3s 1379 /usr/local/lib/python3.12/dist-packages/IPython/core/display.py:724: UserWarning: Consider using IPython.display.IFrame instead
+8503.3s 1380 warnings.warn("Consider using IPython.display.IFrame instead")
+8504.9s 1381 /usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+8504.9s 1382 cells[i][c] = re.sub('\\\\\|', '|', cell)
+8505.0s 1383 /usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+8505.0s 1384 text = re.sub(r'_', '\_', text) # Escape underscores in display text
+8505.4s 1385 [NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+8505.5s 1386 [NbConvertApp] Writing 2231569 bytes to __notebook__.ipynb
+8506.6s 1387 [NbConvertApp] Converting notebook __notebook__.ipynb to html
+8507.1s 1388 [NbConvertApp] Writing 2525849 bytes to __results__.html
