@@ -8,3 +8,6 @@ Actions 3,673 · generated tokens 1,708,295 · 214.4 tok/s
 Bracketing: faithful-clone prior 0.679 · tuned-reference prior 1.21 · Tufa 20-pass 1.6002±0.4475 (not comparable to 1-pass)
 Anomalies: one analyzer read-timeout during final drain (ls20, action 266) — benign
 Pending for the formal Task B record: benchmark.json from the run Output tab (scorer input); meter readings; Phase B outcome
+
+Meter instrumentation (Memo #1 s3): Phase A session (~2.4h wall) consumed 2.5h of the 30h weekly GPU quota -> RTX Pro 6000 multiplier MEASURED ~1:1. Remaining after Phase A: 27.5h. Phase-B-drains-quota question: pending post-submission meter read.
+Phase B: submitted 2026-08-23 (submit dialog requires explicitly selecting submission.parquet — its default pick was the hidden .per_game_cards.pkl diagnostics cache file; runbook note, not a platform defect). Rerun in flight against hidden set.
