@@ -1,0 +1,92 @@
+[
+  {
+    "recording": "vc33-5430563c.virelai.1f7b305c-264c-435d-af5f-7475bc944c01.recording.jsonl",
+    "n_nodes": 25,
+    "t_full_s": 0.6836,
+    "t_marginal_s": 0.0147,
+    "worldlines": 13,
+    "regions_at_tail": 12,
+    "edges_at_tail": 12
+  },
+  {
+    "recording": "vc33-5430563c.virelai.1f7b305c-264c-435d-af5f-7475bc944c01.recording.jsonl",
+    "n_nodes": 51,
+    "t_full_s": 0.7003,
+    "t_marginal_s": 0.014,
+    "worldlines": 11,
+    "regions_at_tail": 11,
+    "edges_at_tail": 12
+  },
+  {
+    "recording": "ls20-9607627b.virelai.889276ef-e036-416b-bb38-e5c91238396c.recording.jsonl",
+    "n_nodes": 50,
+    "t_full_s": 1.9008,
+    "t_marginal_s": 0.0163,
+    "worldlines": 22,
+    "regions_at_tail": 21,
+    "edges_at_tail": 21
+  },
+  {
+    "recording": "ls20-9607627b.virelai.889276ef-e036-416b-bb38-e5c91238396c.recording.jsonl",
+    "n_nodes": 76,
+    "t_full_s": 3.3374,
+    "t_marginal_s": 0.016,
+    "worldlines": 23,
+    "regions_at_tail": 21,
+    "edges_at_tail": 22
+  },
+  {
+    "recording": "vc33-long-head450.recording.jsonl",
+    "n_nodes": 50,
+    "t_full_s": 1.4803,
+    "t_marginal_s": 0.0142,
+    "worldlines": 28,
+    "regions_at_tail": 16,
+    "edges_at_tail": 17
+  },
+  {
+    "recording": "vc33-long-head450.recording.jsonl",
+    "n_nodes": 100,
+    "t_full_s": 4.5605,
+    "t_marginal_s": 0.0164,
+    "worldlines": 60,
+    "regions_at_tail": 31,
+    "edges_at_tail": 32
+  },
+  {
+    "recording": "vc33-long-head450.recording.jsonl",
+    "n_nodes": 200,
+    "t_full_s": 4.3538,
+    "t_marginal_s": 0.0183,
+    "worldlines": 32,
+    "regions_at_tail": 32,
+    "edges_at_tail": 32
+  },
+  {
+    "recording": "vc33-long-head450.recording.jsonl",
+    "n_nodes": 300,
+    "t_full_s": 5.2539,
+    "t_marginal_s": 0.0173,
+    "worldlines": 32,
+    "regions_at_tail": 32,
+    "edges_at_tail": 32
+  },
+  {
+    "recording": "vc33-long-head450.recording.jsonl",
+    "n_nodes": 400,
+    "t_full_s": 7.4915,
+    "t_marginal_s": 0.0165,
+    "worldlines": 32,
+    "regions_at_tail": 32,
+    "edges_at_tail": 32
+  },
+  {
+    "recording": "vc33-long-head450.recording.jsonl",
+    "n_nodes": 450,
+    "t_full_s": 7.8016,
+    "t_marginal_s": 0.017,
+    "worldlines": 32,
+    "regions_at_tail": 32,
+    "edges_at_tail": 32
+  }
+]
