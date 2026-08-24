@@ -5,3 +5,4 @@ __pycache__/
 kaggle.json
 legacy_probe/_staged/
 runs/**/requests.jsonl
+runs/**/kaggle-output/
