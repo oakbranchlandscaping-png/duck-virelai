@@ -40,3 +40,7 @@ all-25 mean 1.2225 · ex-ft09 1.2734 (runs/kaggle-phaseA-v2-2026-08-23/scores.js
   best-of-passes effect. Ring E (n_passes within the 9h envelope) is the cheapest
   score lever on the board; `N_PASSES` is already a config variable in the committed
   Makefile (`environment.n_passes`).
+- **Meter answer (Director, 2026-08-24): the submission rerun burned NO quota** —
+  27.5h/30h remain (the 2.5h was Phase A interactive only). Submission reruns are
+  quota-free; quota bounds only interactive validation runs. Daily submission =
+  a free hidden-set draw at the leaderboard max.
