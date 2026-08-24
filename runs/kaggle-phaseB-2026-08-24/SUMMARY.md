@@ -44,9 +44,9 @@ all-25 mean 1.2225 · ex-ft09 1.2734 (runs/kaggle-phaseA-v2-2026-08-23/scores.js
   27.5h/30h remain (the 2.5h was Phase A interactive only). Submission reruns are
   quota-free; quota bounds only interactive validation runs. Daily submission =
   a free hidden-set draw at the leaderboard max.
-- **Wall-time revision (Director, 2026-08-24): the hidden-set submission run took ~4h**
-  — not the ~2.4h public Phase A showed. Envelope math revised: passes=3 does NOT fit
-  the 9h cap on the hidden set; passes=2 ≈ 8h, tight. Strengthens the deferral below.
+- **Wall time (Director, 2026-08-24, corrected same day): the hidden-set submission ran
+  2h21m** (an initial ~4h reading was corrected from the kernel page). Matches public
+  Phase A (~2.4h) — the passes=3 ≈ 7h envelope math STANDS for when Ring E rejoins.
 - **Director's sequencing ruling (2026-08-24): Ring E validation is DEFERRED — no quota
   spent proving a known-shape effect. Ring 1 (the Virelai insert) builds first; Ring E
   rejoins later as a cheap score booster.** Second dryrun submission (draw #2) launched
