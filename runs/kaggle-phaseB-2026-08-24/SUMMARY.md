@@ -51,3 +51,9 @@ all-25 mean 1.2225 · ex-ft09 1.2734 (runs/kaggle-phaseA-v2-2026-08-23/scores.js
   spent proving a known-shape effect. Ring 1 (the Virelai insert) builds first; Ring E
   rejoins later as a cheap score booster.** Second dryrun submission (draw #2) launched
   same day.
+
+## Draw #2 (Director, 2026-08-25): second hidden submission of the same frozen r0 scored **0.63**
+
+Two draws of identical code: 0.87, 0.63. Mean 0.75, spread 0.24. Leaderboard keeps 0.87
+(max rule). First direct measurement of hidden-set run-to-run variance; confirms the
+public-paired-test gate on ring decisions is necessary, not cautious.
