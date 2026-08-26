@@ -1,0 +1,7 @@
+benchmark.label : duck-virelai-ring11-p2
+benchmark.solver: HarnessSolver(label='duck-harness', runtime_environment=None, job_dir=None, soft_end_time=None, minimal_diagnostics=False, model='local', analyzer_timeout=900.0, max_actions_per_game=None, max_runtime_s_per_game=7920.0, concurrency=28, save_request_logs=False, start_local_server=False, local_server_config='', local_server_api_key_file='', local_server_repo_dir='/home/claude/duck-virelai/variants/ring11/ARC3-Inference', local_server_port=None, local_server_tensor_parallel_size=None, local_server_count=1, cancel_drain_timeout_s=120.0)
+benchmark.passes: 2
+benchmark.games : 25
+git status:
+  ARC3-Inference                   bc6f1b0     DIRTY  main                      Baseline run #1: verified per-game scores table (all-25 1.2…
+  tufa-arc-agi-framework           bc6f1b0     DIRTY  main                      Baseline run #1: verified per-game scores table (all-25 1.2…
