@@ -164,9 +164,21 @@ Ring 4 pre-registers the direction: **the pushed prompt gets shorter as the libr
 gets smarter.** A Ring 4 that renders beautifully and grows the prompt has failed its
 own charter.
 
-**Provenance, typed:** the seven-section shape above is transcribed from the strategy
-chamber's report. This chamber has NOT read `field_card.py` — the golden tree is not
-mounted here. **NOT_MEASURED**; a read-only cite-and-verify against the source is owed
-before Ring 4's DESIGN.md locks, per R-C (origin buys attention, never trust).
+**Provenance, CLOSED 2026-08-26 (read-only sweep, ARC_3_BETA mounted):**
+`arc-prize-2026-arc-agi-3/ARC-AGI-3-Agents/virelai_v4/library/field_card.py`, 617 lines,
+read. Docstring confirmed verbatim ("a VIEW, not data. It reads the library. It does not
+modify it. It produces a string. The string is not stored in the library."). Seven
+sections confirmed — **and the docstring is stale against its own code**: the module also
+renders `_render_background`, `_render_captain_target` and `_render_plan_status`.
+Transcribing "seven sections" would silently drop BACKGROUND, which under the deform-
+background doctrine is not an optional section. **Harvest the code, not the docstring.**
+
+**FRICTION-004 read verbatim** (`v5_proto/08_frictions/`). Two corrections it forces on
+the charter. First, the scar is sharper than "no readers": field_card HAD importers
+(`library/diagnostics.py`, `diagnostics/per_stage_render.py`, `virelai.py`) — it had
+readers and **none of them changed an action**. Second, V4's own resolution states the
+acceptance criterion better than constraint 4 above, and it is hereby the criterion Ring 4
+ships against, cited: *"Does this change what the solver does on at least one game?"
+If not, don't ship it."* · *"Name the consumer before building the producer."*
 
 **Sequence:** Ring 3's run and read complete first, then Ring 4 on the Director's go.
