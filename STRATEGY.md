@@ -1,9 +1,12 @@
 # THE WIN-DISCOVERY STRATEGY — the Virelai method, stated once
-**Type:** `STRATEGY` · **v1** · **2026-08-25** · **Author:** the Director; recorded by the
+**Type:** `STRATEGY` · **v1.2** · **2026-08-26** · **Author:** the Director; recorded by the
 Cowork chamber · **Status:** GOVERNING for this repo — every ring implements a piece of
 this document; every prompt layer teaches it to the model.
 **Sources:** Director's rulings 2026-08-25 · R-B, R-D (canon 4) · canon 1 §2 ·
 PROBE_STRATEGY_v2 + rider · SPEC_SOLVER_LOOPS_v2 · G9/G10/G11.
+**Amendments:** v1.1 — §5 induction/deduction rhythm (Director, 2026-08-26). v1.2 — §6
+the field card reading surface + refreshed live status (2026-08-26). Header carries the
+version; the superseded text stays legible below.
 
 ---
 
@@ -97,3 +100,73 @@ Build consequence, standing: every digest line and sealed read is written to be
 INDUCTION FODDER — exact, compact, structured — and every ring is judged partly on
 whether the model's stated world-model (its induced pattern) sharpens when the ring's
 facts arrive.
+
+---
+
+## Live status (2026-08-26, evening) — supersedes the 2026-08-25 table above
+
+| phase | mechanism | status |
+|---|---|---|
+| 1 grammar | [MAP] ledger · counter seal (Ring 2) · [WORLD]/[EGO] from roster + weave (Ring 2.5) · [DRAIN]/[LEVER] (Ring 3) | Ring 2.5 read: ALL fixtures passed (world types live, 5 ego seals, zero on CLICK). Ring 3 built, battery green, HELD for the go |
+| 2 exploration | untried-tracking + Tier-A subtraction · RESET root · loud batch accounts · [FRONTIER] BFS navigator (Ring 3, 3.5 fence honored) | live through ring25; Ring 3 adds the explicit frontier |
+| 3 description | strategy beat 5; interpretive world model carries the rule | live; vocabulary deepens per ring — **and is the growth Ring 4 is chartered to absorb** |
+| 4 attempt | beat 5, level-to-level | live; world-to-world still held on the §-flag ruling |
+
+Standing behavioral trace: actions 6,220 → 5,189 → 4,830 → 4,495, four rings straight.
+
+---
+
+## 6 · THE READING SURFACE: THE FIELD CARD (Director, 2026-08-26)
+
+**The library owes the model a briefing, not only facts.** The original intent — *an
+expandable field card, built by Virelai, used by an LLM* — is located in the tree at
+`virelai_v4/library/field_card.py` ("a VIEW, not data"), and its scar is FRICTION-004:
+it rendered every turn to a terminal log, a briefing prepared for a reader who never
+came. **The hybrid's LLM is that reader.** Full finding:
+`claude/field-card-finding-2026-08-26.md`.
+
+Two thirds already exist here: the digest is the card's **pushed delta**; the `virelai`
+sandbox variable is its **expandable body** (Memo №3 §4.2 — full structure queryable,
+delta pushed). Not yet carried: the seven-section reading surface, roles grouped for a
+reader, and **GAPS** — a rendered account of what Virelai does not yet know. The model
+currently receives facts and never an account of the blindness around them, which is
+half of honest briefing and is owed under typed silence.
+
+**Ring 4 is chartered on that basis**, with four design constraints binding its
+DESIGN.md — each one earned from a defect this project has already paid for:
+
+1. **The card renders INSIDE the sandbox, as a pure function over `virelai`. It is
+   never serialized into the payload.** "Costs nothing unread" is true only under this
+   constraint: the sandbox is a fresh subprocess per tool call and the whole runtime
+   state ships over stdin every call (duck-sweep F1/F2), so a pre-rendered card would
+   be paid for on every call whether read or not. Unread must mean *unrendered*, not
+   merely *unlooked-at*.
+2. **Rendering may not compute.** v4's docstring promises a view that does not modify;
+   the hybrid's `snapshot()` already calls `_evaluate_seals()` and `_rebuild_map()`.
+   Seal evaluation belongs on the record path, never the read path. A view that
+   advances belief on read is the thing the original docstring was guarding against.
+3. **GAPS is typed silence, not a backlog.** Every gap line names the mechanism of the
+   blindness ("no lever attribution exists on NAV worlds yet"). Open frontier is not a
+   gap — untried actions are the FRONTIER section. Keeping the two apart is what stops
+   GAPS becoming a dumping ground and losing its falsifiability.
+4. **The fixture measures the READER, not the render.** FRICTION-004 was a proven
+   artifact with no consumer; here the consumer is a model that must *choose* to call
+   `virelai_card()`. If it never calls it, Ring 4 reproduces the scar inside the
+   hybrid — a briefing nobody reads, one layer up. Render correctness is a unit-battery
+   matter. The pre-registered fixtures are: **call rate per game**; whether the stated
+   world model sharpens after a call (the §5 induction test, applied directly); and the
+   pushed prompt word count.
+
+**Ring 4 is the first ring whose health metric should FALL.** Prompt grew 2,464 → 2,513
+across the sealed-read contract build-out and was flagged honestly as a finding. The
+card's charter is to absorb that vocabulary — push the delta, expand on demand — so
+Ring 4 pre-registers the direction: **the pushed prompt gets shorter as the library
+gets smarter.** A Ring 4 that renders beautifully and grows the prompt has failed its
+own charter.
+
+**Provenance, typed:** the seven-section shape above is transcribed from the strategy
+chamber's report. This chamber has NOT read `field_card.py` — the golden tree is not
+mounted here. **NOT_MEASURED**; a read-only cite-and-verify against the source is owed
+before Ring 4's DESIGN.md locks, per R-C (origin buys attention, never trust).
+
+**Sequence:** Ring 3's run and read complete first, then Ring 4 on the Director's go.

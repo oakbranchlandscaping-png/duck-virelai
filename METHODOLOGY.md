@@ -108,3 +108,14 @@ output fetches everything; dataset slugs must be unique per ring or bundles coll
 cloud sandbox cannot reach Kaggle's API (bundles built dry-run, Director pushes) ·
 submissions burn NO quota, validations ~2.5h of 30h/week · the Director's daily free
 submission click of the standing config runs independently of everything above.
+
+### §3.6 addendum (interim chamber, 2026-08-26)
+
+`benchmark_initial.pkl` does NOT unpickle outside a Kaggle session — it references
+`arcengine`, which is competition-mounted. Pickle config parity is therefore
+**Kaggle-side-only**. The chamber-side substitute, and it is sufficient: diff
+`preamble.txt` (carries concurrency, `max_runtime_s_per_game`, `analyzer_timeout`,
+model), `setup_commands.json`, `teardown_commands.json` and the `Makefile` against the
+parent ring's bundle — identical there means config parity, with only label, timestamp,
+repo_dir and dataset slug expected to differ. Record the pickle line as NOT_MEASURED
+with the mechanism named; never leave it blank.
