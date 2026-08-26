@@ -70,3 +70,30 @@ is built on (c).**
 | 2 exploration | untried-tracking + Tier-A subtraction (the frontier IS the menu); RESET root marking; loud batch accounts | live (ring11) |
 | 3 description | strategy beat 5 ("state WHAT fired as a rule over the objects"); interpretive world model carries the rule | live (prompt-level); grammar vocabulary deepens with each ring |
 | 4 attempt | strategy beat 5 ("establish the rule directly, few presses; the rule is a hypothesis the next level can kill") | live level-to-level; world-to-world held on the §-flag ruling |
+
+---
+
+## 5 · THE RHYTHM OF INDUCTION AND DEDUCTION (Director, 2026-08-26)
+
+**LLMs are good pattern matchers. The Virelai upgrade probes and deduces the exact
+pattern of each level. This is the rhythm of induction and deduction.**
+
+The division, exactly: Virelai DEDUCES — exact facts from the record (visited states,
+proven no-ops, seals: counter, ego, drain, lever), held without drift for the whole
+game, which no language model can do. The LLM INDUCES — it is natively a pattern
+completer, and completion is the leap deduction cannot make: from clean exact pieces
+to "the pattern of this level is X." The loop alternates: probe → deduce the pieces →
+hand them clean → the model completes the pattern → the completed pattern comes back
+down as a rule the record can test (beat 5), and the next level kills it or keeps it.
+
+Why the baseline fails without this: Tufa asked the pattern matcher to also be the
+bookkeeper, so its inductions ran on drifting self-narrated inputs. Why the hybrid
+works: induction runs on deduced ground truth. The golden thesis ("intelligence is
+not pattern completion") and this instrument are consistent — pattern completion
+CHAINED TO EXACT RULES is the hybrid's whole design, and each ring adds one more
+exact piece for the completer to work with.
+
+Build consequence, standing: every digest line and sealed read is written to be
+INDUCTION FODDER — exact, compact, structured — and every ring is judged partly on
+whether the model's stated world-model (its induced pattern) sharpens when the ring's
+facts arrive.
