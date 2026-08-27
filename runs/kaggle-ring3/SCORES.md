@@ -1,10 +1,55 @@
 # RING 3 — SINGLE VALIDATION RUN, READ
+
+> ## ⚠ CORRECTION — 2026-08-27, SAME DAY, BY THIS CHAMBER
+>
+> **The delivery finding below is WRONG and is retracted. The seals WERE delivered.**
+>
+> It was counted in `prompts/*.log`, whose own header reads **"LATEST MODEL CALL
+> SNAPSHOT"** — ar25 logs 9 prompt renders against 119 actions; sk48 logs 8 against 699.
+> A one-shot seal announcement appears in exactly one prompt per game, so a ~7% sample
+> was expected to miss it. The "per-turn survives / one-shot dies" pattern I called an
+> exact discriminator is **what sampling alone produces**, and I presented it as
+> mechanism. The instrument confirmed on its first try and I did not suspect it.
+>
+> **Counted in `transcripts/*.txt` (the complete record — 487 `[MAP]` lines in ar25 where
+> the prompt log has 26):**
+>
+> | announcement | ring25 | ring3 |
+> |---|---|---|
+> | `[EGO] sealed:` | 8 events / **5 games** (cn04, dc22, ka59, ls20, sc25) | 12 events / 5 games (dc22, ka59, sc25, sp80, tr87) |
+> | `[COUNTER] sealed:` | 4 / 2 games | 4 / 4 games (bp35, dc22, ka59, sp80) |
+> | `[LEVER] sealed:` | 0 (not yet built) | **175 / 13 games** |
+> | `[DRAIN] sealed:` | 0 (not yet built) | **0 / 0 games** |
+>
+> **Consequences.**
+> 1. **Ring 2.5's read was correct.** Its "5 ego seals" matches exactly. My correction of
+>    that chamber was itself the error, and is withdrawn with apology to the record.
+> 2. **The Ring 3.1 delivery-fix proposal is WITHDRAWN.** D1 returns to its prior status:
+>    CONFIRMED in code, **not observed live**.
+> 3. **The drain failure STANDS and is stronger** — zero seals across 25 games in the
+>    complete record, not a sample artifact.
+> 4. Scores, the arm table and the actions rise are unaffected; they came from
+>    `summary.txt`, never from the sample.
+>
+> **Scar, earned twice in one day:** *count events in `transcripts/`, never in
+> `prompts/*.log` — the latter is a snapshot of the last few model calls. And when a
+> pattern is "exact," ask what a sampling artifact would look like first.*
+>
+> **A second hypothesis, raised and killed the same hour:** that 175 lever seals flooded
+> the digest and caused the regression. Tested — games with ≥10 lever seals averaged
+> **−8** actions; games with **zero** averaged **+72**. Every action blowout (sk48 +303,
+> tu93 +503, tr87 +176, re86 +100) had zero lever seals. **Rejected.** The cause of
+> ring3's regression is **NOT_MEASURED.**
+
 **Date:** 2026-08-27 · **Chamber:** Cowork (interim) · **Scorer:** Tufa's, throughout
 **Run:** `taaf-duck-virelai-ring3-share`, 25 games x 1 pass, 2h 12m 55s, 4,768 actions,
 1.61M tokens · **Cadence:** one-run feedback (2026-08-26) — directional feedback and
 per-game shapes, never a promotion or a kill.
 
-## THE HEADLINE IS NOT THE SCORE
+## ~~THE HEADLINE IS NOT THE SCORE~~ — SUPERSEDED BY THE CORRECTION ABOVE
+
+*The section below is left legible per amend-never-edit. Its delivery claim is retracted;
+its fixture verdicts and numbers stand.*
 
 **Prove-it-ran, run first per METHODOLOGY §5, found that three of this ring's five
 sealed reads never reached the model — and that the same was true in ring25.**

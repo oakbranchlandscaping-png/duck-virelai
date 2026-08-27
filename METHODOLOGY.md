@@ -119,3 +119,15 @@ model), `setup_commands.json`, `teardown_commands.json` and the `Makefile` again
 parent ring's bundle — identical there means config parity, with only label, timestamp,
 repo_dir and dataset slug expected to differ. Record the pickle line as NOT_MEASURED
 with the mechanism named; never leave it blank.
+
+### §5 addendum (interim chamber, 2026-08-27) — where to count events
+
+`prompts/*.log` is a **"LATEST MODEL CALL SNAPSHOT"**, not a full prompt history: ~8-9
+renders per game against 119-699 actions. **Prove-it-ran greps for one-shot events
+(seals, boundary notes) MUST be run against `transcripts/*.txt`**, the complete record;
+counting them in the prompt log will read a delivered event as never delivered. Two
+corollaries, both paid for on 2026-08-27: grep the **announcement text**, never the tag
+(the system prompt's contract vocabulary otherwise counts as live events — its tell is
+counts that are identical across all 25 games); and when a pattern looks like an exact
+mechanism on first inspection, state what a sampling artifact would look like before
+reporting it.
