@@ -157,6 +157,27 @@ DESIGN.md — each one earned from a defect this project has already paid for:
    world model sharpens after a call (the §5 induction test, applied directly); and the
    pushed prompt word count.
 
+5. **THE CARD'S INPUT IS OBSERVED, NOT CONCLUDED** (Director, 2026-08-27). Every line
+   the card renders traces to a recorded observation and shows the evidence that earned
+   it. The card reports **what was seen**, not a verdict the model is told to trust.
+
+   *Earned the hard way, 2026-08-27.* Ring 3's ego seals told the model that an 80-cell
+   4x20 bar (sp80), a 1-cell class-0 speck (ka59) and two class-0 blobs at opposite ends
+   of the board (tr87) were **"YOU"** — permanent, with *"a press that does not move you
+   means BLOCKED, not doubt."* Every game we named an ego in scored zero or lost its
+   score. The model is not ignoring us; it complies exactly, which converts a perception
+   defect straight into behaviour. A false conclusion plus *never doubt it* is an
+   unfalsifiable instruction handed to an obedient reader.
+
+   So the card says *"this 4-cell shape moved UP->(-1,0), DOWN->(+1,0) over 6 presses;
+   nothing else moved with your presses"* and lets the reader conclude. Sealed reads may
+   still be rendered — but as observations with their evidence attached, never as
+   verdicts stripped of it, and never with a doubt prohibition. Where a seal is
+   asserted, GAPS states what would falsify it.
+
+   This constraint is also the ring's own measurement: the card's contribution is read by
+   whether the model's stated world model sharpens after it arrives.
+
 **Ring 4 is the first ring whose health metric should FALL.** Prompt grew 2,464 → 2,513
 across the sealed-read contract build-out and was flagged honestly as a finding. The
 card's charter is to absorb that vocabulary — push the delta, expand on demand — so
