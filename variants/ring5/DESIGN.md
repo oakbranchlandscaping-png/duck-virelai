@@ -104,3 +104,29 @@ from another).
   identity but still move); crossings computed over masked footprints may under-count.
 - A ground that itself drifts one cell over the window is "displaced" and disqualifies
   its own crossing — the conjunct is exact, which is also its brittleness.
+
+---
+
+## 2.1 · CONJUNCT 4 — DIRECT CONTROL (Director ruling, 2026-08-27)
+
+> **"An ego is something the agent has *direct* control over. A lever is something the
+> agent's ego can move."**
+
+Adopted as a fourth conjunct, and it closes the gap §7 filed as a pre-registered failure
+(a box pushable in two directions satisfies conjuncts 1-3 and would have sealed EGO).
+
+**Operationalised without circularity:** an ego can move ALONE. A driven object moves only
+on edges where its driver also moved, so its motion-edge set is a **proper subset** of the
+driver's. Refuse any candidate whose anchor-change edges are a proper subset of some other
+worldline's.
+
+Two tones of one body have **equal** motion-edge sets -- not nested -- so both are still
+admitted. That is the campaign's multi-ego case and it survives.
+
+**What this does NOT do:** it refuses the box as an ego; it does not TYPE it as a lever.
+Lever-by-collision is `collision-as-attribution`, which `STATE_OF_THE_CAMPAIGN_EGO` §5
+lists as owed ("every seal reads a click-resolved target; nothing is ever targeted there").
+The box lands as an unclassified mover and GAPS says so.
+
+**F7, pre-registered:** a worldline whose motion-edge set is a proper subset of another's
+never seals EGO.
