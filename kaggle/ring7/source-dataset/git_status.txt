@@ -1,0 +1,3 @@
+git status:
+  ARC3-Inference                   f56bc27     DIRTY  main                      Ring 7: the minimal hybrid — pristine r0 Duck + Captain probe
+  tufa-arc-agi-framework           f56bc27     DIRTY  main                      Ring 7: the minimal hybrid — pristine r0 Duck + Captain probe
