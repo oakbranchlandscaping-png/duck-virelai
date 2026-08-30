@@ -49,13 +49,12 @@ algorithmic evidence behind it. r0 (already run, 1-pass and 2-pass) is the contr
 
 ## 2 · Where this lives
 
-- **`variants/ring-ontology/`** — this file, and (next build step, not yet done) the
-  forked source tree: `baseline/duck-harness/` copied whole, with exactly one change —
+- **`variants/ring-ontology/`** — this file and the forked source tree:
+  `baseline/duck-harness/` copied whole, with exactly one change —
   the notecard block inserted into `ARC3-Inference/inference/agent/prompts.py` per §4.
 - **`kaggle/ring-ontology/`** — the push-ready bundle (source-dataset + kernel), built
-  from the `variants/ring-ontology/` tree once it exists, mirroring the confirmed
-  `variants/ring2` ↔ `kaggle/ring2` pattern (diffed identical, this session). Not built
-  yet — packaging follows the source-tree fork, same order every prior ring used.
+  from the `variants/ring-ontology/` tree, mirroring the confirmed `variants/ring2` ↔
+  `kaggle/ring2` pattern. The packaged source trees diff identical to the variant.
 - The Director pushes and runs it personally, same pattern as every prior arm
   (`kaggle/PUSH.md`, `PUSH-V2.md`, `PUSH-P2.md` — Cowork builds the bundle, the Director
   runs `kaggle datasets create`/`kaggle kernels push` from their own terminal and clicks
@@ -202,11 +201,13 @@ string change — stop, re-fork from r0 rather than reason about a confounded ru
   campaign tests content-and-format together, not separately. Recorded as a possible
   follow-on (a format-only fourth arm) only if this arm shows a real effect worth
   isolating further.
-- **Not yet built:** the forked `variants/ring-ontology/` source tree and the
-  `kaggle/ring-ontology/` push bundle. This document is the charter; the fork and the
-  packaging are the next concrete steps.
+- **Built and pre-flight verified, 2026-08-30:** the forked
+  `variants/ring-ontology/` source tree differs from r0 only in `prompts.py`; the
+  notecard is composed immediately before the compact tool-session rules without a
+  `tool_agent.py` change. The packaged source trees are byte-identical to the variant,
+  the JSON/notebook artifacts parse, and the Captain/Virelai firewall is empty.
 
 ---
 
-*Type: ring DESIGN, `ring-ontology` · v1 · 2026-08-30 · Chief Engineer seat. Committed as
-the campaign's charter. Not yet built, not yet pushed.*
+*Type: ring DESIGN, `ring-ontology` · v1 · 2026-08-30 · Chief Engineer seat. Source and
+push bundle built and pre-flight verified; not yet pushed.*

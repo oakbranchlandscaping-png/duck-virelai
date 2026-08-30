@@ -1,0 +1,22 @@
+{
+  "id": "stephenkaskin/taaf-duck-virelai-ring-ontology-share",
+  "title": "taaf-duck-virelai-ring-ontology-share",
+  "code_file": "taaf_kaggle_run_share.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "competition_sources": [
+    "arc-prize-2026-arc-agi-3"
+  ],
+  "dataset_sources": [
+    "stephenkaskin/taaf-kaggle-source-duck-virelai-ring-ontology",
+    "driessmit1/arc3-vllm-h100-wheelhouse-v3",
+    "driessmit1/vrfai-qwen3-6-27b-fp8-hf-snapshot"
+  ],
+  "kernel_sources": [],
+  "model_sources": [],
+  "machine_shape": "NvidiaRtxPro6000"
+}
