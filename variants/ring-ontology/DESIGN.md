@@ -49,12 +49,13 @@ algorithmic evidence behind it. r0 (already run, 1-pass and 2-pass) is the contr
 
 ## 2 · Where this lives
 
-- **`variants/ring-ontology/`** — this file and the forked source tree:
-  `baseline/duck-harness/` copied whole, with exactly one change —
+- **`variants/ring-ontology/`** — this file, and (next build step, not yet done) the
+  forked source tree: `baseline/duck-harness/` copied whole, with exactly one change —
   the notecard block inserted into `ARC3-Inference/inference/agent/prompts.py` per §4.
 - **`kaggle/ring-ontology/`** — the push-ready bundle (source-dataset + kernel), built
-  from the `variants/ring-ontology/` tree, mirroring the confirmed `variants/ring2` ↔
-  `kaggle/ring2` pattern. The packaged source trees diff identical to the variant.
+  from the `variants/ring-ontology/` tree once it exists, mirroring the confirmed
+  `variants/ring2` ↔ `kaggle/ring2` pattern (diffed identical, this session). Not built
+  yet — packaging follows the source-tree fork, same order every prior ring used.
 - The Director pushes and runs it personally, same pattern as every prior arm
   (`kaggle/PUSH.md`, `PUSH-V2.md`, `PUSH-P2.md` — Cowork builds the bundle, the Director
   runs `kaggle datasets create`/`kaggle kernels push` from their own terminal and clicks
@@ -62,10 +63,11 @@ algorithmic evidence behind it. r0 (already run, 1-pass and 2-pass) is the contr
 
 ## 3 · The notecard
 
-Eight ontology axioms, four genre-convention lines, one search-economy line, one
-render-vs-machine line, a ninth axiom on the honest null (added this pass — see §5), and
-a compressed six-item checklist. Stable per-item tags (`A1…`, `G1…`, `S1`, `M1`, `C1…`) —
-a prompt-local scheme, not this project's `O-8`/`R-A` ruling registry.
+Eight ontology axioms, a ninth on the honest null, a tenth stating the closed taxonomy
+is exhaustive without guaranteeing any member's existence (both added this pass — see
+§5), four genre-convention lines, one search-economy line, one render-vs-machine line,
+and a compressed six-item checklist. Stable per-item tags (`A1…`, `G1…`, `S1`, `M1`,
+`C1…`) — a prompt-local scheme, not this project's `O-8`/`R-A` ruling registry.
 
 ```
 # Ring Ontology — the notecard. Inserted once, as its own constant, positioned LAST
@@ -110,6 +112,13 @@ ARC_GRID_MULTIVERSE_NOTECARD_ADDENDUM = (
     "out to affect nothing and be affected by nothing -- that's a complete, expected "
     "answer, not a gap. Stop hunting for a role once you've tested everything and found "
     "none; a quiet, fully-tested object needs no further explanation.\n"
+    "A10 - Every object's causal role resolves to exactly one of a closed set: an "
+    "embodied self, a counter or other autonomous process, a lever, an unattributed "
+    "environmental force, a dependent member driven by another's effect, or inert "
+    "(affects nothing, is affected by nothing). This list is exhaustive -- there is no "
+    "seventh kind of role. That some object resolves to one of these six is guaranteed; "
+    "which one it resolves to, or whether any given kind appears at all in this game, is "
+    "never guaranteed in advance (A9).\n"
 
     "\nWhat kind of game this is (genre, stated by the platform, true across all of "
     "them):\n"
@@ -129,8 +138,9 @@ ARC_GRID_MULTIVERSE_NOTECARD_ADDENDUM = (
     "S1 - A win being reachable from the start by some action sequence is guaranteed; "
     "the sequence itself is not. Undirected search over the full action space does not "
     "scale. Settling self, counters, and levers where the evidence actually supports "
-    "them (A4-A5, A9) is what narrows the space enough to search it -- turns spent on "
-    "that are what make the later search short, not a cost against solving efficiently.\n"
+    "them (A4-A5, A9-A10) is what narrows the space enough to search it -- turns spent "
+    "on that are what make the later search short, not a cost against solving "
+    "efficiently.\n"
 
     "\nWhat the grid actually is:\n"
     "M1 - The grid renders a smaller set of true variables and update rules; it is not "
@@ -186,6 +196,16 @@ string change — stop, re-fork from r0 rather than reason about a confounded ru
 
 ## 5 · Honest ledger
 
+- **A10 added on explicit Director direction, reading confirmed before writing it.** The
+  Director asked for "the axiomatic archetypes that must exist" as philosophical
+  grounding. Two readings existed and pointed opposite directions: completeness (every
+  object resolves to one of a closed six-member set, including INERT as a full member —
+  canon-true, compatible with A9) versus an existence guarantee (an ego, a counter, and
+  levers are each present in every game — contradicts canon's INERT framing and the
+  evidence-before-belief law, and would have reversed A9). Confirmed completeness before
+  drafting. A10 also names ENVIRONMENTAL FORCE and REACTIVE-DRIVEN for the first time in
+  this notecard — the prior draft named only three of the six archetypes by omission,
+  not by design; A10 closes that gap too.
 - **Self-caught before commit, not after a run:** the first draft of this notecard (A1-A8)
   used conditional phrasing throughout ("can reveal," "is evidence for," "is established
   by... after... excluded") and never literally claimed a self, counter, or lever must
@@ -201,13 +221,11 @@ string change — stop, re-fork from r0 rather than reason about a confounded ru
   campaign tests content-and-format together, not separately. Recorded as a possible
   follow-on (a format-only fourth arm) only if this arm shows a real effect worth
   isolating further.
-- **Built and pre-flight verified, 2026-08-30:** the forked
-  `variants/ring-ontology/` source tree differs from r0 only in `prompts.py`; the
-  notecard is composed immediately before the compact tool-session rules without a
-  `tool_agent.py` change. The packaged source trees are byte-identical to the variant,
-  the JSON/notebook artifacts parse, and the Captain/Virelai firewall is empty.
+- **Not yet built:** the forked `variants/ring-ontology/` source tree and the
+  `kaggle/ring-ontology/` push bundle. This document is the charter; the fork and the
+  packaging are the next concrete steps.
 
 ---
 
-*Type: ring DESIGN, `ring-ontology` · v1 · 2026-08-30 · Chief Engineer seat. Source and
-push bundle built and pre-flight verified; not yet pushed.*
+*Type: ring DESIGN, `ring-ontology` · v1 · 2026-08-30 · Chief Engineer seat. Committed as
+the campaign's charter. Not yet built, not yet pushed.*
