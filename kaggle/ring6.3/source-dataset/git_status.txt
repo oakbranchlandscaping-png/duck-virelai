@@ -1,0 +1,3 @@
+git status:
+  ARC3-Inference                   f36c149     DIRTY  main                      Ring 6.3: handshake repair, reviewed and amended -- exact Ca
+  tufa-arc-agi-framework           f36c149     DIRTY  main                      Ring 6.3: handshake repair, reviewed and amended -- exact Ca
