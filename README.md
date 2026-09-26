@@ -1,5 +1,21 @@
 # duck-virelai
 
+## Current project direction
+
+The active build is `variants/ring9-cybernetic-gates/`. Its North Star is to make Duck investigate
+an ARC world through gated cybernetic targets: establish its action surface and ego, isolate the
+counter, discover levers and reactions, test environmental forces and scoped inertness, and then
+explore counter-masked novel states. A win is admitted only when the environment presents a
+terminal transition; Duck may then explain that observed win using the physics model it learned.
+
+Start with `DOCUMENTATION_INDEX_2026-09-20.md`. It identifies the current governing documents,
+the frozen package and run evidence, and the dated plans retained only as historical port material.
+The current implementation and execution state is maintained in
+`CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-20.md`.
+
+The original competition structure below remains useful repository history. Where it conflicts
+with the current Ring 9 direction, the documentation index and current status document govern.
+
 A competition entry for **ARC Prize 2026 — ARC-AGI-3, Milestone #2** (deadline 2026-09-30).
 
 The shape: Tufa Labs' open-source **Duck harness** (Milestone #1 winner), cloned whole and

@@ -439,6 +439,15 @@ model.
 
 ## 11. How to audit a completed Kaggle run
 
+### Build rhythm after Ring 6.3
+
+Narrow integration fixes no longer go directly from local tests to a full
+25-game run. After local contract tests pass, run a 2–3 game Kaggle smoke set
+that exercises the changed mechanism. Use the full suite only after the smoke
+run proves the repair in the real Kaggle runtime. This keeps transport and
+protocol debugging cheap while reserving full runs for reliability, model-use,
+and outcome measurement.
+
 Use the downloaded artifacts by role:
 
 - `transcripts/*.txt`: authoritative record of the system prompt, exact per-turn user

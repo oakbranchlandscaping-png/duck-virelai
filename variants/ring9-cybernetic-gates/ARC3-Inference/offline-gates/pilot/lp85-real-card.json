@@ -1,0 +1,130 @@
+{
+  "schema": "virelai-expandable-memory-card-v1",
+  "entered_level": 2,
+  "world_mode": "POINTER",
+  "previous_win": {
+    "completed_level": 1,
+    "winning_action": "MOUSE(row=32, col=5)",
+    "acted_cell": [
+      32,
+      5
+    ],
+    "explanation_status": "MINIMAL_OBSERVED_SEPARATOR",
+    "earlier_same_action_failures": 5,
+    "distinguishing_conditions": [
+      {
+        "region": [
+          0,
+          0,
+          29,
+          0
+        ],
+        "winning_pre_state": {
+          "5": 30
+        },
+        "distinct_failed_pre_states": 5
+      }
+    ],
+    "causal_limit": "This separator distinguishes the recorded win from recorded exact-action failures. It is not yet a proven cause."
+  },
+  "known_mechanics": [
+    {
+      "name": "Remote lever A",
+      "kind": "REMOTE_LEVER",
+      "location": [
+        29,
+        2,
+        36,
+        7
+      ],
+      "effect": "remote effects: types=UNIFORM_TRANSFORM,UNKNOWN; directions=CLASS_REWRITE_WITHOUT_SIZE_CHANGE,DECREASES_CELL_COUNT,INCREASES_CELL_COUNT",
+      "affected_regions": [
+        [
+          19,
+          12,
+          22,
+          15
+        ],
+        [
+          43,
+          12,
+          46,
+          15
+        ]
+      ],
+      "observations": 100,
+      "period": null,
+      "periods": []
+    }
+  ],
+  "shared_mechanics": [],
+  "level_comparison": [
+    {
+      "prior_control": "Remote lever A",
+      "prior_location": [
+        29,
+        2,
+        36,
+        7
+      ],
+      "candidate_locations": [
+        [
+          16,
+          19,
+          19,
+          21
+        ],
+        [
+          25,
+          13,
+          28,
+          15
+        ],
+        [
+          34,
+          13,
+          37,
+          15
+        ]
+      ],
+      "status": "UNTESTED"
+    }
+  ],
+  "unknowns": [
+    "The causal condition of the previous win is not proven.",
+    "Candidate counterparts in this level are not confirmed identities.",
+    "Prior-level mechanics may change and must be checked against this level."
+  ],
+  "display": {
+    "controls_shown": 1,
+    "controls_total": 1,
+    "controls_omitted": 0,
+    "controls_not_player_ready": 0,
+    "shared_mechanics_shown": 0,
+    "shared_mechanics_total": 0,
+    "shared_mechanics_omitted": 0
+  },
+  "expand": [
+    {
+      "label": "previous win",
+      "query": "virelai('win', level=1)",
+      "provides": "winning edge and contrast with earlier failures"
+    },
+    {
+      "label": "known mechanics",
+      "query": "virelai('mechanics', level=1)",
+      "provides": "observed controls, effects and affected regions"
+    },
+    {
+      "label": "level comparison",
+      "query": "virelai('carry', level=1)",
+      "provides": "untested counterparts in the new level"
+    },
+    {
+      "label": "full lesson",
+      "query": "virelai('lesson', level=1, detail='full')",
+      "provides": "full evidence-linked lesson and limitations"
+    }
+  ],
+  "text": "VIRELAI WORLD MEMORY \u2014 LEVEL 2\nWORLD: POINTER\n\nPREVIOUS WIN\n- Level 1 ended after MOUSE(row=32, col=5); acted cell=(32, 5).\n- Explanation status: MINIMAL_OBSERVED_SEPARATOR; the same action failed 5 earlier time(s).\n- Pre-win separators observed: [{'region': [0, 0, 29, 0], 'winning_pre_state': {'5': 30}, 'distinct_failed_pre_states': 5}].\n\nKNOWN MECHANICS\n- Remote lever A [REMOTE_LEVER] at [29, 2, 36, 7]: remote effects: types=UNIFORM_TRANSFORM,UNKNOWN; directions=CLASS_REWRITE_WITHOUT_SIZE_CHANGE,DECREASES_CELL_COUNT,INCREASES_CELL_COUNT; affected=[[19, 12, 22, 15], [43, 12, 46, 15]]; period=unmeasured; observed 100 time(s).\n\nLEVEL COMPARISON\n- Remote lever A from [29, 2, 36, 7] may correspond to [[16, 19, 19, 21], [25, 13, 28, 15], [34, 13, 37, 15]] here [UNTESTED].\n\nUNKNOWNS\n- The causal condition of the previous win is not proven.\n- Candidate counterparts in this level are not confirmed identities.\n- Prior-level mechanics may change and must be checked against this level.\n\nEXPAND IF USEFUL\n- previous win: virelai('win', level=1)\n- known mechanics: virelai('mechanics', level=1)\n- level comparison: virelai('carry', level=1)\n- full lesson: virelai('lesson', level=1, detail='full')\nThis is observational memory, not a required plan."
+}

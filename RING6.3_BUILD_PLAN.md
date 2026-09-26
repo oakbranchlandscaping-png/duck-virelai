@@ -426,6 +426,15 @@ Ring 6.3 is not pushed until a captured fake outbound request proves all of the 
 
 ## 11. Kaggle run acceptance gate
 
+### Debugging promotion gate
+
+Future handshake repairs must first run as a 2–3 game Kaggle smoke test after
+local tests pass. The smoke set must include nonzero Captain actions and should
+cover more than one world type when practical. Escalate to the full 25-game
+suite only after every smoke-game handoff passes the exact report, fingerprint,
+accepted-request, and Duck-action checks. A failed smoke run is repaired and
+repeated at smoke scale; it does not trigger another full suite.
+
 The primary denominator is every benchmark game that reaches Duck. Ring 6.3 passes only if
 every handoff-eligible game satisfies:
 

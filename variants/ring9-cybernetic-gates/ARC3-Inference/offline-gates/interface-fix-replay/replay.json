@@ -1,0 +1,61 @@
+{
+  "results": [
+    {
+      "game": "ar25-0c556536_p0",
+      "transitions": 66,
+      "prefix_queries": 67,
+      "query_seconds": 5.035623540024972,
+      "max_query_seconds": 1.4147517920064274,
+      "max_context_utf8_bytes": 1822,
+      "prefix_checks_passed": true,
+      "source_integrity": true,
+      "source_frames_sha256": "4013f4621d14b0a68d381c002150d36d95e0b0a4a9a2275cdb4b07720501fee2"
+    },
+    {
+      "game": "bp35-0a0ad940_p0",
+      "transitions": 80,
+      "prefix_queries": 81,
+      "query_seconds": 15.12724783498561,
+      "max_query_seconds": 2.426761458016699,
+      "max_context_utf8_bytes": 1410,
+      "prefix_checks_passed": true,
+      "source_integrity": true,
+      "source_frames_sha256": "6bfa8452669aaee191286aca79f4075f6d525c7c1041bc545b530f99e49ca25e"
+    },
+    {
+      "game": "lp85-305b61c3_p0",
+      "transitions": 73,
+      "prefix_queries": 74,
+      "query_seconds": 8.661898710095556,
+      "max_query_seconds": 1.364757749979617,
+      "max_context_utf8_bytes": 1840,
+      "prefix_checks_passed": true,
+      "source_integrity": true,
+      "source_frames_sha256": "2e286e5a72de66399c43715b7f98c931275df1463c06579681d2d6ad41b8b10c"
+    },
+    {
+      "game": "ls20-9607627b_p0",
+      "transitions": 46,
+      "prefix_queries": 47,
+      "query_seconds": 1.6253481199673843,
+      "max_query_seconds": 0.44682962499791756,
+      "max_context_utf8_bytes": 693,
+      "prefix_checks_passed": true,
+      "source_integrity": true,
+      "source_frames_sha256": "c521b64620870f2b2a87aeb31d55fbac2ddb4ce00cd5872e935cc249637bfe9d"
+    },
+    {
+      "game": "r11l-495a7899_p0",
+      "transitions": 50,
+      "prefix_queries": 51,
+      "query_seconds": 3.0561421630554833,
+      "max_query_seconds": 0.7743610829929821,
+      "max_context_utf8_bytes": 1386,
+      "prefix_checks_passed": true,
+      "source_integrity": true,
+      "source_frames_sha256": "62263f2de867bf90cc1048391d8dc78b2678dd2f0b508df79e653c72231dacad"
+    }
+  ],
+  "complete": true,
+  "passed": true
+}

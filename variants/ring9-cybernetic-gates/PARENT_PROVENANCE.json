@@ -1,0 +1,23 @@
+{
+  "artifact_separation": {
+    "historical_executed_artifact": "runs/kaggle-ring8-decision-controller-pilot-v2/kaggle-output",
+    "repaired_evaluation": "runs/kaggle-ring8-decision-controller-pilot-v2/CONTROLLER_TRACE_EVALUATION_REPAIRED_2026-09-18.json",
+    "source_variant": "/Users/stephenkaskin/Desktop/virelai-review/duck-virelai/variants/ring9-cybernetic-gates"
+  },
+  "authority": "Fresh implementation under the 2026-09-18 cybernetic gated North Star; the parent is port material, not architectural authority.",
+  "copy_method": "rsync source copy",
+  "created_at": "2026-09-18",
+  "excluded_generated_paths": [
+    ".venv/",
+    ".pytest_cache/",
+    "**/__pycache__/",
+    "**/*.pyc"
+  ],
+  "parent_family": "ring8-decision-controller",
+  "parent_path": "/Users/stephenkaskin/Desktop/virelai-review/duck-virelai/variants/ring8-decision-controller",
+  "parent_source_file_count": 196,
+  "parent_source_tree_sha256": "85b9563f6643f7e50c8578598d226a4eb6910d901a6e6650a63aac6944ff0d87",
+  "repository_head_at_copy": "0efc7ca6cb0b9811128c9f44b90f821ec84a508e",
+  "schema": "virelai-source-provenance-v1",
+  "source_family": "ring9-cybernetic-gates"
+}

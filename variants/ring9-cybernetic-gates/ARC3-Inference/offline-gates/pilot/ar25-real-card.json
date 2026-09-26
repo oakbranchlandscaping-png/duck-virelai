@@ -1,0 +1,69 @@
+{
+  "schema": "virelai-expandable-memory-card-v1",
+  "entered_level": 2,
+  "world_mode": "BODY",
+  "previous_win": {
+    "completed_level": 1,
+    "winning_action": "LEFT",
+    "acted_cell": null,
+    "explanation_status": "MINIMAL_OBSERVED_SEPARATOR",
+    "earlier_same_action_failures": 17,
+    "distinguishing_conditions": [
+      {
+        "region": [
+          0,
+          33,
+          62,
+          62
+        ],
+        "winning_pre_state": {
+          "4": 43,
+          "9": 1818,
+          "11": 29
+        },
+        "distinct_failed_pre_states": 8
+      }
+    ],
+    "causal_limit": "This separator distinguishes the recorded win from recorded exact-action failures. It is not yet a proven cause."
+  },
+  "known_mechanics": [],
+  "shared_mechanics": [],
+  "level_comparison": [],
+  "unknowns": [
+    "The causal condition of the previous win is not proven.",
+    "No cross-level control counterpart has been established.",
+    "Prior-level mechanics may change and must be checked against this level."
+  ],
+  "display": {
+    "controls_shown": 0,
+    "controls_total": 3,
+    "controls_omitted": 0,
+    "controls_not_player_ready": 3,
+    "shared_mechanics_shown": 0,
+    "shared_mechanics_total": 0,
+    "shared_mechanics_omitted": 0
+  },
+  "expand": [
+    {
+      "label": "previous win",
+      "query": "virelai('win', level=1)",
+      "provides": "winning edge and contrast with earlier failures"
+    },
+    {
+      "label": "known mechanics",
+      "query": "virelai('mechanics', level=1)",
+      "provides": "observed controls, effects and affected regions"
+    },
+    {
+      "label": "level comparison",
+      "query": "virelai('carry', level=1)",
+      "provides": "untested counterparts in the new level"
+    },
+    {
+      "label": "full lesson",
+      "query": "virelai('lesson', level=1, detail='full')",
+      "provides": "full evidence-linked lesson and limitations"
+    }
+  ],
+  "text": "VIRELAI WORLD MEMORY \u2014 LEVEL 2\nWORLD: BODY\n\nPREVIOUS WIN\n- Level 1 ended after LEFT; acted cell=None.\n- Explanation status: MINIMAL_OBSERVED_SEPARATOR; the same action failed 17 earlier time(s).\n- Pre-win separators observed: [{'region': [0, 33, 62, 62], 'winning_pre_state': {'4': 43, '9': 1818, '11': 29}, 'distinct_failed_pre_states': 8}].\n\nKNOWN MECHANICS\n- No control mechanic has been established.\n- Presentation limit: 3 additional raw control record(s) lack a usable location or effect summary; expand known mechanics to inspect them.\n\nLEVEL COMPARISON\n- No cross-level counterpart has been established.\n\nUNKNOWNS\n- The causal condition of the previous win is not proven.\n- No cross-level control counterpart has been established.\n- Prior-level mechanics may change and must be checked against this level.\n\nEXPAND IF USEFUL\n- previous win: virelai('win', level=1)\n- known mechanics: virelai('mechanics', level=1)\n- level comparison: virelai('carry', level=1)\n- full lesson: virelai('lesson', level=1, detail='full')\nThis is observational memory, not a required plan."
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "virelai-continuity-fixture-key-v1",
+  "status": "synthetic-key",
+  "judgments": [
+    {"case": "exact_site_same_class", "expected": "CONTINUE", "verb": "STILL", "witness": "exact footprint and held class"},
+    {"case": "exact_site_changed_class", "expected": "CONTINUE", "verb": "RECOLOR", "witness": "exact footprint and changed class"},
+    {"case": "unique_translation", "expected": "CONTINUE", "verb": "MOVE", "witness": "held class, equal normalized shape, reciprocal uniqueness"},
+    {"case": "unique_strict_superset", "expected": "CONTINUE", "verb": "GROW", "witness": "held class, strict cell superset, reciprocal uniqueness"},
+    {"case": "unique_strict_subset", "expected": "CONTINUE", "verb": "SHRINK", "witness": "held class, strict cell subset, reciprocal uniqueness"},
+    {"case": "two_identical_destinations", "expected": "AMBIGUOUS", "witness": "more than one licensed destination"},
+    {"case": "exact_partition_split", "expected": "DISCONTINUE", "witness": "two or more successor components exactly partition the prior footprint"},
+    {"case": "exact_partition_merge", "expected": "DISCONTINUE", "witness": "two or more prior components exactly partition the successor footprint"},
+    {"case": "unlicensed_deformation", "expected": "DISCONTINUE", "witness": "same class but neither site, translation, subset, nor superset"},
+    {"case": "geometry_change", "expected": "DISCONTINUE", "witness": "visible grid geometry changed"},
+    {"case": "level_boundary", "expected": "DISCONTINUE", "witness": "level changed"}
+  ],
+  "limitations": [
+    "This key covers deterministic synthetic cases only.",
+    "A separately frozen real-recording key is still required before accuracy claims or model exposure."
+  ]
+}

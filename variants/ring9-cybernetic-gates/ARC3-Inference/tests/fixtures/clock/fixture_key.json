@@ -1,0 +1,16 @@
+{
+  "schema": "virelai-clock-fixtures-v1",
+  "frozen_before_detector_run": true,
+  "fixtures": [
+    {"id": "positive_monotone", "expected_candidates": 1, "description": "edge support loses one class-7 cell on every varied action"},
+    {"id": "positive_exchange", "expected_candidates": 1, "description": "same support converts class 7 to class 4 on every varied action"},
+    {"id": "positive_variable_rate", "expected_candidates": 1, "description": "monotone loss alternates one and two cells"},
+    {"id": "positive_with_gameplay", "expected_candidates": 1, "description": "monotone support coexists with unrelated visible rewrites"},
+    {"id": "negative_static_strip", "expected_candidates": 0, "description": "edge-aligned strip never changes"},
+    {"id": "negative_player_meter", "expected_candidates": 0, "description": "count reverses with directional actions"},
+    {"id": "negative_lever_resource", "expected_candidates": 0, "description": "resource changes under only one repeated action key"},
+    {"id": "negative_moving_body", "expected_candidates": 0, "description": "body moves while its class count stays constant"},
+    {"id": "negative_global_recolor", "expected_candidates": 0, "description": "one whole-board recolor is not recurrent"},
+    {"id": "negative_no_process", "expected_candidates": 0, "description": "varied actions produce no repeated class-count process"}
+  ]
+}

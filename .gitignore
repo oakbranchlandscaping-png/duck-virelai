@@ -3,6 +3,13 @@ __pycache__/
 .venv/
 .DS_Store
 kaggle.json
+.env
+.env.*
+!.env.example
 legacy_probe/_staged/
 runs/**/requests.jsonl
 runs/**/kaggle-output/
+
+# Run artifacts: immutable executed evidence, kept on disk, not version-controlled (large binaries)
+runs/
+*.egg-info/
