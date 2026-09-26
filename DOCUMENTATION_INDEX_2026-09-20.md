@@ -29,6 +29,8 @@ after a new package, hashes, receipt, and notebook version are created.
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-26.md` | Current execution state, proof boundary, active G4.2 run, remaining plans, and immediate handoff action. |
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-24.md` | Current continuity memory: North Star, repository identities, direct v2 evidence, reset repair, G3/G4 boundary, OpenRouter-first build ladder, and v3 exit. |
 | `handoff/FRESH_TASK_BOOTSTRAP_2026-09-24.md` | Minimal current read order and execution boundary for a new task or collaborator. |
+| `DOCTRINE_TWO_PHASE_LEVER_STUDY_v1_2026-09-26.md` | LOCKED strategy governing G4: Phase 1 deepens each lever alone (consecutive presses to period + class, dynamic queue); Phase 2, gated on Phase-1-complete, presses lever sequences for reversal, persistence, couplings, mechanics. |
+| `BUILD_PLAN_G4_PHASE1_DRAIN_RETURN_EDGE_v1_2026-09-26.md` | The pending-lever return edge: machine-level descent controller, per-orbit classification, PHASE-1-COMPLETE signal, G4.3 re-homed behind it; slices S1..S4, exit criteria, owed tests. |
 | `CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-22.md` | Authoritative current implementation, v3 result, evidence boundary, and full build ladder; updated 2026-09-24. |
 | `INFRASTRUCTURE_G3_QWEN36_KAGGLE_CHECKPOINT_2026-09-23.md` | Exact-Tufa-model Kaggle packaging, receipt binding, source transport, version-1 pre-model failure, version-2 recovery, and pending review boundary. |
 | `runs/kaggle-ring9-g3-qwen36-compatibility-v1/REVIEW_V2.md` | Completed exact-Qwen review: vc33 gate grades, attribution and certificate failures, deadline starvation of ft09/ls20, and required repair slice. |

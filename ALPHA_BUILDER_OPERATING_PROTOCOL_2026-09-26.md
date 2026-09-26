@@ -429,6 +429,16 @@ Never edit an old review to imply later code was present. Add a dated correction
 
 ## 13. Current proof state
 
+> **2026-09-26 UPGRADE - two-phase lever study (LOCKED).** Lever deepening is now two explicit
+> phases. **Phase 1:** each lever alone, consecutive same-lever presses (AAAA) to period +
+> classification - every lever, dynamic queue, newborns append. **Phase 2** (gated on
+> Phase-1-complete): lever sequences (ABA, ABC) for reversal, persistence, couplings, and world
+> mechanics. Governing docs, read before any G4 work: `DOCTRINE_TWO_PHASE_LEVER_STUDY_v1_2026-09-26.md`
+> and `BUILD_PLAN_G4_PHASE1_DRAIN_RETURN_EDGE_v1_2026-09-26.md`. The current `G4.3-LEVER-LIMITS`
+> gate's reversal/persistence are Phase-2 work being re-homed behind the Phase-1-complete signal.
+> Ground truth committed at 1bf09e0 (373 offline tests green, Director-run).
+
+
 ### Live proven
 
 - G0 action-surface reading on vc33.
