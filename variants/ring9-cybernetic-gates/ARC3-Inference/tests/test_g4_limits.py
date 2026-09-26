@@ -182,14 +182,21 @@ def machine_at_g4_3():
             product_id="ORBITS-test", product_type="LeverOrbitSet",
             target_id="G4.2-LEVER-ORBITS", revision=1,
             payload={
-                "lever_entities": ["E-A"],
-                "pending_lever_entities": ["E-B"],
+                "lever_entities": ["E-A", "E-B"],
+                "pending_lever_entities": [],
+                "lever_classes": {"E-A": "ABSORBING", "E-B": "TOGGLE"},
                 "orbits": [
                     {
                         "entity_id": "E-A",
                         "intervention": {"action": "ACTION6", "row": 2, "col": 3},
                         "status": "NULL_AT_OBSERVED_STATE",
                         "state_sequence": [raw_address(grid(1)), raw_address(grid(2))],
+                    },
+                    {
+                        "entity_id": "E-B",
+                        "intervention": {"action": "ACTION6", "row": 5, "col": 6},
+                        "status": "OBSERVED_STATE_RECURRENCE",
+                        "state_sequence": [raw_address(grid(4)), raw_address(grid(5)), raw_address(grid(4))],
                     },
                 ]
             },
@@ -262,10 +269,11 @@ def test_gate_routes_through_endpoint_inverse_and_reapplication():
         "competing_models": ["An unmeasured condition may mediate the paired response."],
         "falsifier": "The same state-scoped sequence fails to restore and re-enable E-A.",
     })
-    assert machine.status == "SATISFIED"
-    product = machine.target_journal.active_product("G4.3-LEVER-LIMITS")
-    assert product is not None
-    assert product.payload["answers"][0]["reversal_disposition"] == "EXACT_REVERSAL_DEMONSTRATED"
+    # All-levers-then-satisfy: E-A is fully studied (endpoint/inverse/reapply proven above),
+    # but E-B remains, so the gate does not satisfy on one lever - it advances to E-B.
+    assert machine.status == "PROBE_REQUIRED"
+    assert machine.gate_view()["progress"]["current_entity_id"] == "E-B"
+    assert machine.target_journal.active_product("G4.3-LEVER-LIMITS") is None
 
 
 def test_completed_orbit_descends_entity_locally_without_discarding_pending_lever():
@@ -289,8 +297,40 @@ def test_completed_orbit_descends_entity_locally_without_discarding_pending_leve
     assert orbit_product.payload["lever_entities"] == ["E-A"]
     assert orbit_product.payload["pending_lever_entities"] == ["E-B"]
     assert orbit_product.payload["lever_classes"]["E-A"] == "ABSORBING"
-    assert machine.gate_id == "G4.3-LEVER-LIMITS"
+    assert machine.gate_id == "G4.2-LEVER-ORBITS"
     view = machine.gate_view()
-    assert view["progress"]["current_entity_id"] == "E-A"
-    assert machine.next_probe_capability()["purpose"] == "CONFIRM_ENDPOINT"
-    assert view["current_study"]["reversal_disposition"] == "UNTESTED"
+    assert view["progress"]["current_entity_id"] == "E-B"
+    assert machine.next_probe_capability()["purpose"] == "REPEAT_CONFIRMED_LEVER"
+
+
+def test_phase1_drains_both_levers_before_g4_3_opens():
+    machine = machine_at_g4_2_with_two_levers()
+
+    def orbit_current_null(tid):
+        cap = machine.next_probe_capability()
+        probe = machine.validate_probe(
+            {"probe_token": cap["probe_token"]}, cap["actions"]
+        )
+        machine.record_outcome(probe, outcome(2, 2, tid))
+        template = machine.gate_view()["answer_template"]
+        machine.submit_answer({
+            **template,
+            "mechanism_explanation": (
+                "Consecutive presses left the counter-masked world unchanged at this state."
+            ),
+            "competing_models": ["The lever may respond from another state."],
+            "falsifier": "A later repeat from this exact masked state changes the world.",
+        })
+
+    assert machine.gate_id == "G4.2-LEVER-ORBITS"
+    orbit_current_null(31)  # E-A
+    # Return edge: E-B still pending, so the machine stays in G4.2 rather than opening G4.3.
+    assert machine.gate_id == "G4.2-LEVER-ORBITS"
+    assert machine.gate_view()["progress"]["current_entity_id"] == "E-B"
+    orbit_current_null(32)  # E-B
+    orbit_product = machine.target_journal.active_product("G4.2-LEVER-ORBITS")
+    assert set(orbit_product.payload["lever_entities"]) == {"E-A", "E-B"}
+    assert orbit_product.payload["pending_lever_entities"] == []
+    assert orbit_product.payload["lever_classes"] == {"E-A": "ABSORBING", "E-B": "ABSORBING"}
+    # Phase-1-complete: only now does Phase 2 (G4.3) open.
+    assert machine.gate_id == "G4.3-LEVER-LIMITS"

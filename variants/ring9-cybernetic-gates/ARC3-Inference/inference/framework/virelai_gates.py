@@ -4310,6 +4310,11 @@ class _LeverLimitTarget:
         product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         if product is None:
             raise GateContractError("G4.3 cannot open before G4.2 emits LeverOrbitSet.")
+        if product.payload.get("pending_lever_entities"):
+            raise GateContractError(
+                "G4.3 (Phase 2) cannot open until every lever is orbited and classified; "
+                "Phase 1 is incomplete."
+            )
         return product
 
     def _control_intervention(self) -> dict[str, Any] | None:
@@ -4725,12 +4730,24 @@ class CyberneticGateMachine:
     def g0_revision(self) -> int:
         return self._g0.revision
 
+    def _effective_target_id(self) -> str:
+        picked = self.target_router.current_or_last().target_id
+        orbit = self.target_journal.active_product(ORBIT_GATE_ID)
+        if orbit is not None and orbit.payload.get("pending_lever_entities"):
+            order = [contract.target_id for contract in self.target_registry.ordered()]
+            if (picked in order and ORBIT_GATE_ID in order
+                    and order.index(picked) > order.index(ORBIT_GATE_ID)):
+                # Phase 1 incomplete: a lever is still un-orbited. Stay in G4.2 to
+                # deepen it before any Phase-2 gate opens (two-phase lever study).
+                return ORBIT_GATE_ID
+        return picked
+
     def _active_adapter(self) -> Any:
-        return self._adapters[self.target_router.current_or_last().target_id]
+        return self._adapters[self._effective_target_id()]
 
     @property
     def gate_id(self) -> str:
-        return self.target_router.current_or_last().target_id
+        return self._effective_target_id()
 
     @property
     def status(self) -> str:
@@ -4942,7 +4959,7 @@ class CyberneticGateMachine:
         return rows
 
     def gate_view(self) -> dict[str, Any]:
-        contract = self.target_router.current_or_last()
+        contract = self.target_registry.get(self._effective_target_id())
         assessment = self.assessment()
         if contract.target_id == REACTION_GATE_ID:
             return self._adapters[REACTION_GATE_ID].compact_gate_view()
