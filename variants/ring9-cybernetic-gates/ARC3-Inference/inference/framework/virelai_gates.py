@@ -4339,6 +4339,15 @@ class _LeverLimitTarget:
             stop_disposition = str(row.get("status") or "")
             steps = tuple(row.get("steps") or ())
             last_step = steps[-1] if steps and isinstance(steps[-1], Mapping) else {}
+            rec_index = last_step.get("recurrence_to_state_index")
+            rec_period = last_step.get("observed_period")
+            if stop_disposition == "OBSERVED_STATE_RECURRENCE" and (
+                rec_index is None or rec_period is None
+            ):
+                seq = tuple(str(item) for item in states)
+                if len(seq) >= 2 and seq[-1] in seq[:-1]:
+                    rec_index = seq.index(seq[-1])
+                    rec_period = len(seq) - 1 - rec_index
             if not entity_id or not isinstance(intervention, Mapping):
                 raise GateContractError("G4.3 requires entity-bound G4.2 orbit rows.")
             if _action_number(str(intervention.get("action") or "")) != 6:
@@ -4356,8 +4365,8 @@ class _LeverLimitTarget:
                     orbit_state_sequence=states,
                     orbit_stop_disposition=stop_disposition,
                     mask_law=self.machine.counter.mask_law,
-                    recurrence_to_state_index=last_step.get("recurrence_to_state_index"),
-                    observed_period=last_step.get("observed_period"),
+                    recurrence_to_state_index=rec_index,
+                    observed_period=rec_period,
                     control_intervention=control,
                     inverse_candidates=candidates,
                 )

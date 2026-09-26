@@ -182,18 +182,14 @@ def machine_at_g4_3():
             product_id="ORBITS-test", product_type="LeverOrbitSet",
             target_id="G4.2-LEVER-ORBITS", revision=1,
             payload={
+                "lever_entities": ["E-A"],
+                "pending_lever_entities": ["E-B"],
                 "orbits": [
                     {
                         "entity_id": "E-A",
                         "intervention": {"action": "ACTION6", "row": 2, "col": 3},
                         "status": "NULL_AT_OBSERVED_STATE",
                         "state_sequence": [raw_address(grid(1)), raw_address(grid(2))],
-                    },
-                    {
-                        "entity_id": "E-B",
-                        "intervention": {"action": "ACTION6", "row": 5, "col": 6},
-                        "status": "OBSERVED_STATE_RECURRENCE",
-                        "state_sequence": [raw_address(grid(4)), raw_address(grid(5)), raw_address(grid(4))],
                     },
                 ]
             },
