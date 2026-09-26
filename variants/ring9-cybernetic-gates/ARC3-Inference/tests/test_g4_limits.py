@@ -288,6 +288,7 @@ def test_completed_orbit_descends_entity_locally_without_discarding_pending_leve
     orbit_product = machine.target_journal.active_product("G4.2-LEVER-ORBITS")
     assert orbit_product.payload["lever_entities"] == ["E-A"]
     assert orbit_product.payload["pending_lever_entities"] == ["E-B"]
+    assert orbit_product.payload["lever_classes"]["E-A"] == "ABSORBING"
     assert machine.gate_id == "G4.3-LEVER-LIMITS"
     view = machine.gate_view()
     assert view["progress"]["current_entity_id"] == "E-A"

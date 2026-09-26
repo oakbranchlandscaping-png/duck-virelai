@@ -106,6 +106,25 @@ LEVER_GATE_ID = "G3-LEVERS"
 REACTION_GATE_ID = "G4-REACTIONS"
 ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
 LIMIT_GATE_ID = "G4.3-LEVER-LIMITS"
+
+
+def _lever_class(answer: Any) -> str:
+    """Phase-1 classification of a lever from its own consecutive-push orbit.
+
+    Derived only from the orbit stop and period (single-lever data); no
+    cross-lever information. Richer typing is a later refinement.
+    """
+    stop = getattr(answer, "stop_disposition", None)
+    period = getattr(answer, "observed_period", None)
+    if stop == "OBSERVED_STATE_RECURRENCE":
+        if period == 2:
+            return "TOGGLE"
+        if isinstance(period, int) and period > 2:
+            return "CYCLE"
+        return "RECURRENT"
+    if stop == "NULL_AT_OBSERVED_STATE":
+        return "ABSORBING"
+    return "UNCLASSIFIED"
 _OPAQUE_ACTION = re.compile(r"^ACTION([0-9]+)$")
 
 
@@ -4162,6 +4181,7 @@ class _LeverOrbitTarget:
                 "pending_lever_entities": list(pending),
                 "orbits": [self._orbits[item].snapshot() for item in completed],
                 "answers": [asdict(self._answers[item]) for item in completed],
+                "lever_classes": {item: _lever_class(self._answers[item]) for item in completed},
                 "epistemic_limit": (
                     "Observed nulls and recurrences are state-scoped; they are not universal laws. "
                     "Pending levers have not been discarded or classified."
