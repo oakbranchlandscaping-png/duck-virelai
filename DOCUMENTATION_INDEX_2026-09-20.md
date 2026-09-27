@@ -1,9 +1,15 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-09-26  
+**Updated:** 2026-09-27  
 **Active source:** `variants/ring9-cybernetic-gates/`  
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
+
+> **2026-09-27 STATUS (Claude, Alpha build seat) — signed.** S1, the Phase-1 drain return edge, is
+> committed at `f8a967e`; its first live test is Kaggle notebook
+> `stephenkaskin/taaf-virelai-ring9-g4-phase1-drain-v1` (v1, 2026-09-27; OpenRouter rung skipped by
+> Director ruling after a 402 credit failure). Security: API keys shipped inside the G3-era Kaggle
+> bundles; never `git add kaggle/`. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md`.
 
 ## 1. Authority rule
 
@@ -25,6 +31,15 @@ after a new package, hashes, receipt, and notebook version are created.
 
 | Document | Role |
 |---|---|
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md` | Current state (supersedes 2026-09-26 for status): S1 committed, live Kaggle test running, commit ledger, corrections, ranked risks, handoff action. Claude, signed. |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-27.md` | Current minimal read order and first action for a new builder. Claude, signed. |
+| `BUILD_SLICE_G4_PHASE1_DRAIN_RETURN_EDGE_2026-09-27.md` | S1 as built: classifier, return edge, G4.3 guard, seed fix, tests, deviations from the plan (no newborn append). Claude, signed. |
+| `INFRASTRUCTURE_G4_PHASE1_DRAIN_KAGGLE_CHECKPOINT_2026-09-27.md` | G4 Kaggle package: authorized skip of the OpenRouter rung, committed-source packaging and secret guard, budget evidence, full pre-upload verification. Claude, signed. |
+| `G4_PHASE1_DRAIN_KAGGLE_RUNBOOK_2026-09-27.md` | Preregistered C1–C4 grading from artifacts, outcome table, and the reusable Kaggle launch procedure (`-r skip`). Claude, signed. |
+| `UPLOAD_STATUS_G4_PHASE1_DRAIN_V1_2026-09-27.md` | Frozen G4 identifiers, hashes, budgets and upload log. Claude, signed. |
+| `INCIDENT_DOTENV_KEYS_IN_KAGGLE_BUNDLES_2026-09-27.md` | OPEN: API keys packaged into the G3-era Kaggle bundles; exposure, containment, Director actions. Claude, signed. |
+| `tools/verify_kaggle_package.py` | Stand-alone pre-upload check: manifests, receipts, src.zip identity, offline/GPU kernel, secret scan, optional byte-identity to a commit. Claude, signed. |
+| `tools/simulate_kaggle_preflight.py` | Runs a package notebook's real startup cells against a simulated /kaggle mount in three layouts (Linux). Claude, signed. |
 | `ALPHA_BUILDER_OPERATING_PROTOCOL_2026-09-26.md` | Replacement-ready protocol for philosophy, repository identity, gate doctrine, engineering rhythm, evidence standards, execution, review, and the active G4.2 handoff. |
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-26.md` | Current execution state, proof boundary, active G4.2 run, remaining plans, and immediate handoff action. |
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-24.md` | Current continuity memory: North Star, repository identities, direct v2 evidence, reset repair, G3/G4 boundary, OpenRouter-first build ladder, and v3 exit. |

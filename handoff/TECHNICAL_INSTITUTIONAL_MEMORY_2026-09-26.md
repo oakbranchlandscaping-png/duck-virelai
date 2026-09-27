@@ -1,5 +1,7 @@
 # Technical institutional memory — Cybernetic Duck
 
+> **Superseded for current state by `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md`** (2026-09-27, Claude). Doctrine and evidence below remain valid.
+
 **Date:** 2026-09-26  
 **Role:** current execution state and evidence ledger; operational memory, not an implementation order  
 **Builder method:** `ALPHA_BUILDER_OPERATING_PROTOCOL_2026-09-26.md`  

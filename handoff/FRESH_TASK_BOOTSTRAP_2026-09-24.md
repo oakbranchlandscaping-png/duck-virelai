@@ -1,5 +1,7 @@
 # Fresh-task bootstrap — Cybernetic Duck
 
+> **Superseded by `handoff/FRESH_TASK_BOOTSTRAP_2026-09-27.md`** (2026-09-27, Claude).
+
 **Updated:** 2026-09-26
 
 > **2026-09-26 UPGRADE - two-phase lever study (LOCKED).** Lever deepening is now two explicit

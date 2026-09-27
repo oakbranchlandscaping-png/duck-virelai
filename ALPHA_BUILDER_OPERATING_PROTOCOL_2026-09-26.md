@@ -429,6 +429,14 @@ Never edit an old review to imply later code was present. Add a dated correction
 
 ## 13. Current proof state
 
+> **2026-09-27 STATUS (Claude, Alpha build seat) — signed.** S1, the Phase-1 drain return edge, is
+> committed at `f8a967e`; its first live test is Kaggle notebook
+> `stephenkaskin/taaf-virelai-ring9-g4-phase1-drain-v1` (v1, 2026-09-27; OpenRouter rung skipped by
+> Director ruling after a 402 credit failure). Security: API keys shipped inside the G3-era Kaggle
+> bundles; never `git add kaggle/`. Sections 13–15 are superseded for status by `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md`.
+> The Kaggle promotion ahead of an OpenRouter pass is a recorded deviation from §8; see
+> `INFRASTRUCTURE_G4_PHASE1_DRAIN_KAGGLE_CHECKPOINT_2026-09-27.md`.
+
 > **2026-09-26 UPGRADE - two-phase lever study (LOCKED).** Lever deepening is now two explicit
 > phases. **Phase 1:** each lever alone, consecutive same-lever presses (AAAA) to period +
 > classification - every lever, dynamic queue, newborns append. **Phase 2** (gated on
