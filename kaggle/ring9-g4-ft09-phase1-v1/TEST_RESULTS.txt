@@ -1,0 +1,3 @@
+Source commit 8cfb7827cb94cb711c7924e877b41f3365765cde (S1 return edge + boundary release).
+Isolated Python 3.12 export: 377 passed, 1 skipped (a recorded ft09 artifact outside the source package). Director-run Mac pytest at the same commit with the protocol's two ignored suites: 366 passed.
+Boundary-release tests (4) failed on f8a967e and pass here, including a replay of the real Kaggle vc33 v1 G4.2 segment that reproduces every recorded masked address.

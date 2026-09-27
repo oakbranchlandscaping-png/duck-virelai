@@ -1,0 +1,1 @@
+Isolated source export of commit 8cfb7827cb94cb711c7924e877b41f3365765cde. Source-manifest and package-manifest hashes define the exact checkpoint; working-tree changes outside this export are not included.

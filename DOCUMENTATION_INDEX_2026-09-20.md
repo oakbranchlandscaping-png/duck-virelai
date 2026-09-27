@@ -31,6 +31,8 @@ after a new package, hashes, receipt, and notebook version are created.
 
 | Document | Role |
 |---|---|
+| `UPLOAD_STATUS_G4_FT09_PHASE1_V1_2026-09-27.md` | ft09 checkpoint: full Phase-1 drain then G4.3 on a world whose levers return without a level change (Director ruling: cross-level is G9); identifiers, budget reasoning, preregistered P/C1–C7/I1–I4, stated risks (ft09 untested live; timer contamination). Claude, signed. |
+| `BUILD_SLICE_G4_PHASE1_BOUNDARY_RELEASE_2026-09-27.md` | S1 deadlock fix (`8cfb782`): interrupted levers leave pending, a level transition closes the level's G4 study, G4.2 no longer SATISFIED while a lever is pending; tests including a real-data replay of the Kaggle v1 G4.2 segment. Claude, signed. |
 | `REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md` | Graded S1 Kaggle run: first G3 closure on the exact model, S1 return edge confirmed live (C4 hold), E0005 orbit ended in a level transition, then an S1-hold deadlock on the interrupted lever; three candidate rulings. Claude, signed. |
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md` | Current state (supersedes 2026-09-26 for status): S1 committed, live Kaggle test running, commit ledger, corrections, ranked risks, handoff action. Claude, signed. |
 | `handoff/FRESH_TASK_BOOTSTRAP_2026-09-27.md` | Current minimal read order and first action for a new builder. Claude, signed. |

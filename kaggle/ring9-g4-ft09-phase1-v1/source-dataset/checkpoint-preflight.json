@@ -1,0 +1,55 @@
+{
+  "claim": "Evaluates the G0-G3 path on ft09 into G4, the full Phase-1 drain of every confirmed lever with the S1 return edge and the boundary release, and G4.3 recurrence re-confirmation once Phase 1 is complete.",
+  "claim_limits": [
+    "Automated grades do not establish semantic correctness.",
+    "ft09 has never been through the gate ladder live; G0-G3 closure is a precondition.",
+    "Phase-2 couplings, sequences (ABA/ABC) and cross-level work are out of scope.",
+    "A receipt-bound human frame review is required for semantic correctness."
+  ],
+  "concurrency": 1,
+  "context_window_tokens": 65536,
+  "infrastructure_criteria": [
+    "I1: G0 assigns CLICK/God Mode from metadata.",
+    "I2: G2 closes with a valid mask or the bounded COUNTER_NOT_OBSERVED_WITHIN_OPENING product; it does not stall.",
+    "I3: G3 inherits the ranked opening frontier and completes the click sweep.",
+    "I4: G4.2 records recurrences without ticker contamination."
+  ],
+  "live_criteria": [
+    "C1: every confirmed lever drains through Phase 1 - each G4.2 orbit reaches a masked null or an exact prior-state recurrence and lands a class (TOGGLE / CYCLE / ABSORBING / RECURRENT).",
+    "C2: the final LeverOrbitSet has pending_lever_entities empty and phase1_status COMPLETE; products accumulate and are never replaced.",
+    "C3: no prior lever's orbit or class is invalidated.",
+    "C4: after each accepted orbit the gate stays in G4.2 while any lever is pending; G4.3 opens only once phase1_status is COMPLETE.",
+    "C5: G4.3 re-confirms a recurrence by one predicted additional period, grading every masked address (EXACT_RECURRENCE_RECONFIRMED or RECURRENCE_DIVERGED at the first mismatch).",
+    "C6: Duck's accepted answers distinguish an observed finite recurrence from a universal or unconditional law.",
+    "C7: no deadlock. If a boundary interrupts an orbit, the lever is recorded as interrupted and leaves pending; a level transition closes the level's G4 study with the G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9 card."
+  ],
+  "max_actions_per_world": 200,
+  "max_output_tokens_per_turn": "server_default",
+  "max_runtime_seconds_per_world": 10800,
+  "model": "vrfai/Qwen3.6-27B-FP8",
+  "passes": 1,
+  "precondition": "P: G3 closes on ft09 with at least two confirmed levers and a G4.1 anatomy for each. A stall at or before G3 is a G0-G3-on-ft09 finding (ft09 has never been through the ladder live) and leaves the G4 criteria ungraded, not failed.",
+  "required_mounted_directories": [
+    "src/ARC3-Inference",
+    "src/tufa-arc-agi-framework"
+  ],
+  "required_mounted_files": [
+    "source-manifest.json",
+    "checkpoint-preflight.json",
+    "execution_receipt.json",
+    "taaf-kaggle-bundle.json",
+    "benchmark_initial.pkl",
+    "deploy_target.pkl",
+    "setup_commands.json"
+  ],
+  "schema": "virelai-gated-checkpoint-preflight-v2",
+  "semantic_action_aliases_exposed": false,
+  "source_commit": "8cfb7827cb94cb711c7924e877b41f3365765cde",
+  "source_delivery": "Kaggle may mount src/ directly or transport it as src.zip; the notebook verifies extracted files before imports.",
+  "stage": "G0-G4.3-FT09-PHASE1-DRAIN",
+  "tool_output_tokens": 1024,
+  "virelai_mode": "gated",
+  "worlds": [
+    "ft09-0d8bbf25"
+  ]
+}
