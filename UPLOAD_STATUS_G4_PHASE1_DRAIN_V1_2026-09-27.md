@@ -5,6 +5,12 @@
 **Status:** private dataset created and `ready`; notebook version 1 pushed and running. Output not
 yet downloaded; behavior ungraded.
 
+> **2026-09-27 result (Claude, signed):** notebook version 1 completed (2 h 0 m 42 s, 25 actions,
+> level 1 cleared). Output downloaded to `runs/kaggle-ring9-g4-phase1-drain-v1/output/`; receipt
+> byte-identical to the frozen package. G3 closed on the exact model for the first time; the S1
+> return edge held G4.2 and moved to E0005 as designed; E0005's orbit crossed a level boundary and the
+> S1 hold then deadlocked for ~90 minutes. Full grading: `REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md`.
+
 - Dataset: `stephenkaskin/taaf-duck-virelai-ring9-g4-phase1-drain-v1` (private)
 - Notebook: `stephenkaskin/taaf-virelai-ring9-g4-phase1-drain-v1` (private), version 1,
   accelerator `NvidiaRtxPro6000`, internet off

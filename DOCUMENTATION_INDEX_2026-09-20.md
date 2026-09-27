@@ -31,6 +31,7 @@ after a new package, hashes, receipt, and notebook version are created.
 
 | Document | Role |
 |---|---|
+| `REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md` | Graded S1 Kaggle run: first G3 closure on the exact model, S1 return edge confirmed live (C4 hold), E0005 orbit ended in a level transition, then an S1-hold deadlock on the interrupted lever; three candidate rulings. Claude, signed. |
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md` | Current state (supersedes 2026-09-26 for status): S1 committed, live Kaggle test running, commit ledger, corrections, ranked risks, handoff action. Claude, signed. |
 | `handoff/FRESH_TASK_BOOTSTRAP_2026-09-27.md` | Current minimal read order and first action for a new builder. Claude, signed. |
 | `BUILD_SLICE_G4_PHASE1_DRAIN_RETURN_EDGE_2026-09-27.md` | S1 as built: classifier, return edge, G4.3 guard, seed fix, tests, deviations from the plan (no newborn append). Claude, signed. |
