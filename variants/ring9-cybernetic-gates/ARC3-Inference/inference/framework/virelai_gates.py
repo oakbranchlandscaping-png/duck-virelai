@@ -108,6 +108,21 @@ ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
 LIMIT_GATE_ID = "G4.3-LEVER-LIMITS"
 
 
+def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
+    """Why Phase 2 (G4.3 onward) may not open yet, or None when it may.
+
+    Shared by the S1 return edge and the G4.3 guard so the two can never disagree.
+    Cross-level work is a separate gate (G9): a level transition closes the level's G4 study.
+    """
+    if payload.get("pending_lever_entities"):
+        return "Phase 1 is incomplete."
+    if payload.get("phase1_status") == "CLOSED_BY_LEVEL_BOUNDARY":
+        return "the level changed during Phase 1; cross-level work belongs to the G9 gate."
+    if not payload.get("lever_entities"):
+        return "no lever completed Phase 1 on this level."
+    return None
+
+
 def _lever_class(answer: Any) -> str:
     """Phase-1 classification of a lever from its own consecutive-push orbit.
 
@@ -3968,6 +3983,10 @@ class _LeverOrbitTarget:
         self._orbits: dict[str, LeverOrbit] = {}
         self._answers: dict[str, LeverOrbitAnswer] = {}
         self._events: list[dict[str, Any]] = []
+        # Levers whose orbit a boundary cut off: neither classified nor pending.
+        self._interruptions: dict[str, dict[str, Any]] = {}
+        # Set once a level transition interrupts an orbit; closes this level's G4 study.
+        self._level_closed: dict[str, Any] | None = None
 
     def _reaction_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
@@ -3998,7 +4017,12 @@ class _LeverOrbitTarget:
 
     def _current_entity(self) -> str | None:
         self._seed()
-        return next((item for item in self._ordered_entities if item not in self._answers), None)
+        if self._level_closed is not None:
+            return None
+        return next((
+            item for item in self._ordered_entities
+            if item not in self._answers and item not in self._interruptions
+        ), None)
 
     def _current_orbit(self) -> LeverOrbit | None:
         entity_id = self._current_entity()
@@ -4021,21 +4045,17 @@ class _LeverOrbitTarget:
         product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         current = self._current_entity()
         orbit = self._current_orbit()
-        if product is not None:
-            disposition = "SATISFIED"
-            unmet: tuple[str, ...] = ()
-        elif current is None:
-            disposition = "ANSWER_REQUIRED"
-            unmet = ("emit the G4.2 orbit product",)
+        # SATISFIED only when no lever remains to study on this level. An active product with
+        # a lever still pending is progress, not satisfaction (the S1 hold keeps G4.2 active).
+        if current is None:
+            disposition = "SATISFIED" if product is not None else "ANSWER_REQUIRED"
+            unmet: tuple[str, ...] = () if product is not None else ("emit the G4.2 orbit product",)
         elif not self._pointer_intervention(self._interventions[current]):
             disposition = "UNRESOLVED"
             unmet = (
                 "NAV/HYBRID repeated activation requires the re-contact pilot slice; "
                 "do not treat repeated movement into the same position as lever activation",
             )
-        elif orbit is not None and orbit.stop_disposition == "BOUNDARY_INTERRUPTED":
-            disposition = "UNRESOLVED"
-            unmet = ("the level or run boundary interrupted this lever orbit",)
         elif orbit is not None and orbit.closed:
             disposition = "ANSWER_REQUIRED"
             unmet = (f"explain the observed repeated-activation orbit for {current}",)
@@ -4151,7 +4171,93 @@ class _LeverOrbitTarget:
             "new_visual_entity_ids": sorted(entities_after - entities_before),
         }
         self._events.append(event)
+        if orbit.closed and orbit.stop_disposition == "BOUNDARY_INTERRUPTED":
+            self._record_interruption(entity_id, orbit, evidence_id, boundary)
         return event
+
+    def _record_interruption(
+        self, entity_id: str, orbit: LeverOrbit, evidence_id: str, boundary: Any
+    ) -> None:
+        """A boundary cut this lever's orbit off: record it and release it from pending.
+
+        The orbit is not completed and gets no class. A level transition also closes this
+        level's G4 study; resolving the lever across levels belongs to the G9 gate.
+        """
+        state = dict(boundary) if isinstance(boundary, Mapping) else {}
+        before, after = state.get("level_before"), state.get("level_after")
+        level_changed = bool(state.get("level_completed")) or (
+            before is not None and after is not None and before != after
+        )
+        self._interruptions[entity_id] = {
+            "entity_id": entity_id,
+            "evidence_ref": evidence_id,
+            "boundary_state": state,
+            "level_transition": level_changed,
+            "orbit": orbit.snapshot(),
+            "resolution": (
+                "deferred to the cross-level gate (G9)" if level_changed
+                else "unresolved on this level; a later same-level re-study may resume it"
+            ),
+        }
+        if level_changed and self._level_closed is None:
+            self._level_closed = {
+                "entity_id": entity_id,
+                "evidence_ref": evidence_id,
+                "level_before": before,
+                "level_after": after,
+            }
+        self.revision += 1
+        self._emit_orbit_product()
+
+    def _emit_orbit_product(self) -> None:
+        completed = tuple(item for item in self._ordered_entities if item in self._answers)
+        interrupted = tuple(item for item in self._ordered_entities if item in self._interruptions)
+        pending = () if self._level_closed is not None else tuple(
+            item for item in self._ordered_entities
+            if item not in self._answers and item not in self._interruptions
+        )
+        unstudied = () if self._level_closed is None else tuple(
+            item for item in self._ordered_entities
+            if item not in self._answers and item not in self._interruptions
+        )
+        identity: dict[str, Any] = {
+            "entities": completed,
+            "answers": [self._answers[item].answer_id for item in completed],
+        }
+        if interrupted:
+            identity["interrupted"] = interrupted
+        product_id = "G4-ORBITS-" + hashlib.sha256(
+            _canonical(identity).encode()
+        ).hexdigest()[:16]
+        phase1_status = (
+            "CLOSED_BY_LEVEL_BOUNDARY" if self._level_closed is not None
+            else "IN_PROGRESS" if pending else "COMPLETE"
+        )
+        self.machine.target_journal.put(MemoryProduct(
+            product_id=product_id,
+            product_type="LeverOrbitSet",
+            target_id=ORBIT_GATE_ID,
+            revision=self.revision,
+            payload={
+                "scope": "G4.2_ENTITY_LOCAL_REPEATED_ACTIVATION_ORBITS",
+                "lever_entities": list(completed),
+                "pending_lever_entities": list(pending),
+                "interrupted_lever_entities": list(interrupted),
+                "unstudied_lever_entities": list(unstudied),
+                "interruptions": [self._interruptions[item] for item in interrupted],
+                "phase1_status": phase1_status,
+                "level_boundary": None if self._level_closed is None else dict(self._level_closed),
+                "orbits": [self._orbits[item].snapshot() for item in completed],
+                "answers": [asdict(self._answers[item]) for item in completed],
+                "lever_classes": {item: _lever_class(self._answers[item]) for item in completed},
+                "epistemic_limit": (
+                    "Observed nulls and recurrences are state-scoped; they are not universal laws. "
+                    "Pending levers have not been discarded or classified. Interrupted levers were "
+                    "cut off by a boundary: they are neither classified nor pending."
+                ),
+            },
+            dependencies=(REACTION_GATE_ID,),
+        ))
 
     def submit_answer(self, raw: Mapping[str, Any]) -> LeverOrbitAnswer:
         entity_id = self._current_entity()
@@ -4164,31 +4270,7 @@ class _LeverOrbitTarget:
             raise GateContractError(f"G4.2 orbit answer rejected: {exc}") from exc
         self._answers[entity_id] = answer
         self.revision += 1
-        completed = tuple(item for item in self._ordered_entities if item in self._answers)
-        pending = tuple(item for item in self._ordered_entities if item not in self._answers)
-        product_id = "G4-ORBITS-" + hashlib.sha256(_canonical({
-            "entities": completed,
-            "answers": [self._answers[item].answer_id for item in completed],
-        }).encode()).hexdigest()[:16]
-        self.machine.target_journal.put(MemoryProduct(
-            product_id=product_id,
-            product_type="LeverOrbitSet",
-            target_id=ORBIT_GATE_ID,
-            revision=self.revision,
-            payload={
-                "scope": "G4.2_ENTITY_LOCAL_REPEATED_ACTIVATION_ORBITS",
-                "lever_entities": list(completed),
-                "pending_lever_entities": list(pending),
-                "orbits": [self._orbits[item].snapshot() for item in completed],
-                "answers": [asdict(self._answers[item]) for item in completed],
-                "lever_classes": {item: _lever_class(self._answers[item]) for item in completed},
-                "epistemic_limit": (
-                    "Observed nulls and recurrences are state-scoped; they are not universal laws. "
-                    "Pending levers have not been discarded or classified."
-                ),
-            },
-            dependencies=(REACTION_GATE_ID,),
-        ))
+        self._emit_orbit_product()
         return answer
 
     def orbit_view(self, entity_id: str) -> dict[str, Any]:
@@ -4224,6 +4306,11 @@ class _LeverOrbitTarget:
                 if item in self._answers
             ],
             "events": list(self._events),
+            "interruptions": [
+                self._interruptions[item] for item in self._ordered_entities
+                if item in self._interruptions
+            ],
+            "level_boundary": None if self._level_closed is None else dict(self._level_closed),
             "unmet_requirements": list(self.assess().unmet_requirements),
         }
 
@@ -4247,13 +4334,12 @@ class _LeverOrbitTarget:
             },
             "unmet_requirements": list(assessment.unmet_requirements),
             "next_operation": (
-                "WAIT_FOR_NEXT_G4_SLICE" if entity_id is None
+                "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
+                if entity_id is None and self._level_closed is not None
+                else "WAIT_FOR_NEXT_G4_SLICE" if entity_id is None
                 else "SUBMIT_GATE_ANSWER" if orbit is not None and orbit.closed
-                and orbit.stop_disposition != "BOUNDARY_INTERRUPTED"
                 else "WAIT_FOR_NAV_RECONTACT_CONTROLLER"
                 if assessment.disposition == "UNRESOLVED" and orbit is not None and not orbit.closed
-                else "BOUNDARY_INTERRUPTED"
-                if orbit is not None and orbit.stop_disposition == "BOUNDARY_INTERRUPTED"
                 else "QUERY_NEXT_PROBE"
             ),
             "rule": (
@@ -4261,6 +4347,22 @@ class _LeverOrbitTarget:
                 "masked null or exact prior-state recurrence."
             ),
         }
+        if self._interruptions:
+            view["interrupted_levers"] = [
+                {
+                    "entity_id": item["entity_id"],
+                    "level_transition": item["level_transition"],
+                    "resolution": item["resolution"],
+                }
+                for item in self._interruptions.values()
+            ]
+        if self._level_closed is not None:
+            view["level_boundary"] = dict(self._level_closed)
+            view["rule"] = (
+                "The level changed during Phase 1, so G4 study for the previous level is closed. "
+                "Cross-level transfer is the separate G9 gate, which is not built. No gated "
+                "operation is available here; do not attempt activations or orbit answers."
+            )
         if orbit is not None:
             view["current_orbit"] = orbit.snapshot(include_cells=False)
             view["expand"] = [{
@@ -4269,7 +4371,7 @@ class _LeverOrbitTarget:
             }]
         if next_probe is not None:
             view["probe_available"] = True
-        if orbit is not None and orbit.closed and orbit.stop_disposition != "BOUNDARY_INTERRUPTED":
+        if orbit is not None and orbit.closed:
             last = orbit.steps[-1]
             view["answer_template"] = {
                 "answer_kind": "LEVER_ORBIT_OBSERVATION",
@@ -4310,10 +4412,11 @@ class _LeverLimitTarget:
         product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         if product is None:
             raise GateContractError("G4.3 cannot open before G4.2 emits LeverOrbitSet.")
-        if product.payload.get("pending_lever_entities"):
+        reason = _phase1_hold_reason(product.payload)
+        if reason is not None:
             raise GateContractError(
                 "G4.3 (Phase 2) cannot open until every lever is orbited and classified; "
-                "Phase 1 is incomplete."
+                + reason
             )
         return product
 
@@ -4733,12 +4836,12 @@ class CyberneticGateMachine:
     def _effective_target_id(self) -> str:
         picked = self.target_router.current_or_last().target_id
         orbit = self.target_journal.active_product(ORBIT_GATE_ID)
-        if orbit is not None and orbit.payload.get("pending_lever_entities"):
+        if orbit is not None and _phase1_hold_reason(orbit.payload) is not None:
             order = [contract.target_id for contract in self.target_registry.ordered()]
             if (picked in order and ORBIT_GATE_ID in order
                     and order.index(picked) > order.index(ORBIT_GATE_ID)):
-                # Phase 1 incomplete: a lever is still un-orbited. Stay in G4.2 to
-                # deepen it before any Phase-2 gate opens (two-phase lever study).
+                # Phase 1 is not complete on this level (a lever is pending, or the level
+                # changed mid-study). Stay in G4.2; no Phase-2 gate opens (two-phase study).
                 return ORBIT_GATE_ID
         return picked
 
