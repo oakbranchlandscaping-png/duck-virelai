@@ -1,0 +1,25 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 160,
+    "max_output_tokens_per_turn": "server_default",
+    "max_runtime_seconds_per_world": 7200,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "mode": "gated",
+  "model": {
+    "id": "vrfai/Qwen3.6-27B-FP8"
+  },
+  "package": {
+    "manifest_sha256": "9241ba8cd5f41b4e6c6a30ec53ede67f96c5da25110af7d5a3988a5b28ea419c",
+    "name": "ring9-g4-phase1-drain-v1",
+    "sha256": "a827ab849f5789cb6c230ff9866347ff660d3cf4b466277bc0993e1f267a2538"
+  },
+  "passes": 1,
+  "schema": "virelai-g4-phase1-drain-execution-receipt-v1",
+  "worlds": [
+    "vc33-5430563c"
+  ]
+}

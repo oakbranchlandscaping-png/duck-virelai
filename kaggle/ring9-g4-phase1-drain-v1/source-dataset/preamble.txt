@@ -1,0 +1,1 @@
+Ring 9 G4 Phase-1 drain (S1) exact-model checkpoint: vc33 only, one pass, 160 actions and 7200 seconds of behavior time after model setup. Source f8a967e. Human review required.
