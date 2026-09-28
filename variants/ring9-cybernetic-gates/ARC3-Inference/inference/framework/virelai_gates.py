@@ -83,9 +83,14 @@ from inference.framework.g4_reactions import (
 )
 from inference.framework.g4_orbits import (
     G4OrbitError,
-    LeverOrbit,
     LeverOrbitAnswer,
     validate_orbit_answer,
+)
+from inference.framework.g4_guided import (
+    INTERRUPTED,
+    LeverRun,
+    is_terminal,
+    level_changed,
 )
 from inference.framework.g4_limits import (
     G4LimitError,
@@ -186,6 +191,8 @@ class ProbeEnvelope:
     admissible_actions: tuple[str, ...] = ()
     target: Mapping[str, Any] | None = None
     pilot_intent: str | None = None
+    # G4-A guided actions: Duck's optional free-text statement of what the action is for.
+    intent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1797,56 +1804,33 @@ def _target_registry() -> TargetRegistry:
         memory_product_type="LeverEffectAnatomySet",
     ))
     registry.register(GoalContract(
-        goal_id="G4.2-LEVER-ORBITS-v1",
+        goal_id="G4A-GUIDED-LEVER-STUDY-v1",
         target_id=ORBIT_GATE_ID,
         question=(
-            "What sequence of counter-masked world states does each confirmed lever produce "
-            "when repeatedly activated?"
+            "What does pressing each confirmed lever repeatedly do, up to a confirmed endpoint "
+            "or recurrence?"
         ),
         desired_knowledge=(
-            "complete observed masked state sequence",
-            "effect sequence under one repeated intervention",
-            "first observed null or exact recurrence",
-            "observed recurrence index and period",
-            "human explanation bounded to the observed orbit",
+            "complete counter-masked state sequence of a consecutive same-click run",
+            "first observed null or exact recurrence, with its period",
+            "confirmation: a second null, or one more full retraced cycle",
+            "single-lever class from the lever's own run",
+            "human explanation bounded to the observed run",
         ),
         prerequisites=(REACTION_GATE_ID,),
-        admissible_probe_kinds=("repeated confirmed lever activation",),
+        admissible_probe_kinds=("any one valid action chosen by Duck (guided target)",),
         completion_predicate=(
-            "The active confirmed lever is repeatedly activated until the counter-masked state "
-            "is unchanged or exactly revisits a prior observed state, then emits an entity-local "
-            "batch for deeper G4 study. Every intermediate state and effect is retained; other "
-            "levers remain pending and a boundary or run budget leaves the active orbit unresolved."
+            "Stated target, Duck-executed: every lever has a confirmed or diverged run read from "
+            "Duck's own consecutive presses, plus an accepted explanation. Boundary-interrupted "
+            "levers are released; a level change closes the level's study (G9 owns transfer). "
+            "The controller never selects Duck's next action."
         ),
         memory_product_type="LeverOrbitSet",
     ))
-    registry.register(GoalContract(
-        goal_id="G4.3-LEVER-LIMITS-v1",
-        target_id=LIMIT_GATE_ID,
-        question=(
-            "Which observed lever endpoints repeat, persist through a control intervention, "
-            "or can be reversed by another confirmed lever?"
-        ),
-        desired_knowledge=(
-            "repeated observed endpoint",
-            "persistence through an available scoped control",
-            "exact restoration of an earlier orbit state",
-            "renewed effectiveness of the original lever after restoration",
-        ),
-        prerequisites=(ORBIT_GATE_ID,),
-        admissible_probe_kinds=(
-            "endpoint confirmation",
-            "scoped persistence control",
-            "confirmed-lever inverse candidate",
-            "original-lever reapplication",
-        ),
-        completion_predicate=(
-            "Each eligible CLICK lever with an observed G4.2 masked null receives one endpoint "
-            "confirmation and every available bounded persistence/reversal test. Reversal requires "
-            "both exact prior-state restoration and renewed original-lever effectiveness."
-        ),
-        memory_product_type="LeverLimitStudySet",
-    ))
+    # G4.3-LEVER-LIMITS is retired from the ladder (Director ruling 2026-09-27: G4 becomes
+    # stated targets). Endpoint and recurrence confirmation moved into G4-A; persistence and
+    # reversal return as Duck-proposed, prediction-first tests in G4-B. The G4.3 study code in
+    # g4_limits.py is kept for that port. See BUILD_PLAN_G4_CLICK_COMPLETION_v2_2026-09-27.md.
     return registry
 
 
@@ -3972,172 +3956,199 @@ class _ReactionTarget:
         return view
 
 
-class _LeverOrbitTarget:
-    """G4.2: repeatedly activate each known lever until masked null or recurrence."""
+class _LeverStudyTarget:
+    """G4-A guided lever study (replaces the scripted G4.2 driver; Claude, 2026-09-27).
+
+    Director ruling 2026-09-27: G4 becomes stated targets. The card states the target and the
+    closure test; Duck chooses every action. The controller records each action, reads lever
+    runs out of Duck's own presses (``g4_guided.LeverRun``), and checks the record. It never
+    selects Duck's next move. The gate id, product type and Phase-1 payload fields are kept so
+    the S1 hold and the boundary-release semantics (8cfb782) carry over unchanged.
+    """
+
+    TARGET = (
+        "For every lever listed below, find out what pressing it repeatedly does. Press the "
+        "lever's click again and again, with no other action in between, until the "
+        "counter-masked board stops changing or returns to an earlier state. Then confirm that "
+        "endpoint: one more press that also changes nothing, or one more full cycle that retraces "
+        "the recorded states. Explain each lever once its run is confirmed."
+    )
+    DONE_WHEN = (
+        "Every lever has a confirmed (or diverged) run and an accepted explanation. A lever whose "
+        "run was cut off by a boundary is recorded as interrupted and released. A level change "
+        "closes this level's study; cross-level work is G9."
+    )
+    RULES = (
+        "You choose every action, in any order. The controller does not pick your moves.",
+        "A press counts only if it is the lever's exact listed click (action and coordinates).",
+        "Any other action, a reset, or a boundary ends an unconfirmed run; start it again when "
+        "you are ready. Ended runs stay on the record as evidence.",
+        "The counter is masked: only non-counter changes count as the board changing.",
+        "Explain a lever with virelai('gate_answer', answer={...}) once its run is CONFIRMED or "
+        "DIVERGED; the answer template for that lever is on this card.",
+    )
 
     def __init__(self, machine: "CyberneticGateMachine") -> None:
         self.machine = machine
         self.revision = 1
         self._ordered_entities: tuple[str, ...] = ()
         self._interventions: dict[str, dict[str, Any]] = {}
-        self._orbits: dict[str, LeverOrbit] = {}
+        self._active_run: LeverRun | None = None
+        self._runs: dict[str, list[LeverRun]] = {}
+        self._completed: dict[str, LeverRun] = {}
         self._answers: dict[str, LeverOrbitAnswer] = {}
         self._events: list[dict[str, Any]] = []
-        # Levers whose orbit a boundary cut off: neither classified nor pending.
+        self._action_count = 0
+        # Levers whose run a boundary cut off: released from pending, still re-studiable.
         self._interruptions: dict[str, dict[str, Any]] = {}
-        # Set once a level transition interrupts an orbit; closes this level's G4 study.
+        # Set once a level transition occurs; closes this level's G4 study (G9 owns transfer).
         self._level_closed: dict[str, Any] | None = None
 
     def _reaction_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
         if product is None:
-            raise GateContractError("G4.2 cannot open before G4.1 emits LeverEffectAnatomySet.")
+            raise GateContractError("G4-A cannot open before G4.1 emits LeverEffectAnatomySet.")
         return product
 
     def _seed(self) -> None:
         if self._ordered_entities:
             return
         product = self._reaction_product()
-        anatomy_rows = product.payload.get("anatomies") or ()
         interventions: dict[str, dict[str, Any]] = {}
         order: list[str] = []
-        for raw in anatomy_rows:
+        for raw in product.payload.get("anatomies") or ():
             if not isinstance(raw, Mapping):
-                raise GateContractError("G4.2 requires structured G4.1 anatomy rows.")
+                raise GateContractError("G4-A requires structured G4.1 anatomy rows.")
             entity_id = str(raw.get("entity_id") or "").strip()
             intervention = raw.get("intervention")
             if not entity_id or not isinstance(intervention, Mapping) or not intervention:
-                raise GateContractError("Each G4.2 subject needs an entity and bound intervention.")
+                raise GateContractError("Each G4-A lever needs an entity and bound intervention.")
             order.append(entity_id)
-            interventions[entity_id] = dict(intervention)
+            interventions[entity_id] = _normalize_action_payload(intervention)
         if not order:
-            raise GateContractError("G4.2 requires at least one confirmed lever.")
+            raise GateContractError("G4-A requires at least one confirmed lever.")
         self._ordered_entities = tuple(order)
         self._interventions = interventions
 
-    def _current_entity(self) -> str | None:
+    # ---- state -------------------------------------------------------------------------
+
+    def _pending(self) -> tuple[str, ...]:
         self._seed()
         if self._level_closed is not None:
-            return None
-        return next((
+            return ()
+        return tuple(
             item for item in self._ordered_entities
             if item not in self._answers and item not in self._interruptions
-        ), None)
+        )
 
-    def _current_orbit(self) -> LeverOrbit | None:
-        entity_id = self._current_entity()
-        if entity_id is None:
-            return None
-        if entity_id not in self._orbits:
-            self._orbits[entity_id] = LeverOrbit(
-                entity_id=entity_id,
-                intervention=self._interventions[entity_id],
-                mask_law=self.machine.counter.mask_law,
-            )
-        return self._orbits[entity_id]
+    def _awaiting_answer(self) -> tuple[str, ...]:
+        return tuple(
+            item for item in self._ordered_entities
+            if item in self._completed and item not in self._answers
+        )
 
-    @staticmethod
-    def _pointer_intervention(intervention: Mapping[str, Any]) -> bool:
-        return _action_number(str(intervention.get("action") or "")) == 6
+    def _lever_for_action(self, action: Mapping[str, Any]) -> str | None:
+        normalized = _canonical(_normalize_action_payload(action))
+        for entity_id in self._ordered_entities:
+            if _canonical(self._interventions[entity_id]) == normalized:
+                return entity_id
+        return None
+
+    def _lever_status(self, entity_id: str) -> str:
+        if entity_id in self._answers:
+            return "EXPLAINED"
+        if entity_id in self._completed:
+            return f"{self._completed[entity_id].status}_AWAITING_EXPLANATION"
+        if self._active_run is not None and self._active_run.entity_id == entity_id:
+            return self._active_run.status
+        if entity_id in self._interruptions:
+            return "INTERRUPTED_RELEASED"
+        return "NOT_STARTED" if not self._runs.get(entity_id) else "RUN_ENDED_RESTART_NEEDED"
+
+    def _studying(self) -> bool:
+        """Duck still has lever runs to perform on this level."""
+        if self._level_closed is not None:
+            return False
+        return any(
+            item not in self._completed and item not in self._interruptions
+            for item in self._ordered_entities
+        )
+
+    # ---- gate protocol -----------------------------------------------------------------
 
     def assess(self) -> GateAssessment:
         self._seed()
         product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
-        current = self._current_entity()
-        orbit = self._current_orbit()
-        # SATISFIED only when no lever remains to study on this level. An active product with
-        # a lever still pending is progress, not satisfaction (the S1 hold keeps G4.2 active).
-        if current is None:
+        pending = self._pending()
+        awaiting = self._awaiting_answer()
+        if not pending:
             disposition = "SATISFIED" if product is not None else "ANSWER_REQUIRED"
-            unmet: tuple[str, ...] = () if product is not None else ("emit the G4.2 orbit product",)
-        elif not self._pointer_intervention(self._interventions[current]):
-            disposition = "UNRESOLVED"
-            unmet = (
-                "NAV/HYBRID repeated activation requires the re-contact pilot slice; "
-                "do not treat repeated movement into the same position as lever activation",
-            )
-        elif orbit is not None and orbit.closed:
-            disposition = "ANSWER_REQUIRED"
-            unmet = (f"explain the observed repeated-activation orbit for {current}",)
-        else:
+            unmet: tuple[str, ...] = () if product is not None else ("emit the G4-A product",)
+        elif self._studying():
             disposition = "PROBE_REQUIRED"
-            unmet = (f"activate confirmed lever {current} again",)
-        refs = tuple(
-            step.evidence_ref
-            for item in self._ordered_entities
-            for step in (() if item not in self._orbits else self._orbits[item].steps)
-        )
+            unmet = tuple(
+                f"{item}: {self._lever_status(item)}" for item in pending
+            )
+        else:
+            disposition = "ANSWER_REQUIRED"
+            unmet = tuple(f"explain the confirmed run for {item}" for item in awaiting)
+        refs = tuple(event["evidence_id"] for event in self._events)
         return GateAssessment(
             target_id=ORBIT_GATE_ID,
             revision=self.revision,
             disposition=disposition,
             evidence_refs=refs,
             unmet_requirements=unmet,
-            explanation=(
-                "G4.2 repeats one confirmed lever at a time. Novel masked states keep the "
-                "orbit open; only an observed masked null or exact prior-state recurrence closes it."
-            ),
+            explanation=self.TARGET,
         )
 
     def next_probe(self) -> ProbeEnvelope | None:
-        entity_id = self._current_entity()
-        orbit = self._current_orbit()
-        if entity_id is None or orbit is None or orbit.closed:
+        self._seed()
+        if not self._studying():
             return None
-        intervention = self._interventions[entity_id]
-        if not self._pointer_intervention(intervention):
+        admissible = tuple(sorted(
+            item.action for item in self.machine.ego.affordances
+            if item.action in self.machine.ego._currently_available
+        ))
+        if not admissible:
             return None
-        activation = len(orbit.steps) + 1
         return ProbeEnvelope(
-            probe_id=f"{ORBIT_GATE_ID}:{entity_id}:{activation}",
+            probe_id=f"{ORBIT_GATE_ID}:GUIDED:{self._action_count + 1}",
             gate_id=ORBIT_GATE_ID,
-            purpose="REPEAT_CONFIRMED_LEVER",
-            question=(
-                "Does another activation reveal a novel counter-masked world state, "
-                "produce a masked null, or revisit an exact prior state?"
-            ),
-            actions=(dict(intervention),),
-            live_alternatives=(
-                "novel masked state", "masked null", "exact state recurrence", "boundary interruption"
-            ),
-            outcome_partition=("novel", "null", "recurrence", "boundary"),
-            declared_at_transition=(
-                orbit.steps[-1].transition_id
-                if orbit.steps else self.machine.observed_through_step
-            ),
+            purpose="GUIDED_ACTION",
+            question=self.TARGET,
+            actions=(),
+            live_alternatives=("run continues", "run stops", "endpoint confirmed", "run ended"),
+            outcome_partition=("recorded",),
+            declared_at_transition=self.machine.observed_through_step,
+            admissible_actions=admissible,
             target={
-                "entity_id": entity_id,
-                "activation_index": activation,
-                "intervention": dict(intervention),
+                "levers": [
+                    {"entity_id": item, "click": dict(self._interventions[item]),
+                     "status": self._lever_status(item)}
+                    for item in self._ordered_entities
+                ],
             },
         )
 
     def validate_probe(
         self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]
     ) -> ProbeEnvelope:
-        expected = self.next_probe()
-        if expected is None:
-            raise GateContractError("G4.2 has no admissible activation in its current state.")
-        supplied = tuple(_normalize_action_payload(item) for item in actions)
-        if _canonical(supplied) != _canonical(expected.actions):
-            raise GateContractError(
-                f"G4.2 admits only the confirmed intervention: {list(expected.actions)!r}."
-            )
-        return expected
+        raise GateContractError(
+            "G4-A has no action to take now: every lever run on this level is confirmed, "
+            "interrupted, or the level closed. Submit the explanations the card asks for."
+        )
 
     def record_outcome(
         self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
     ) -> dict[str, Any]:
-        expected = self.next_probe()
-        if expected is None or expected.probe_id != probe.probe_id:
-            raise GateContractError("Outcome does not belong to the current G4.2 activation.")
+        if probe.gate_id != ORBIT_GATE_ID or probe.purpose != "GUIDED_ACTION":
+            raise GateContractError("Outcome does not belong to the G4-A guided study.")
         grids = grids_from_probe_outcome(outcome)
         if grids is None:
-            raise GateContractError("G4.2 requires lossless full-grid site transitions.")
-        entity_id = str((probe.target or {}).get("entity_id") or "")
-        orbit = self._current_orbit()
-        if orbit is None or orbit.entity_id != entity_id:
-            raise GateContractError("G4.2 outcome does not match the active lever.")
+            raise GateContractError("G4-A requires lossless full-grid site transitions.")
+        self._seed()
+        action = dict(probe.actions[0]) if probe.actions else dict(outcome.get("action") or {})
         evidence_id = "E-" + hashlib.sha256(
             _canonical({"probe_id": probe.probe_id, "outcome": outcome}).encode()
         ).hexdigest()[:16]
@@ -4148,74 +4159,123 @@ class _LeverOrbitTarget:
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         entities_after = set(ledger.entities)
         boundary = outcome.get("boundary_event")
-        try:
-            step = orbit.record(
-                evidence_ref=evidence_id,
-                transition_id=int(outcome.get("transition_id") or 0),
-                before=grids[0],
-                after=grids[1],
-                boundary_state=boundary if isinstance(boundary, Mapping) else None,
-            )
-        except G4OrbitError as exc:
-            raise GateContractError(f"G4.2 orbit rejected: {exc}") from exc
+        boundary_state = dict(boundary) if isinstance(boundary, Mapping) else None
+        transition_id = int(outcome.get("transition_id") or 0)
+        self._action_count += 1
+
+        lever = self._lever_for_action(action)
+        run_event = self._route_action(
+            lever, action, evidence_id, transition_id, grids, boundary_state
+        )
         self.revision += 1
         event = {
             "schema": SCHEMA_VERSION,
             "evidence_id": evidence_id,
             "gate_id": ORBIT_GATE_ID,
             "probe_id": probe.probe_id,
-            "entity_id": entity_id,
+            "action": action,
+            "lever_entity_id": lever,
+            "decision_intent": probe.intent,
             "outcome": compact_probe_outcome(outcome),
-            "orbit_step": asdict(step),
+            "run": run_event,
             "counter_baseline": counter_baseline,
             "new_visual_entity_ids": sorted(entities_after - entities_before),
         }
         self._events.append(event)
-        if orbit.closed and orbit.stop_disposition == "BOUNDARY_INTERRUPTED":
-            self._record_interruption(entity_id, orbit, evidence_id, boundary)
+        if is_terminal(boundary_state):
+            self._record_boundary(evidence_id, boundary_state)
         return event
 
-    def _record_interruption(
-        self, entity_id: str, orbit: LeverOrbit, evidence_id: str, boundary: Any
-    ) -> None:
-        """A boundary cut this lever's orbit off: record it and release it from pending.
-
-        The orbit is not completed and gets no class. A level transition also closes this
-        level's G4 study; resolving the lever across levels belongs to the G9 gate.
-        """
-        state = dict(boundary) if isinstance(boundary, Mapping) else {}
-        before, after = state.get("level_before"), state.get("level_after")
-        level_changed = bool(state.get("level_completed")) or (
-            before is not None and after is not None and before != after
-        )
-        self._interruptions[entity_id] = {
-            "entity_id": entity_id,
-            "evidence_ref": evidence_id,
-            "boundary_state": state,
-            "level_transition": level_changed,
-            "orbit": orbit.snapshot(),
-            "resolution": (
-                "deferred to the cross-level gate (G9)" if level_changed
-                else "unresolved on this level; a later same-level re-study may resume it"
-            ),
-        }
-        if level_changed and self._level_closed is None:
-            self._level_closed = {
-                "entity_id": entity_id,
+    def _route_action(
+        self,
+        lever: str | None,
+        action: Mapping[str, Any],
+        evidence_id: str,
+        transition_id: int,
+        grids: tuple[Any, Any],
+        boundary_state: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        active = self._active_run
+        before, after = grids
+        if lever is None or lever in self._completed or lever in self._answers:
+            if active is not None:
+                active.end("another action was taken")
+                self._active_run = None
+            return {
+                "kind": "OTHER_ACTION" if lever is None else "PRESS_AFTER_CONFIRMED_RUN",
+                "ended_run": None if active is None else active.run_id,
+            }
+        ended = None
+        if active is not None and (
+            active.entity_id != lever or not active.continues_from(before)
+        ):
+            active.end(
+                "another lever was pressed" if active.entity_id != lever
+                else "the board changed between presses (for example a reset)"
+            )
+            ended = active.run_id
+            active = None
+        if active is None:
+            runs = self._runs.setdefault(lever, [])
+            active = LeverRun(
+                run_id=f"{lever}-R{len(runs) + 1}",
+                entity_id=lever,
+                intervention=self._interventions[lever],
+                mask_law=self.machine.counter.mask_law,
+            )
+            runs.append(active)
+            self._active_run = active
+        try:
+            result = active.record(
+                evidence_ref=evidence_id,
+                transition_id=transition_id,
+                before=before,
+                after=after,
+                boundary_state=boundary_state,
+            )
+        except G4OrbitError as exc:
+            raise GateContractError(f"G4-A run rejected: {exc}") from exc
+        if not active.open:
+            self._active_run = None
+        if active.complete:
+            self._completed[lever] = active
+            self._interruptions.pop(lever, None)
+        elif active.status == INTERRUPTED:
+            self._interruptions[lever] = {
+                "entity_id": lever,
+                "run_id": active.run_id,
                 "evidence_ref": evidence_id,
-                "level_before": before,
-                "level_after": after,
+                "boundary_state": dict(boundary_state or {}),
+                "level_transition": level_changed(boundary_state),
+                "run": active.snapshot(),
+                "resolution": (
+                    "deferred to the cross-level gate (G9)" if level_changed(boundary_state)
+                    else "released from pending; Duck may re-study it on this level"
+                ),
+            }
+        return {"kind": "LEVER_PRESS", "run_id": active.run_id, "ended_run": ended, **result}
+
+    def _record_boundary(self, evidence_id: str, boundary_state: Mapping[str, Any] | None) -> None:
+        if self._active_run is not None:
+            self._active_run.end("boundary")
+            self._active_run = None
+        if level_changed(boundary_state) and self._level_closed is None:
+            state = dict(boundary_state or {})
+            self._level_closed = {
+                "evidence_ref": evidence_id,
+                "level_before": state.get("level_before"),
+                "level_after": state.get("level_after"),
             }
         self.revision += 1
         self._emit_orbit_product()
 
     def _emit_orbit_product(self) -> None:
         completed = tuple(item for item in self._ordered_entities if item in self._answers)
-        interrupted = tuple(item for item in self._ordered_entities if item in self._interruptions)
-        pending = () if self._level_closed is not None else tuple(
+        interrupted = tuple(
             item for item in self._ordered_entities
-            if item not in self._answers and item not in self._interruptions
+            if item in self._interruptions and item not in self._answers
         )
+        pending = self._pending()
         unstudied = () if self._level_closed is None else tuple(
             item for item in self._ordered_entities
             if item not in self._answers and item not in self._interruptions
@@ -4226,6 +4286,8 @@ class _LeverOrbitTarget:
         }
         if interrupted:
             identity["interrupted"] = interrupted
+        if self._level_closed is not None:
+            identity["level_closed"] = self._level_closed.get("evidence_ref")
         product_id = "G4-ORBITS-" + hashlib.sha256(
             _canonical(identity).encode()
         ).hexdigest()[:16]
@@ -4239,7 +4301,7 @@ class _LeverOrbitTarget:
             target_id=ORBIT_GATE_ID,
             revision=self.revision,
             payload={
-                "scope": "G4.2_ENTITY_LOCAL_REPEATED_ACTIVATION_ORBITS",
+                "scope": "G4A_GUIDED_SINGLE_LEVER_STUDY",
                 "lever_entities": list(completed),
                 "pending_lever_entities": list(pending),
                 "interrupted_lever_entities": list(interrupted),
@@ -4247,27 +4309,42 @@ class _LeverOrbitTarget:
                 "interruptions": [self._interruptions[item] for item in interrupted],
                 "phase1_status": phase1_status,
                 "level_boundary": None if self._level_closed is None else dict(self._level_closed),
-                "orbits": [self._orbits[item].snapshot() for item in completed],
+                "orbits": [
+                    {**self._completed[item].orbit.snapshot(),
+                     "run_id": self._completed[item].run_id,
+                     "run_status": self._completed[item].status,
+                     "confirmation": list(self._completed[item].confirmation)}
+                    for item in completed
+                ],
                 "answers": [asdict(self._answers[item]) for item in completed],
-                "lever_classes": {item: _lever_class(self._answers[item]) for item in completed},
+                "lever_classes": {item: self._completed[item].lever_class() for item in completed},
+                "action_count": self._action_count,
                 "epistemic_limit": (
-                    "Observed nulls and recurrences are state-scoped; they are not universal laws. "
-                    "Pending levers have not been discarded or classified. Interrupted levers were "
-                    "cut off by a boundary: they are neither classified nor pending."
+                    "Confirmed endpoints and recurrences are state-scoped observations, not "
+                    "universal laws. Interrupted levers were cut off by a boundary and are "
+                    "neither classified nor pending."
                 ),
             },
             dependencies=(REACTION_GATE_ID,),
         ))
 
     def submit_answer(self, raw: Mapping[str, Any]) -> LeverOrbitAnswer:
-        entity_id = self._current_entity()
-        orbit = self._current_orbit()
-        if entity_id is None or orbit is None:
-            raise GateContractError("G4.2 orbit answers are already complete.")
+        self._seed()
+        entity_id = str(raw.get("entity_id") or "").strip()
+        if entity_id not in self._ordered_entities:
+            raise GateContractError(f"Unknown G4-A lever entity_id {entity_id!r}.")
+        if entity_id in self._answers:
+            raise GateContractError(f"{entity_id} is already explained.")
+        run = self._completed.get(entity_id)
+        if run is None:
+            raise GateContractError(
+                f"{entity_id} has no confirmed run yet ({self._lever_status(entity_id)}); "
+                "finish its run before explaining it."
+            )
         try:
-            answer = validate_orbit_answer(raw, orbit)
+            answer = validate_orbit_answer(raw, run.orbit)
         except G4OrbitError as exc:
-            raise GateContractError(f"G4.2 orbit answer rejected: {exc}") from exc
+            raise GateContractError(f"G4-A answer rejected: {exc}") from exc
         self._answers[entity_id] = answer
         self.revision += 1
         self._emit_orbit_product()
@@ -4277,13 +4354,14 @@ class _LeverOrbitTarget:
         self._seed()
         requested = str(entity_id or "").strip()
         if requested not in self._ordered_entities:
-            raise GateContractError(f"Unknown G4.2 lever entity_id {requested!r}.")
-        orbit = self._orbits.get(requested)
+            raise GateContractError(f"Unknown G4-A lever entity_id {requested!r}.")
         return {
-            "schema": "virelai-g4-orbit-detail-v1",
+            "schema": "virelai-g4a-lever-detail-v1",
             "gate_id": ORBIT_GATE_ID,
             "entity_id": requested,
-            "orbit": None if orbit is None else orbit.snapshot(),
+            "click": dict(self._interventions[requested]),
+            "status": self._lever_status(requested),
+            "runs": [run.snapshot() for run in self._runs.get(requested, [])],
             "accepted_answer": (
                 None if requested not in self._answers else asdict(self._answers[requested])
             ),
@@ -4292,15 +4370,15 @@ class _LeverOrbitTarget:
     def snapshot(self) -> dict[str, Any]:
         self._seed()
         return {
-            "schema": "virelai-g4-orbit-gate-v1",
+            "schema": "virelai-g4a-guided-gate-v1",
             "gate_id": ORBIT_GATE_ID,
             "revision": self.revision,
             "status": self.assess().disposition,
             "lever_entities": list(self._ordered_entities),
-            "orbits": [
-                self._orbits[item].snapshot() for item in self._ordered_entities
-                if item in self._orbits
-            ],
+            "runs": {
+                item: [run.snapshot() for run in self._runs.get(item, [])]
+                for item in self._ordered_entities
+            },
             "answers": [
                 asdict(self._answers[item]) for item in self._ordered_entities
                 if item in self._answers
@@ -4314,39 +4392,86 @@ class _LeverOrbitTarget:
             "unmet_requirements": list(self.assess().unmet_requirements),
         }
 
+    def _answer_template(self, entity_id: str) -> dict[str, Any]:
+        run = self._completed[entity_id]
+        orbit = run.orbit
+        last = orbit.steps[-1]
+        return {
+            "answer_kind": "LEVER_ORBIT_OBSERVATION",
+            "entity_id": entity_id,
+            "intervention": dict(orbit.intervention),
+            "stop_disposition": orbit.stop_disposition,
+            "state_sequence": list(orbit.state_sequence),
+            "recurrence_to_state_index": last.recurrence_to_state_index,
+            "observed_period": last.observed_period,
+            "mechanism_explanation": (
+                "Explain what repeated pressing did across this run, why it stopped, and what "
+                "the confirmation showed."
+            ),
+            "evidence_refs": [item.evidence_ref for item in orbit.steps],
+            "competing_models": ["State one model still compatible with this finite run."],
+            "falsifier": "State a later observation that would contradict this description.",
+            "limitations": ["This is an observed state-scoped run, not a universal law."],
+        }
+
     def compact_gate_view(self) -> dict[str, Any]:
         contract = self.machine.target_registry.get(ORBIT_GATE_ID)
         assessment = self.assess()
-        entity_id = self._current_entity()
-        orbit = self._current_orbit()
-        next_probe = self.next_probe()
+        self._seed()
+        awaiting = self._awaiting_answer()
         view: dict[str, Any] = {
-            "schema": "virelai-g4-orbit-card-v1",
+            "schema": "virelai-g4a-target-card-v1",
             "gate_id": ORBIT_GATE_ID,
             "revision": self.revision,
             "status": assessment.disposition,
             "goal_card": contract.goal_card(status=assessment.disposition),
+            "target": self.TARGET,
+            "done_when": self.DONE_WHEN,
+            "rules": list(self.RULES),
+            "levers": [
+                {
+                    "entity_id": item,
+                    "click": dict(self._interventions[item]),
+                    "status": self._lever_status(item),
+                    "class": (
+                        self._completed[item].lever_class() if item in self._completed else None
+                    ),
+                }
+                for item in self._ordered_entities
+            ],
             "progress": {
-                "accepted_count": len(self._answers),
+                "explained_count": len(self._answers),
                 "total_count": len(self._ordered_entities),
-                "current_entity_id": entity_id,
-                "current_activation_count": 0 if orbit is None else len(orbit.steps),
+                "actions_taken": self._action_count,
             },
             "unmet_requirements": list(assessment.unmet_requirements),
             "next_operation": (
                 "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
-                if entity_id is None and self._level_closed is not None
-                else "WAIT_FOR_NEXT_G4_SLICE" if entity_id is None
-                else "SUBMIT_GATE_ANSWER" if orbit is not None and orbit.closed
-                else "WAIT_FOR_NAV_RECONTACT_CONTROLLER"
-                if assessment.disposition == "UNRESOLVED" and orbit is not None and not orbit.closed
-                else "QUERY_NEXT_PROBE"
-            ),
-            "rule": (
-                "Continue through every novel counter-masked state. Stop only on the first "
-                "masked null or exact prior-state recurrence."
+                if self._level_closed is not None and not awaiting
+                else "QUERY_NEXT_PROBE" if self._studying()
+                else "SUBMIT_GATE_ANSWER" if awaiting
+                else "WAIT_FOR_NEXT_G4_SLICE"
             ),
         }
+        if self._active_run is not None:
+            run = self._active_run
+            view["active_run"] = {
+                "run_id": run.run_id,
+                "entity_id": run.entity_id,
+                "status": run.status,
+                "presses": len(run.orbit.steps) + len(run.confirmation),
+                "confirmation_required": run.confirmation_required,
+                "confirmation_done": len(run.confirmation),
+            }
+        if awaiting:
+            # Bounded so the binding card stays inside the gate-context budget on many-lever
+            # worlds; the remaining templates appear as earlier ones are answered.
+            view["answer_templates"] = [self._answer_template(item) for item in awaiting[:3]]
+            if len(awaiting) > 3:
+                view["more_levers_awaiting_explanation"] = list(awaiting[3:])
+        view["answer_template"] = (
+            None if not awaiting else self._answer_template(awaiting[0])
+        )
         if self._interruptions:
             view["interrupted_levers"] = [
                 {
@@ -4358,42 +4483,15 @@ class _LeverOrbitTarget:
             ]
         if self._level_closed is not None:
             view["level_boundary"] = dict(self._level_closed)
-            view["rule"] = (
-                "The level changed during Phase 1, so G4 study for the previous level is closed. "
-                "Cross-level transfer is the separate G9 gate, which is not built. No gated "
-                "operation is available here; do not attempt activations or orbit answers."
-            )
-        if orbit is not None:
-            view["current_orbit"] = orbit.snapshot(include_cells=False)
-            view["expand"] = [{
-                "label": "full orbit record",
-                "query": f"virelai('orbit', id={orbit.entity_id!r})",
-            }]
-        if next_probe is not None:
-            view["probe_available"] = True
-        if orbit is not None and orbit.closed:
-            last = orbit.steps[-1]
-            view["answer_template"] = {
-                "answer_kind": "LEVER_ORBIT_OBSERVATION",
-                "entity_id": orbit.entity_id,
-                "intervention": dict(orbit.intervention),
-                "stop_disposition": orbit.stop_disposition,
-                "state_sequence": list(orbit.state_sequence),
-                "recurrence_to_state_index": last.recurrence_to_state_index,
-                "observed_period": last.observed_period,
-                "mechanism_explanation": (
-                    "Explain what repeated activation did across this observed sequence and why "
-                    "the final transition is a masked null or exact recurrence."
-                ),
-                "evidence_refs": [item.evidence_ref for item in orbit.steps],
-                "competing_models": ["State one model still compatible with this finite orbit."],
-                "falsifier": "State a later observation that would contradict this orbit description.",
-                "limitations": [
-                    "This is an observed state-scoped orbit, not a universal reaction law."
-                ],
-            }
-        else:
-            view["answer_template"] = None
+            view["rules"] = [
+                "The level changed, so G4 study for the previous level is closed. Cross-level "
+                "transfer is the separate G9 gate, which is not built. No lever runs remain; "
+                "explain any confirmed run still listed, otherwise no gated operation is available."
+            ]
+        view["expand"] = [{
+            "label": "full lever record",
+            "query": "virelai('orbit', id='<lever entity_id>')",
+        }]
         return view
 
 
@@ -4803,7 +4901,7 @@ class CyberneticGateMachine:
             COUNTER_GATE_ID: _CounterTarget(self),
             LEVER_GATE_ID: _LeverTarget(self),
             REACTION_GATE_ID: _ReactionTarget(self),
-            ORBIT_GATE_ID: _LeverOrbitTarget(self),
+            ORBIT_GATE_ID: _LeverStudyTarget(self),
             LIMIT_GATE_ID: _LeverLimitTarget(self),
         }
         self._capability_secret = secrets.token_bytes(32)
@@ -4900,7 +4998,16 @@ class CyberneticGateMachine:
             "outcome_partition": list(probe.outcome_partition),
             "declared_at_transition": probe.declared_at_transition,
         }
-        if probe.admissible_actions:
+        if probe.admissible_actions and probe.purpose == "GUIDED_ACTION":
+            capability["admissible_actions"] = list(probe.admissible_actions)
+            capability["optional_decision_field"] = {
+                "intent": "one short sentence: what this action is for"
+            }
+            capability["instruction"] = (
+                "You choose this action. Pick any one admissible action (ACTION6 needs row and "
+                "col) that advances the target; the controller records and audits it."
+            )
+        elif probe.admissible_actions:
             capability["admissible_actions"] = list(probe.admissible_actions)
             capability["required_decision_field"] = {
                 "pilot_intent": ["APPROACH", "CONTACT_ATTEMPT"]
@@ -4919,11 +5026,18 @@ class CyberneticGateMachine:
             raise GateContractError(
                 "Query virelai('next_probe'), then call action(actions, decision={'probe_token': token})."
             )
+        guided = probe.purpose == "GUIDED_ACTION" and bool(probe.admissible_actions)
         allowed_decision_fields = {"probe_token"}
-        if probe.admissible_actions:
+        if guided:
+            allowed_decision_fields.add("intent")
+        elif probe.admissible_actions:
             allowed_decision_fields.add("pilot_intent")
         unexpected = set(decision) - allowed_decision_fields
         if unexpected:
+            if guided:
+                raise GateContractError(
+                    "A guided G4 action decision accepts only probe_token and an optional intent."
+                )
             if probe.admissible_actions:
                 raise GateContractError(
                     "Embodied pilot decision accepts only probe_token and pilot_intent; "
@@ -4949,7 +5063,15 @@ class CyberneticGateMachine:
             )
         supplied_actions = tuple(_normalize_action_payload(item) for item in actions)
         admitted_probe = probe
-        if probe.admissible_actions:
+        if guided:
+            if len(supplied_actions) != 1 or supplied_actions[0]["action"] not in probe.admissible_actions:
+                raise GateContractError(
+                    "A guided G4 action is exactly one action from: "
+                    f"{list(probe.admissible_actions)!r}."
+                )
+            intent = str(decision.get("intent") or "").strip()[:240] or None
+            admitted_probe = replace(probe, actions=supplied_actions, intent=intent)
+        elif probe.admissible_actions:
             if len(supplied_actions) != 1 or supplied_actions[0]["action"] not in probe.admissible_actions:
                 raise GateContractError(
                     "The embodied pilot admits one action from: "

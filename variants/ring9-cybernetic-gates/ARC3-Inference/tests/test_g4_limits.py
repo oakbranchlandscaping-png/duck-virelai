@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from inference.framework.cybernetic_targeting import MemoryProduct
 from inference.framework.g4_limits import (
     G4LimitError,
     LeverLimitStudy,
     validate_limit_answer,
 )
 from inference.framework.masked_world_state import raw_address
-from inference.framework.virelai_gates import CyberneticGateMachine
 
 
 def grid(value):
@@ -142,195 +140,8 @@ def test_answer_cannot_invent_an_inverse():
         validate_limit_answer(raw, target)
 
 
-def machine_at_g4_3():
-    initial = grid(2)
-    machine = CyberneticGateMachine(valid_actions=["ACTION6"], initial_grid=initial)
-    machine.submit_answer({
-        "answer_id": "G0-test",
-        "action_metadata": [{"action": "ACTION6", "requires_coordinates": True}],
-        "semantic_claims": [],
-        "epistemic_limit": "Effects remain unknown until observed.",
-    })
-    products = (
-        MemoryProduct(
-            product_id="EGO-test", product_type="EgoLaw", target_id="G1-EGO", revision=1,
-            payload={"mode": "POINTER_GOD_MODE"}, dependencies=("G0-ACTION-METADATA",),
-        ),
-        MemoryProduct(
-            product_id="COUNTER-test", product_type="CounterGateProduct",
-            target_id="G2-COUNTER", revision=1, payload={"mask_law": None},
-            dependencies=("G1-EGO",),
-        ),
-        MemoryProduct(
-            product_id="LEVERS-test", product_type="LeverInventory",
-            target_id="G3-LEVERS", revision=1,
-            payload={"lever_entities": ["E-A", "E-B"], "clean_null_entities": []},
-            dependencies=("G2-COUNTER",),
-        ),
-        MemoryProduct(
-            product_id="ANATOMY-test", product_type="LeverEffectAnatomySet",
-            target_id="G4-REACTIONS", revision=1,
-            payload={
-                "anatomies": [
-                    {"entity_id": "E-A", "intervention": {"action": "ACTION6", "row": 2, "col": 3}},
-                    {"entity_id": "E-B", "intervention": {"action": "ACTION6", "row": 5, "col": 6}},
-                ]
-            },
-            dependencies=("G3-LEVERS",),
-        ),
-        MemoryProduct(
-            product_id="ORBITS-test", product_type="LeverOrbitSet",
-            target_id="G4.2-LEVER-ORBITS", revision=1,
-            payload={
-                "lever_entities": ["E-A", "E-B"],
-                "pending_lever_entities": [],
-                "lever_classes": {"E-A": "ABSORBING", "E-B": "TOGGLE"},
-                "orbits": [
-                    {
-                        "entity_id": "E-A",
-                        "intervention": {"action": "ACTION6", "row": 2, "col": 3},
-                        "status": "NULL_AT_OBSERVED_STATE",
-                        "state_sequence": [raw_address(grid(1)), raw_address(grid(2))],
-                    },
-                    {
-                        "entity_id": "E-B",
-                        "intervention": {"action": "ACTION6", "row": 5, "col": 6},
-                        "status": "OBSERVED_STATE_RECURRENCE",
-                        "state_sequence": [raw_address(grid(4)), raw_address(grid(5)), raw_address(grid(4))],
-                    },
-                ]
-            },
-            dependencies=("G4-REACTIONS",),
-        ),
-    )
-    for product in products:
-        machine.target_journal.put(product)
-    return machine
-
-
-def machine_at_g4_2_with_two_levers():
-    machine = machine_at_g4_3()
-    machine.target_journal.invalidate("G4.2-LEVER-ORBITS", include_self=True)
-    return machine
-
-
-def outcome(before, after, transition_id):
-    left, right = grid(before), grid(after)
-    return {
-        "transition_id": transition_id,
-        "action": {"action": "ACTION6", "row": 0, "col": 0},
-        "changed_cells": [
-            {"row": row, "col": col, "before": value, "after": right[row][col]}
-            for row, values in enumerate(left)
-            for col, value in enumerate(values)
-            if value != right[row][col]
-        ],
-        "site_transitions": [
-            {"row": row, "col": col, "before": value, "after": right[row][col]}
-            for row, values in enumerate(left)
-            for col, value in enumerate(values)
-        ],
-        "shape_before": [2, 2],
-        "shape_after": [2, 2],
-        "boundary_event": {"state": "PLAYING"},
-    }
-
-
-def execute(machine, before, after, transition_id):
-    capability = machine.next_probe_capability()
-    probe = machine.validate_probe(
-        {"probe_token": capability["probe_token"]}, capability["actions"]
-    )
-    return machine.record_outcome(probe, outcome(before, after, transition_id))
-
-
-def test_gate_routes_through_endpoint_inverse_and_reapplication():
-    machine = machine_at_g4_3()
-    assert machine.gate_id == "G4.3-LEVER-LIMITS"
-    assert machine.gate_view()["progress"]["current_phase"] == "CONFIRM_ENDPOINT"
-
-    first = execute(machine, 2, 2, 11)
-    assert first["limit_observation"]["disposition"] == "ENDPOINT_CONFIRMED"
-    assert machine.next_probe_capability()["purpose"] == "TEST_INVERSE"
-
-    second = execute(machine, 2, 1, 12)
-    assert second["limit_observation"]["disposition"] == "EXACT_ORBIT_STATE_RESTORED"
-    assert machine.next_probe_capability()["purpose"] == "REAPPLY_ORIGINAL"
-
-    third = execute(machine, 1, 2, 13)
-    assert third["limit_observation"]["disposition"] == "ORIGINAL_REENABLED"
-    template = machine.gate_view()["answer_template"]
-    machine.submit_answer({
-        **template,
-        "mechanism_explanation": (
-            "The endpoint repeated, E-B restored the earlier orbit state, and E-A then "
-            "became effective again under the observed conditions."
-        ),
-        "competing_models": ["An unmeasured condition may mediate the paired response."],
-        "falsifier": "The same state-scoped sequence fails to restore and re-enable E-A.",
-    })
-    # All-levers-then-satisfy: E-A is fully studied (endpoint/inverse/reapply proven above),
-    # but E-B remains, so the gate does not satisfy on one lever - it advances to E-B.
-    assert machine.status == "PROBE_REQUIRED"
-    assert machine.gate_view()["progress"]["current_entity_id"] == "E-B"
-    assert machine.target_journal.active_product("G4.3-LEVER-LIMITS") is None
-
-
-def test_completed_orbit_descends_entity_locally_without_discarding_pending_lever():
-    machine = machine_at_g4_2_with_two_levers()
-    assert machine.gate_id == "G4.2-LEVER-ORBITS"
-    capability = machine.next_probe_capability()
-    probe = machine.validate_probe(
-        {"probe_token": capability["probe_token"]}, capability["actions"]
-    )
-    machine.record_outcome(probe, outcome(2, 2, 21))
-    template = machine.gate_view()["answer_template"]
-    machine.submit_answer({
-        **template,
-        "mechanism_explanation": (
-            "The active lever produced no counter-masked change at this exact observed state."
-        ),
-        "competing_models": ["The same lever may respond from another state."],
-        "falsifier": "A repeat from this exact masked state later changes the world.",
-    })
-    orbit_product = machine.target_journal.active_product("G4.2-LEVER-ORBITS")
-    assert orbit_product.payload["lever_entities"] == ["E-A"]
-    assert orbit_product.payload["pending_lever_entities"] == ["E-B"]
-    assert orbit_product.payload["lever_classes"]["E-A"] == "ABSORBING"
-    assert machine.gate_id == "G4.2-LEVER-ORBITS"
-    view = machine.gate_view()
-    assert view["progress"]["current_entity_id"] == "E-B"
-    assert machine.next_probe_capability()["purpose"] == "REPEAT_CONFIRMED_LEVER"
-
-
-def test_phase1_drains_both_levers_before_g4_3_opens():
-    machine = machine_at_g4_2_with_two_levers()
-
-    def orbit_current_null(tid):
-        cap = machine.next_probe_capability()
-        probe = machine.validate_probe(
-            {"probe_token": cap["probe_token"]}, cap["actions"]
-        )
-        machine.record_outcome(probe, outcome(2, 2, tid))
-        template = machine.gate_view()["answer_template"]
-        machine.submit_answer({
-            **template,
-            "mechanism_explanation": (
-                "Consecutive presses left the counter-masked world unchanged at this state."
-            ),
-            "competing_models": ["The lever may respond from another state."],
-            "falsifier": "A later repeat from this exact masked state changes the world.",
-        })
-
-    assert machine.gate_id == "G4.2-LEVER-ORBITS"
-    orbit_current_null(31)  # E-A
-    # Return edge: E-B still pending, so the machine stays in G4.2 rather than opening G4.3.
-    assert machine.gate_id == "G4.2-LEVER-ORBITS"
-    assert machine.gate_view()["progress"]["current_entity_id"] == "E-B"
-    orbit_current_null(32)  # E-B
-    orbit_product = machine.target_journal.active_product("G4.2-LEVER-ORBITS")
-    assert set(orbit_product.payload["lever_entities"]) == {"E-A", "E-B"}
-    assert orbit_product.payload["pending_lever_entities"] == []
-    assert orbit_product.payload["lever_classes"] == {"E-A": "ABSORBING", "E-B": "ABSORBING"}
-    # Phase-1-complete: only now does Phase 2 (G4.3) open.
-    assert machine.gate_id == "G4.3-LEVER-LIMITS"
+# The gate-level G4.3 routing tests were removed on 2026-09-27 (Claude, Alpha build seat):
+# G4.3-LEVER-LIMITS is retired from the ladder by the Director's ruling that G4 becomes stated
+# targets. Endpoint/recurrence confirmation now lives in the guided G4-A run
+# (tests/test_g4_guided.py); persistence and reversal return in G4-B as Duck-proposed,
+# prediction-first tests. The study-level tests above stay: g4_limits.py is the port source.

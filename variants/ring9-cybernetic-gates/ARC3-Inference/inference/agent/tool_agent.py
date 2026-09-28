@@ -531,6 +531,10 @@ def _build_system_prompt(
             "its actions with `action(actions, decision={'probe_token': token})`. For an embodied "
             "PILOT_TO_CONTACT probe, the target stays binding while you choose exactly one action from "
             "`admissible_actions`; add `pilot_intent='APPROACH'` or `pilot_intent='CONTACT_ATTEMPT'`. "
+            "For a GUIDED_ACTION capability (the G4 lever study), the gate states a target and "
+            "you decide how to reach it: choose any one action from `admissible_actions` (ACTION6 "
+            "needs row and col), optionally add `intent='...'`, and the controller records and "
+            "audits the result against the target's closure test. "
             "Do not translate ACTION numbers into directional or mouse labels. When coverage is complete, "
             "submit an explanatory answer with `virelai('gate_answer', answer={...})`; the answer must cite "
             "observed evidence, state action laws and alternatives, and make a novel prediction that will be demonstrated.\n"
@@ -1742,6 +1746,8 @@ class ToolAgent:
                 "is present, execute it directly; otherwise query `virelai('next_probe')` when requested. "
                 "Execute its exact actions with only its probe_token unless it "
                 "is PILOT_TO_CONTACT; then choose one listed admissible action and include pilot_intent. "
+                "If it is GUIDED_ACTION, the target is binding but the move is yours: choose one "
+                "admissible action that advances the stated target. "
                 "If status is ANSWER_REQUIRED, submit `virelai('gate_answer', answer={...})` instead of acting."
             )
         elif getattr(self, "_virelai_controller_enabled", False):
@@ -2982,7 +2988,8 @@ class ToolAgent:
                             "read the binding gate, execute its supplied current_probe directly (query "
                             "`virelai('next_probe')` only if none is supplied), or choose one admissible "
                             "ego-control action plus pilot_intent "
-                            "for PILOT_TO_CONTACT, using `action(actions, decision={'probe_token': token, ...})`, "
+                            "for PILOT_TO_CONTACT, or any one admissible action you choose for GUIDED_ACTION, "
+                            "using `action(actions, decision={'probe_token': token, ...})`, "
                             "or submit the required gate_answer. "
                         )
                     elif getattr(self, "_virelai_controller_enabled", False):

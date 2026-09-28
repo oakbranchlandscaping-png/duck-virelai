@@ -203,11 +203,15 @@ def test_g4_routes_from_clean_g3_inventory_and_emits_anatomy_product():
     # included here to reproduce the live v2 regression that reopened G3.
     machine.counter.boundary_obligation = {"status": "OPEN", "source_after": 1}
 
+    # G4-A is a stated target (Director ruling 2026-09-27): the capability admits Duck's own
+    # choice of action; Duck reads the lever's click from the card and presses it.
     orbit_capability = machine.next_probe_capability()
-    assert orbit_capability["purpose"] == "REPEAT_CONFIRMED_LEVER"
+    assert orbit_capability["purpose"] == "GUIDED_ACTION"
+    assert orbit_capability["actions"] == []
+    lever_click = orbit_capability["target"]["levers"][0]["click"]
     orbit_probe = machine.validate_probe(
-        {"probe_token": orbit_capability["probe_token"]},
-        orbit_capability["actions"],
+        {"probe_token": orbit_capability["probe_token"], "intent": "start the lever run"},
+        [lever_click],
     )
     first_sites = [
         {
@@ -221,13 +225,14 @@ def test_g4_routes_from_clean_g3_inventory_and_emits_anatomy_product():
     ]
     orbit_event = machine.record_outcome(orbit_probe, {
         "transition_id": 3,
-        "action": orbit_capability["actions"][0],
+        "action": lever_click,
         "changed_cells": [{"row": 0, "col": 1, "before": 0, "after": 5}],
         "site_transitions": first_sites,
         "shape_before": [3, 4], "shape_after": [3, 4],
         "boundary_event": {"state": "PLAYING"},
     })
-    assert orbit_event["orbit_step"]["disposition"] == "NOVEL_STATE_REVEALED"
+    assert orbit_event["run"]["disposition"] == "NOVEL_STATE_REVEALED"
+    assert orbit_event["decision_intent"] == "start the lever run"
     assert orbit_event["counter_baseline"]["policy"] == "MASK_AND_IGNORE_AFTER_G2"
     assert machine.gate_id == "G4.2-LEVER-ORBITS"
     assert machine.target_journal.active_product("G2-COUNTER").product_id == g2_product_id
@@ -237,8 +242,7 @@ def test_g4_routes_from_clean_g3_inventory_and_emits_anatomy_product():
     second_capability = machine.next_probe_capability()
     assert machine.next_probe().probe_id.endswith(":2")
     second_probe = machine.validate_probe(
-        {"probe_token": second_capability["probe_token"]},
-        second_capability["actions"],
+        {"probe_token": second_capability["probe_token"]}, [lever_click],
     )
     second_sites = [
         {
@@ -252,13 +256,29 @@ def test_g4_routes_from_clean_g3_inventory_and_emits_anatomy_product():
     ]
     second_event = machine.record_outcome(second_probe, {
         "transition_id": 4,
-        "action": second_capability["actions"][0],
+        "action": lever_click,
         "changed_cells": [],
         "site_transitions": second_sites,
         "shape_before": [3, 4], "shape_after": [3, 4],
         "boundary_event": {"state": "PLAYING"},
     })
-    assert second_event["orbit_step"]["disposition"] == "NULL_AT_OBSERVED_STATE"
+    assert second_event["run"]["disposition"] == "NULL_AT_OBSERVED_STATE"
+    assert second_event["run"]["run_status"] == "CONFIRMING"
+    # Confirmation: Duck presses once more; a second null confirms the endpoint.
+    third_capability = machine.next_probe_capability()
+    third_probe = machine.validate_probe(
+        {"probe_token": third_capability["probe_token"]}, [lever_click],
+    )
+    third_event = machine.record_outcome(third_probe, {
+        "transition_id": 5,
+        "action": lever_click,
+        "changed_cells": [],
+        "site_transitions": second_sites,
+        "shape_before": [3, 4], "shape_after": [3, 4],
+        "boundary_event": {"state": "PLAYING"},
+    })
+    assert third_event["run"]["disposition"] == "ENDPOINT_CONFIRMED"
+    assert machine.status == "ANSWER_REQUIRED"
     orbit_answer = machine.gate_view()["answer_template"]
     machine.submit_answer({
         **orbit_answer,
@@ -268,9 +288,13 @@ def test_g4_routes_from_clean_g3_inventory_and_emits_anatomy_product():
         "competing_models": ["The lever may respond from another world state."],
         "falsifier": "The same repeat changes this exact masked state later.",
     })
-    assert machine.gate_id == "G4.3-LEVER-LIMITS"
-    assert machine.status == "PROBE_REQUIRED"
-    assert machine.gate_view()["progress"]["current_phase"] == "CONFIRM_ENDPOINT"
+    # G4.3 is retired; with every lever explained, G4-A is satisfied and nothing scripted opens.
+    assert machine.gate_id == "G4.2-LEVER-ORBITS"
+    assert machine.status == "SATISFIED"
+    assert machine.gate_view()["next_operation"] == "WAIT_FOR_NEXT_G4_SLICE"
     orbit_product = machine.target_journal.active_product("G4.2-LEVER-ORBITS")
     assert orbit_product is not None
     assert orbit_product.payload["orbits"][0]["status"] == "NULL_AT_OBSERVED_STATE"
+    assert orbit_product.payload["orbits"][0]["run_status"] == "CONFIRMED"
+    assert orbit_product.payload["lever_classes"] == {orbit_answer["entity_id"]: "ABSORBING"}
+    assert orbit_product.payload["phase1_status"] == "COMPLETE"

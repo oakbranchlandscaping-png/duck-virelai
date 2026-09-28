@@ -1,14 +1,13 @@
-"""Phase 1 must not deadlock on a boundary-interrupted lever.
+"""Phase 1 must not deadlock on a boundary, now under the guided G4-A target.
 
 Author: Claude (Alpha build seat), 2026-09-27.
 
-Regression for REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md. In that Kaggle run the S1 return
-edge held G4.2 for a lever whose orbit had been interrupted by a level transition; the lever could
-no longer be activated or answered, so the machine offered no legal move for ~90 minutes.
-
-Director ruling (2026-09-27): cross-level work is a separate gate (G9). G4 records a boundary
-interruption and releases the lever from Phase-1 pending; a level transition closes the previous
-level's G4 study instead of carrying it across.
+Regression for REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md (the S1 hold deadlocked on a lever
+whose orbit a level transition interrupted). Director rulings, 2026-09-27: cross-level work is a
+separate gate (G9); G4 becomes stated targets that Duck executes as needed. These tests carry the
+boundary-release semantics of 8cfb782 into the guided G4-A study: a boundary releases the lever it
+cut off, a level transition closes the level's G4 study, and the machine always rests in a
+coherent state.
 """
 from __future__ import annotations
 
@@ -16,14 +15,11 @@ import gzip
 import json
 from pathlib import Path
 
-import pytest
-
 from inference.framework.counter_verification import MaskLaw
 from inference.framework.cybernetic_targeting import MemoryProduct
-from inference.framework.virelai_gates import CyberneticGateMachine, GateContractError
+from inference.framework.virelai_gates import CyberneticGateMachine
 
 ORBITS = "G4.2-LEVER-ORBITS"
-LIMITS = "G4.3-LEVER-LIMITS"
 LEVEL_CLOSED = "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
 FIXTURE = Path(__file__).parent / "fixtures" / "vc33_kaggle_v1_g4_2_segment.json.gz"
 HEX = "0123456789abcdef"
@@ -84,18 +80,19 @@ def _outcome(before, after, transition_id, action, boundary=None):
     }
 
 
-def _press(machine, before, after, transition_id, boundary=None):
+def _act(machine, action, before, after, transition_id, boundary=None):
+    """Duck's own choice of action through the guided capability."""
     capability = machine.next_probe_capability()
-    assert capability is not None, "expected an admissible G4.2 activation"
-    probe = machine.validate_probe({"probe_token": capability["probe_token"]}, capability["actions"])
-    outcome = _outcome(before, after, transition_id, capability["actions"][0], boundary)
-    return machine.record_outcome(probe, outcome)
+    assert capability is not None, "expected the guided G4-A capability"
+    assert capability["purpose"] == "GUIDED_ACTION"
+    probe = machine.validate_probe({"probe_token": capability["probe_token"]}, [action])
+    return machine.record_outcome(probe, _outcome(before, after, transition_id, action, boundary))
 
 
-def _answer_current(machine, mechanism="Consecutive presses of this lever reached the observed stopping state."):
-    template = machine.gate_view()["answer_template"]
+def _explain(machine, entity_id, mechanism="Consecutive presses of this lever reached the observed stopping state."):
+    templates = {item["entity_id"]: item for item in machine.gate_view()["answer_templates"]}
     machine.submit_answer({
-        **template,
+        **templates[entity_id],
         "mechanism_explanation": mechanism,
         "competing_models": ["The same lever may respond differently from another state."],
         "falsifier": "A repeat from this exact masked state later behaves differently.",
@@ -106,10 +103,9 @@ def _g(value):
     return ((0, value), (0, 0))
 
 
-SYNTHETIC_LEVERS = [
-    {"entity_id": "E-A", "intervention": {"action": "ACTION6", "row": 1, "col": 0}},
-    {"entity_id": "E-B", "intervention": {"action": "ACTION6", "row": 1, "col": 1}},
-]
+A = {"action": "ACTION6", "row": 1, "col": 0}
+B = {"action": "ACTION6", "row": 1, "col": 1}
+SYNTHETIC_LEVERS = [{"entity_id": "E-A", "intervention": A}, {"entity_id": "E-B", "intervention": B}]
 LEVEL_UP = {"level_completed": True, "level_before": 1, "level_after": 2, "state": "NOT_FINISHED"}
 GAME_OVER = {"game_over": True, "level_before": 1, "level_after": 1, "state": "GAME_OVER"}
 
@@ -120,21 +116,25 @@ def _orbit_product(machine):
 
 def test_g4_2_is_not_reported_satisfied_while_a_lever_is_pending():
     machine = _machine(_g(2), SYNTHETIC_LEVERS)
-    _press(machine, _g(2), _g(2), 1)
-    _answer_current(machine)
+    _act(machine, A, _g(2), _g(2), 1)   # null
+    _act(machine, A, _g(2), _g(2), 2)   # confirmation null
+    _explain(machine, "E-A")
     assert machine.gate_id == ORBITS
     view = machine.gate_view()
-    assert view["progress"]["current_entity_id"] == "E-B"
     assert view["status"] == "PROBE_REQUIRED"
     assert view["next_operation"] == "QUERY_NEXT_PROBE"
+    statuses = {item["entity_id"]: item["status"] for item in view["levers"]}
+    assert statuses == {"E-A": "EXPLAINED", "E-B": "NOT_STARTED"}
+    assert _orbit_product(machine)["pending_lever_entities"] == ["E-B"]
 
 
 def test_level_transition_interrupts_the_lever_and_closes_the_level_study():
     machine = _machine(_g(2), SYNTHETIC_LEVERS)
-    _press(machine, _g(2), _g(2), 1)
-    _answer_current(machine)
-    _press(machine, _g(2), _g(3), 2)
-    _press(machine, _g(3), _g(7), 3, LEVEL_UP)
+    _act(machine, A, _g(2), _g(2), 1)
+    _act(machine, A, _g(2), _g(2), 2)
+    _explain(machine, "E-A")
+    _act(machine, B, _g(2), _g(3), 3)
+    _act(machine, B, _g(3), _g(7), 4, LEVEL_UP)
 
     payload = _orbit_product(machine)
     assert payload["lever_entities"] == ["E-A"]
@@ -145,37 +145,32 @@ def test_level_transition_interrupts_the_lever_and_closes_the_level_study():
     assert payload["lever_classes"] == {"E-A": "ABSORBING"}
     assert [row["entity_id"] for row in payload["orbits"]] == ["E-A"]
 
-    # No deadlock: the machine rests in a coherent closed state, not a refused-probe loop.
-    assert machine.gate_id == ORBITS
+    # No deadlock: a coherent closed state with no capability and nothing to answer.
     view = machine.gate_view()
     assert view["next_operation"] == LEVEL_CLOSED
     assert view["status"] == "SATISFIED"
     assert view["answer_template"] is None
-    assert not view.get("probe_available")
     assert machine.next_probe_capability() is None
-    # G4.3 is same-level Phase-2 study; it must not open across the level transition.
-    with pytest.raises(GateContractError, match="cross-level"):
-        machine._adapters[LIMITS]._orbit_product()
 
 
-def test_same_level_boundary_releases_the_lever_and_phase2_opens():
+def test_same_level_boundary_releases_the_lever_and_the_rest_drains():
     machine = _machine(_g(2), SYNTHETIC_LEVERS)
-    _press(machine, _g(2), _g(3), 1, GAME_OVER)
+    _act(machine, A, _g(2), _g(3), 1, GAME_OVER)
 
     payload = _orbit_product(machine)
     assert payload["interrupted_lever_entities"] == ["E-A"]
     assert payload["pending_lever_entities"] == ["E-B"]
     assert payload["phase1_status"] == "IN_PROGRESS"
     assert machine.gate_id == ORBITS
-    assert machine.gate_view()["progress"]["current_entity_id"] == "E-B"
 
-    _press(machine, _g(3), _g(3), 2)
-    _answer_current(machine)
+    _act(machine, B, _g(3), _g(3), 2)
+    _act(machine, B, _g(3), _g(3), 3)
+    _explain(machine, "E-B")
     payload = _orbit_product(machine)
     assert payload["lever_entities"] == ["E-B"]
     assert payload["pending_lever_entities"] == []
     assert payload["phase1_status"] == "COMPLETE"
-    assert machine.gate_id == LIMITS
+    assert machine.status == "SATISFIED"
 
 
 def _load_fixture():
@@ -186,7 +181,13 @@ def _decode(rows):
     return tuple(tuple(HEX.index(ch) for ch in row) for row in rows)
 
 
-def test_vc33_kaggle_v1_g4_2_replay_matches_the_record_and_closes_cleanly():
+def test_vc33_kaggle_v1_segment_replayed_as_duck_actions_matches_the_record_and_closes():
+    """The real vc33 G4.2 presses, replayed as if Duck chose them under the guided target.
+
+    Fidelity: every masked address equals the one the Kaggle run recorded. Semantics: E0004 reached
+    its null but was never confirmed (the next press was E0005), so its run ends unconfirmed; the
+    sixth E0005 press changed the level, which closes the level's study without a deadlock.
+    """
     data = _load_fixture()
     steps = data["steps"]
     mask = MaskLaw(
@@ -197,35 +198,28 @@ def test_vc33_kaggle_v1_g4_2_replay_matches_the_record_and_closes_cleanly():
     machine = _machine(_decode(steps[0]["before"]), data["levers"], mask)
     interventions = {item["entity_id"]: item["intervention"] for item in data["levers"]}
 
-    for index, step in enumerate(steps):
-        capability = machine.next_probe_capability()
-        assert capability is not None, f"no admissible activation at replay step {index + 1}"
-        assert capability["actions"] == [interventions[step["entity_id"]]]
-        probe = machine.validate_probe(
-            {"probe_token": capability["probe_token"]}, capability["actions"]
+    for step in steps:
+        event = _act(
+            machine, interventions[step["entity_id"]], _decode(step["before"]),
+            _decode(step["after"]), step["transition_id"], step["boundary_event"],
         )
-        assert probe.probe_id == step["probe_id"]
-        event = machine.record_outcome(probe, _outcome(
-            _decode(step["before"]), _decode(step["after"]), step["transition_id"],
-            capability["actions"][0], step["boundary_event"],
-        ))
-        # Fidelity: the replay computes exactly the masked addresses the Kaggle run recorded.
-        assert event["orbit_step"]["before_world_address"] == step["recorded_before_address"]
-        assert event["orbit_step"]["after_world_address"] == step["recorded_after_address"]
-        assert event["orbit_step"]["disposition"] == step["recorded_disposition"]
-        if step["recorded_disposition"] == "NULL_AT_OBSERVED_STATE":
-            template = machine.gate_view()["answer_template"]
-            assert template["state_sequence"] == data["e0004_recorded_state_sequence"]
-            _answer_current(machine, data["e0004_answer_mechanism"])
-            # The live S1 signature: stay in G4.2 and move to the next lever.
-            assert machine.gate_id == ORBITS
-            assert machine.gate_view()["progress"]["current_entity_id"] == "E0005"
+        assert event["lever_entity_id"] == step["entity_id"]
+    detail_4 = machine.orbit_view("E0004")["runs"][0]
+    detail_5 = machine.orbit_view("E0005")["runs"][0]
+    replayed = detail_4["orbit"]["steps"] + detail_5["orbit"]["steps"]
+    assert len(replayed) == len(steps)
+    for recorded, step in zip(steps, replayed):
+        assert step["before_world_address"] == recorded["recorded_before_address"]
+        assert step["after_world_address"] == recorded["recorded_after_address"]
+        assert step["disposition"] == recorded["recorded_disposition"]
+    assert detail_4["orbit"]["state_sequence"] == data["e0004_recorded_state_sequence"]
+    assert detail_4["status"] == "BROKEN"
+    assert detail_5["status"] == "INTERRUPTED"
 
     payload = _orbit_product(machine)
-    assert payload["lever_classes"] == {"E0004": "ABSORBING"}
+    assert payload["lever_classes"] == {}
     assert payload["interrupted_lever_entities"] == ["E0005"]
-    assert payload["pending_lever_entities"] == []
+    assert payload["unstudied_lever_entities"] == ["E0004"]
     assert payload["phase1_status"] == "CLOSED_BY_LEVEL_BOUNDARY"
-    assert machine.gate_id == ORBITS
     assert machine.gate_view()["next_operation"] == LEVEL_CLOSED
     assert machine.next_probe_capability() is None
