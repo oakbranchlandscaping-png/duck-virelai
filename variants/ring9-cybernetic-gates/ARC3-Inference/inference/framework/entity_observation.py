@@ -340,6 +340,40 @@ class EntityLedger:
         sighting = self.entities[entity_id].current
         return () if sighting is None else sighting.cells
 
+    def _continuity_match(
+        self,
+        now: Mapping[str, Any],
+        persisting: set[tuple[int, tuple[Cell, ...]]],
+        consumed_previous: set[str],
+        transition_id: int,
+        evidence_ref: str | None,
+    ) -> tuple[str, str]:
+        """Match a component with no exact predecessor: unique MOVE or RECOLOR, else abstain.
+
+        Sources are prior entities not yet consumed and not persisting at their own exact key.
+        A same-integer exact translation is a MOVE source; a same-footprint predecessor of another
+        integer is a RECOLOR source. One source matches; several abstain as AMBIGUOUS (contract
+        CONTRACT_G3_ENTITY_LIFECYCLE_v1 §1: ambiguity abstains, never silently assigned).
+        """
+        cells_now = tuple(now["cells"])
+        sources: list[tuple[str, str]] = []
+        for key, candidate_id in self._active.items():
+            if candidate_id in consumed_previous or key in persisting:
+                continue
+            integer, cells = key
+            if integer == int(now["integer"]):
+                if _translation(tuple(cells), cells_now) is not None:
+                    sources.append((candidate_id, "MOVE"))
+            elif tuple(cells) == cells_now:
+                sources.append((candidate_id, "RECOLOR"))
+        if len(sources) == 1:
+            return sources[0]
+        if sources:
+            entity_id = self._new_entity(now, relation="AMBIGUOUS_BIRTH", transition_id=transition_id)
+            self.entities[entity_id].ambiguity_refs.append(evidence_ref or f"T-{transition_id}")
+            return entity_id, "AMBIGUOUS"
+        return self._new_entity(now, relation="BIRTH", transition_id=transition_id), "BIRTH"
+
     def observe(self, outcome: Mapping[str, Any]) -> EntityTransition:
         transition_id = int(outcome.get("transition_id") or 0)
         if transition_id in self._transitions_by_id:
@@ -368,33 +402,19 @@ class EntityLedger:
         relations: list[tuple[str, str, str]] = []
         next_active: dict[tuple[int, tuple[Cell, ...]], str] = {}
         consumed_previous: set[str] = set()
+        # An entity whose exact key survives into the after frame is STILL; it cannot also be
+        # the source of a move or recolour elsewhere (R9-R05).
+        persisting = {
+            (int(item["integer"]), tuple(item["cells"])) for item in current
+        } & set(self._active)
         for now in current:
             exact = self._active.get((int(now["integer"]), tuple(now["cells"])))
             if exact is not None and exact not in consumed_previous:
                 entity_id, relation = exact, "STILL"
             else:
-                candidates = []
-                for (integer, cells), candidate_id in self._active.items():
-                    if candidate_id in consumed_previous or integer != int(now["integer"]):
-                        continue
-                    translation = _translation(tuple(cells), tuple(now["cells"]))
-                    if translation is not None:
-                        candidates.append(candidate_id)
-                if len(candidates) == 1:
-                    entity_id, relation = candidates[0], "MOVE"
-                elif len(candidates) > 1:
-                    entity_id, relation = self._new_entity(now, relation="AMBIGUOUS_BIRTH", transition_id=transition_id), "AMBIGUOUS"
-                    self.entities[entity_id].ambiguity_refs.append(evidence_ref or f"T-{transition_id}")
-                else:
-                    same_footprint = [
-                        candidate_id
-                        for (integer, cells), candidate_id in self._active.items()
-                        if candidate_id not in consumed_previous and tuple(cells) == tuple(now["cells"])
-                    ]
-                    if len(same_footprint) == 1:
-                        entity_id, relation = same_footprint[0], "RECOLOR"
-                    else:
-                        entity_id, relation = self._new_entity(now, relation="BIRTH", transition_id=transition_id), "BIRTH"
+                entity_id, relation = self._continuity_match(
+                    now, persisting, consumed_previous, transition_id, evidence_ref,
+                )
             consumed_previous.add(entity_id)
             old = self.entities[entity_id]
             old.version += 1
