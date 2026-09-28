@@ -5,11 +5,7 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
-> **2026-09-27 STATUS (Claude, Alpha build seat) — signed.** S1, the Phase-1 drain return edge, is
-> committed at `f8a967e`; its first live test is Kaggle notebook
-> `stephenkaskin/taaf-virelai-ring9-g4-phase1-drain-v1` (v1, 2026-09-27; OpenRouter rung skipped by
-> Director ruling after a 402 credit failure). Security: API keys shipped inside the G3-era Kaggle
-> bundles; never `git add kaggle/`. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27.md`.
+> **2026-09-27 EVENING STATUS (Claude, Alpha build seat) — signed.** Director rulings: a stated target is the goal when possible (G2 CLICK and G4 are stated targets; G3 scripted); every friction sharpens an axiom (`DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md`); NAV shelved; cross-level is G9; Kaggle is the test venue. G4-A guided lever study committed `fcc7f11`; G2 counter axiom + no-legal-move guard pending commit. Both Kaggle runs today reviewed (vc33 S1; ft09 stalled in G2). Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md`. Security: never `git add kaggle/`.
 
 ## 1. Authority rule
 
@@ -31,6 +27,13 @@ after a new package, hashes, receipt, and notebook version are created.
 
 | Document | Role |
 |---|---|
+| `DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md` | Director rulings as axioms A1–A5: counter purity (find, label, mask), no-legal-move, level boundary, continuity, guidance (stated targets). Every friction is routed here first. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md` | Current state (supersedes the morning memory for status): rulings of the day, commit ledger, evidence, two gate modes, handoff actions, read order. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md` | Current plan (supersedes v1, v2): G2 and G4 as stated targets, G4-A/B/C, order of work, decisions owed. Claude, signed. |
+| `BUILD_SLICE_G2_COUNTER_AXIOM_AND_LEGAL_MOVE_GUARD_2026-09-27.md` | G2 under axiom A1 (purity, not isolation; stated target in CLICK worlds; REWRITE or SILENT prediction), `legal_move_status` and the runtime watchdog (A2); real ft09 replay fixture. Claude, signed. |
+| `REVIEW_G4_FT09_PHASE1_KAGGLE_V1_2026-09-27.md` | Graded ft09 run: G2 deadlock on the counter-only rule (effective-move counter), P not met, G4 ungraded; repair options. Claude, signed. |
+| `BUILD_SLICE_G4A_GUIDED_LEVER_STUDY_2026-09-27.md` | G4-A as a stated target (`fcc7f11`): Duck chooses presses, runs read from the record with in-run confirmation, G4.3 retired from the ladder. Claude, signed. |
+| `FINDING_G4_3_CONTINUITY_AFTER_PHASE1_DRAIN_2026-09-27.md` | G4.3 continuity defect after the Phase-1 drain, with a prediction filed before the ft09 output; resolved by G4-A (axiom A4). Claude, signed. |
 | `UPLOAD_STATUS_G4_FT09_PHASE1_V1_2026-09-27.md` | ft09 checkpoint: full Phase-1 drain then G4.3 on a world whose levers return without a level change (Director ruling: cross-level is G9); identifiers, budget reasoning, preregistered P/C1–C7/I1–I4, stated risks (ft09 untested live; timer contamination). Claude, signed. |
 | `BUILD_SLICE_G4_PHASE1_BOUNDARY_RELEASE_2026-09-27.md` | S1 deadlock fix (`8cfb782`): interrupted levers leave pending, a level transition closes the level's G4 study, G4.2 no longer SATISFIED while a lever is pending; tests including a real-data replay of the Kaggle v1 G4.2 segment. Claude, signed. |
 | `REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md` | Graded S1 Kaggle run: first G3 closure on the exact model, S1 return edge confirmed live (C4 hold), E0005 orbit ended in a level transition, then an S1-hold deadlock on the interrupted lever; three candidate rulings. Claude, signed. |
@@ -164,13 +167,13 @@ confirmed that the served Duck used the gated protocol through G1 closure and G2
 |---|---|---|
 | Harness and G0 | **LIVE CONFIRMED** | Clean G0 v2 Kaggle checkpoint on vc33, ft09, and ls20. |
 | G1 Ego | **LIVE CONFIRMED ON ONE LOCAL ls20 PILOT** | Ordered Delphi probes, explanation, full-pattern prospective demonstration, and `EgoLaw` all completed. |
-| G2 Counter | **LIVE CONFIRMED; MASK-READY HANDOFF LIVE UNCONFIRMED** | Duck has predicted and masked counters on served runs. Active source now hands forward at mask readiness and monitors the boundary during G3. |
+| G2 Counter | **LIVE CONFIRMED (vc33, ls20); AXIOM A1 REBUILD PENDING COMMIT** | 2026-09-27: ft09 stalled on the counter-only rule. G2 now tests purity, not isolation, and is a stated target in CLICK worlds (`BUILD_SLICE_G2_COUNTER_AXIOM_AND_LEGAL_MOVE_GUARD_2026-09-27.md`). |
 | Universal prompt | **LIVE CONFIRMED AS DELIVERED** | Present in the completed ls20 prompt trace; semantic benefit remains bounded by the failed G1 exit. |
 | Binding opening protocol | **LIVE CONFIRMED FOR NAV ENTRY** | G2 received the demonstrated ego footprint, bound rank-1 object `[32,20]`, and admitted two approach actions. CLICK and HYBRID remain unconfirmed. |
 | G1 closure reliability | **LIVE CONFIRMED ON ONE LOCAL ls20 PILOT** | Visible errors enabled correction; the exact multi-color prediction was accepted and supported. |
 | G2 productive closure/runtime | **LIVE CONFIRMED ON `ls20`** | The served run completed recognition, prediction, recurrence, masking, boundary focus, and extremal reset detection. |
-| G3 broad lever location | **LIVE CONFIRMED ON vc33** | vc33 v8 completed the ranked click sweep, accepted one inventory with 2 confirmed levers and 8 scoped no-lever responses, reported `SATISFIED`, and handed off with `WAIT_FOR_NEXT_TARGET`. |
-| G4 per-lever study | **NEXT BUILD** | Consume the G3 inventory as a binding per-lever reaction queue. Each confirmed lever opens an in-depth subtree; newly appearing objects return to entity-specific G3 classification first. |
+| G3 broad lever location | **LIVE CONFIRMED ON vc33 (OpenRouter v8; Kaggle 2026-09-27); SCRIPTED BY RULING** | vc33 v8 completed the ranked click sweep, accepted one inventory with 2 confirmed levers and 8 scoped no-lever responses, reported `SATISFIED`, and handed off with `WAIT_FOR_NEXT_TARGET`. |
+| G4 per-lever study | **G4.0/G4.1 LIVE CONFIRMED (vc33); G4-A STATED TARGET BUILT (`fcc7f11`), NOT YET LIVE** | 2026-09-27: G4 is a stated target (Duck chooses presses; runs read from the record; confirmation in-run). G4.3 retired; G4-B/G4-C specified. See `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md`. |
 | G5-G9 | **PLANNED** | Remaining gates still require port-first slices. |
 
 Use `CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-22.md` for detailed claims and exit decisions.

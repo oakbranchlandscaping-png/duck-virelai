@@ -71,6 +71,23 @@ def _check(value: Any, detail: str) -> dict[str, Any]:
     return {"passed": bool(value), "detail": detail}
 
 
+def _mask_obeys_counter_law(changed: Any, mask: set, candidate: Mapping[str, Any]) -> bool:
+    """Every change inside the mask follows the counter law (or its inverse refill)."""
+    try:
+        source = int(candidate.get("source_integer"))
+        replacement = int(candidate.get("replacement_integer"))
+    except (TypeError, ValueError):
+        return False
+    allowed = {(source, replacement), (replacement, source)}
+    for item in changed or ():
+        if not isinstance(item, Mapping):
+            continue
+        cell = (int(item["row"]), int(item["col"]))
+        if cell in mask and (int(item["before"]), int(item["after"])) not in allowed:
+            return False
+    return True
+
+
 def _grade(checks: Mapping[str, dict[str, Any]], *, pending: bool = False) -> dict[str, Any]:
     status = "REVIEW_REQUIRED" if pending else (
         "PASS" if checks and all(item["passed"] for item in checks.values()) else "FAIL"
@@ -553,7 +570,6 @@ def _g2_grades(
     })
 
     demo_purpose = purposes.get(str(demo_event.get("probe_id") or ""), "")
-    demo_changed = _cells(demo_outcome.get("changed_cells"))
     demo_acted = _cell(demo_outcome.get("acted_site"))
     prediction_grade = _grade({
         "prospective_claim_persisted": _check(
@@ -564,8 +580,13 @@ def _g2_grades(
         ),
         "predicts_candidate_rewrite": _check(
             str(prediction.get("expected_rewrite") or "") == rewrite
-            and int(prediction.get("expected_amount") or -1) in amounts,
-            "The frozen prediction names the candidate rewrite at an observed rate.",
+            and (
+                int(prediction.get("expected_amount") if prediction.get("expected_amount") is not None else -1)
+                in amounts
+                or int(prediction.get("expected_amount") if prediction.get("expected_amount") is not None else -1) == 0
+            ),
+            "The frozen prediction names the candidate rewrite at an observed rate "
+            "(COUNTER_REWRITE) or predicts a silent footprint (COUNTER_SILENT, amount 0).",
         ),
         "declared_before_observation": _check(
             bool(comparison)
@@ -575,19 +596,23 @@ def _g2_grades(
         ),
         "comparison_supported_at_rate": _check(
             comparison.get("outcome") == "SUPPORTED"
-            and int(comparison.get("observed_amount") or -1)
-            == int(prediction.get("expected_amount") or -2),
+            and int(comparison.get("observed_amount") if comparison.get("observed_amount") is not None else -1)
+            == int(prediction.get("expected_amount") if prediction.get("expected_amount") is not None else -2),
             "The prospective comparison was SUPPORTED at the expected amount.",
         ),
         "demonstration_probe_purpose": _check(
             demo_purpose == "DEMONSTRATE",
             "The confirming transition came from a DEMONSTRATE probe.",
         ),
-        "confirmation_counter_only": _check(
+        # Axiom A1 (DOCTRINE_FRICTION_AXIOMS_v1, Claude 2026-09-27): purity, not isolation.
+        # The confirming action may change the world elsewhere; inside the mask every change
+        # must follow the counter law, and the action must not target the counter itself.
+        "confirmation_footprint_pure": _check(
             bool(demo_outcome) and bool(mask)
-            and bool(demo_changed) and demo_changed <= mask
+            and _mask_obeys_counter_law(demo_outcome.get("changed_cells"), mask, candidate)
             and (demo_acted is None or demo_acted not in mask),
-            "The confirming action changed only masked cells and did not target the counter.",
+            "Inside the mask the confirming transition obeyed the counter law, and the action "
+            "did not target the counter.",
         ),
     })
 

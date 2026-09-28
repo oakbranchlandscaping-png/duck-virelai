@@ -2,7 +2,7 @@
 
 **Prepared:** 2026-09-27
 **Author:** Claude (Alpha build seat) — signed; upload commands to be executed by the Director
-**Status:** packaged and verified; not yet uploaded.
+**Status:** uploaded, ran, reviewed. **Result (2026-09-27):** Kaggle v1 ran 3 h 0 m and ended `cancelled` with 56 actions. It stalled in G2: the counter ticks only on effective clicks, and the old closure demanded a counter-only action. Precondition P not met, so the G4 criteria are ungraded. Receipt byte-identical. See `REVIEW_G4_FT09_PHASE1_KAGGLE_V1_2026-09-27.md`; repaired in `BUILD_SLICE_G2_COUNTER_AXIOM_AND_LEGAL_MOVE_GUARD_2026-09-27.md`.
 
 - Dataset: `stephenkaskin/taaf-duck-virelai-ring9-g4-ft09-phase1-v1` (to be created, private)
 - Notebook: `stephenkaskin/taaf-virelai-ring9-g4-ft09-phase1-v1` (private), accelerator

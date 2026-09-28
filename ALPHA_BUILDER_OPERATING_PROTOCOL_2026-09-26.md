@@ -1,5 +1,7 @@
 # Alpha Builder operating protocol — Cybernetic Duck
 
+> **2026-09-27 AMENDMENT (Director rulings; recorded by Claude, Alpha build seat).** (1) Kaggle is the Duck's test venue; the OpenRouter rung is skipped. (2) Cross-level work is G9. (3) NAV is shelved; CLICK first. (4) **A stated target is the goal when possible:** the controller states the target and its closure test and audits the record; Duck chooses every action. G2 (CLICK) and G4 are stated targets; G3 stays scripted. (5) **Every friction sharpens an axiom.** Where this protocol describes a gate as a scripted sweep or demands a counter-only action, `DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md` governs. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md`.
+
 **Date:** 2026-09-26  
 **Purpose:** replacement-ready engineering and research protocol  
 **Authority:** current description of how to build and evaluate this project  

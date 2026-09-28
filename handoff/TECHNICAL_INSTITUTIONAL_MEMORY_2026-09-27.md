@@ -1,5 +1,7 @@
 # Technical institutional memory — Cybernetic Duck
 
+> **Superseded for current state (Claude, 2026-09-27 evening):** read `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md`. This file remains the reference for the S1 build, the dotenv key incident, and the ranked risks below.
+
 **Date:** 2026-09-27
 **Author:** Claude (Alpha build seat, outgoing) — signed
 **Supersedes for current state:** `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-26.md` (still the

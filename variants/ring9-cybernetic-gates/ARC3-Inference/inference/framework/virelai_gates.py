@@ -101,6 +101,13 @@ from inference.framework.g4_limits import (
 
 
 SCHEMA_VERSION = "virelai-cybernetic-gates-v1"
+# Axiom A1 (DOCTRINE_FRICTION_AXIOMS_v1): counters come in many forms; the target is the same.
+COUNTER_TARGET = (
+    "Find any counter on this board -- a visible process that tracks bookkeeping (actions, "
+    "effective moves, time, lives) rather than the world -- label its law, and mask it so lever "
+    "data stays pure. You choose the actions. When the controller shows a candidate, explain it "
+    "and freeze one prediction about the counter's footprint for an action you choose."
+)
 ACTION_METADATA_GATE_ID = "G0-ACTION-METADATA"
 GATE_ID = "G1-EGO"
 COUNTER_GATE_ID = "G2-COUNTER"
@@ -985,6 +992,12 @@ class CounterGateMachine:
         self._probe_index = 0
         self._probe_serial = 0
         self._counter_only_action: dict[str, Any] | None = None
+        # Counter axiom (DOCTRINE_FRICTION_AXIOMS_v1, A1): in CLICK worlds G2 is a stated
+        # target -- find the counter, label its law, mask it -- and Duck chooses the actions.
+        self._guided = self._world_type == "CLICK_GOD_MODE"
+        self._clicked_cells: set[tuple[int, int]] = set()
+        self._rejected_candidates: list[dict[str, Any]] = []
+        self._prediction_predicate: str = "COUNTER_REWRITE"
         self.candidate: CounterCandidate | None = None
         self.answer: CounterAnswer | None = None
         self.pending_prediction: CounterPrediction | None = None
@@ -1035,19 +1048,25 @@ class CounterGateMachine:
         }
 
     def _current_action(self) -> dict[str, Any] | None:
+        if self.status == "DEMONSTRATION_REQUIRED" and self.answer is not None:
+            # Duck's own frozen choice: the prediction names the action it will take.
+            return dict(self.answer.novel_prediction["action"])
         if (
             self.status in {"DEMONSTRATION_REQUIRED", "BOUNDARY_CONFIRMATION_REQUIRED"}
             and self._counter_only_action is not None
         ):
             return dict(self._counter_only_action)
+        if self._guided:
+            return None
         if self._probe_index < len(self._probe_actions):
             return self._probe_actions[self._probe_index]
         return None
 
     def answer_template(self) -> dict[str, Any] | None:
         """Return the exact evidence-bound G2 answer shape Duck must complete."""
-        if self.candidate is None or self._counter_only_action is None:
+        if self.candidate is None:
             return None
+        default_action = self._counter_only_action or self._latest_witness_action()
         prediction = prediction_for(
             self.candidate, declared_at_transition=self.observed_through_step
         )
@@ -1065,7 +1084,7 @@ class CounterGateMachine:
             "falsifier": "State what future observation would refute this counter model.",
             "limitations": ["The consequence at source minimum/replacement maximum is unobserved."],
             "novel_prediction": {
-                "action": dict(self._counter_only_action),
+                "action": dict(default_action),
                 "scope": {
                     "representation": "CELLS",
                     "cells": [list(cell) for cell in self.candidate.full_bar_footprint],
@@ -1078,7 +1097,80 @@ class CounterGateMachine:
                 "because": "Explain why the observed recurrence predicts this future rewrite.",
                 "novelty": "Explain why this is a prospective transition from a later state.",
             },
+            "prediction_options": {
+                "action": (
+                    "Any one admissible action you choose. The prediction is scored only on the "
+                    "counter footprint; changes elsewhere are recorded, not held against it."
+                ),
+                "predicate": {
+                    "COUNTER_REWRITE": "the action will rewrite exactly `amount` footprint cells",
+                    "COUNTER_SILENT": (
+                        "the action will leave the footprint unchanged (for example, if your "
+                        "label says the counter ticks only on effective actions); amount 0"
+                    ),
+                },
+            },
         }
+
+    def _latest_witness_action(self) -> dict[str, Any]:
+        assert self.candidate is not None
+        refs = set(self.candidate.witness_evidence_refs)
+        for outcome in reversed(self._lossless_outcomes):
+            action = outcome.get("action")
+            if str(outcome.get("evidence_id") or "") in refs and isinstance(action, Mapping):
+                return _normalize_action_payload(action)
+        return {"action": self.affordances[0].action}
+
+    def _purity_violations(self, candidate: CounterCandidate) -> list[str]:
+        """Axiom A1 purity: the mask may neither swallow nor leak lever data.
+
+        Every recorded change inside the footprint must follow the counter's own rewrite law
+        (or its inverse, a refill), and no witness may have acted directly on the footprint.
+        """
+        footprint = set(candidate.full_bar_footprint) | set(candidate.observed_support)
+        allowed = {
+            (candidate.source_integer, candidate.replacement_integer),
+            (candidate.replacement_integer, candidate.source_integer),
+        }
+        witness_refs = set(candidate.witness_evidence_refs)
+        violations: list[str] = []
+        remote_witness = False
+        for outcome in self._lossless_outcomes:
+            ref = str(outcome.get("evidence_id") or "")
+            for item in outcome.get("changed_cells") or ():
+                if not isinstance(item, Mapping):
+                    continue
+                cell = (int(item["row"]), int(item["col"]))
+                if cell in footprint and (int(item["before"]), int(item["after"])) not in allowed:
+                    violations.append(
+                        f"{ref}: footprint cell {list(cell)} changed "
+                        f"{item['before']}->{item['after']}, outside the counter law"
+                    )
+            if ref in witness_refs:
+                acted = outcome.get("acted_site")
+                acted_cell = (
+                    (int(acted["row"]), int(acted["col"])) if isinstance(acted, Mapping) else None
+                )
+                if acted_cell is None or acted_cell not in footprint:
+                    remote_witness = True
+        if not remote_witness:
+            # A counter must tick when acted on elsewhere; if every witness targeted the
+            # footprint, the rewrite may be the footprint's own response (a lever), not bookkeeping.
+            violations.append("every witness acted directly on the footprint; none was remote")
+        return violations
+
+    def _rank_prefix_observed(self) -> int:
+        count = 0
+        for item in self._ranked_visual_targets:
+            if not (set(item.cells) & self._clicked_cells):
+                break
+            count += 1
+        return count
+
+    def _click_coverage_complete(self) -> bool:
+        return all(
+            set(item.cells) & self._clicked_cells for item in self._ranked_visual_targets
+        )
 
     def _select_counter_only_action(self, candidate: CounterCandidate) -> dict[str, Any] | None:
         footprint = set(candidate.full_bar_footprint)
@@ -1135,6 +1227,37 @@ class CounterGateMachine:
                     "boundary event", "pilot budget exhausted",
                 ),
                 declared_at_transition=self.observed_through_step,
+            )
+        if self._guided and self.status == "ACTIVE":
+            untried = [
+                list(item.anchor) for item in self._ranked_visual_targets
+                if not (set(item.cells) & self._clicked_cells)
+            ]
+            return ProbeEnvelope(
+                probe_id=f"{COUNTER_GATE_ID}:GUIDED:{self._probe_serial + 1}",
+                gate_id=COUNTER_GATE_ID,
+                purpose="GUIDED_ACTION",
+                question=COUNTER_TARGET,
+                actions=(),
+                admissible_actions=tuple(sorted({item.action for item in self.affordances})),
+                live_alternatives=(
+                    "a recurrent bookkeeping rewrite appears",
+                    "a target-dependent effect appears",
+                    "nothing visible changes",
+                ),
+                outcome_partition=("recorded",),
+                declared_at_transition=self.observed_through_step,
+                target={
+                    "coverage_rule": (
+                        "If no counter appears, G2 closes as not-observed only after every "
+                        "ranked visual object has been clicked at least once."
+                    ),
+                    "untried_object_anchors": untried[:24],
+                    "untried_count": len(untried),
+                    "rejected_candidates": [
+                        item["candidate_id"] for item in self._rejected_candidates
+                    ],
+                },
             )
         action = self._current_action()
         if action is None:
@@ -1391,6 +1514,11 @@ class CounterGateMachine:
         self._probe_serial += 1
         if probe.purpose == "PROBE":
             self._probe_index += 1
+        elif probe.purpose == "GUIDED_ACTION" or (self._guided and probe.purpose == "DEMONSTRATE"):
+            for item in probe.actions:
+                if "row" in item and "col" in item:
+                    self._clicked_cells.add((int(item["row"]), int(item["col"])))
+            self._probe_index = self._rank_prefix_observed()
         elif probe.purpose == "PILOT_TO_CONTACT":
             navigation_result = self._record_navigation_step(
                 probe, outcome, evidence_id=evidence_id
@@ -1401,18 +1529,25 @@ class CounterGateMachine:
         if self.status == "DEMONSTRATION_REQUIRED":
             assert self.pending_prediction is not None
             assert self.candidate is not None
-            comparison = compare_counter_prediction(
-                self.pending_prediction, outcome, evidence_ref=evidence_id
-            )
+            comparison = self._grade_counter_prediction(outcome, evidence_id)
             self.last_comparison = comparison
-            if comparison.outcome == "SUPPORTED":
+            violations = (
+                self._purity_violations(self.candidate)
+                if comparison.outcome == "SUPPORTED" else []
+            )
+            if comparison.outcome == "SUPPORTED" and not violations:
                 self.mask_law = mask_law_from_supported(self.candidate, comparison)
                 self._record_supported_counter(outcome, evidence_id)
+            elif comparison.outcome == "SUPPORTED":
+                self._reject_candidate("COUNTER_MASK_IMPURE", violations)
             elif comparison.outcome == "CONTRADICTED":
                 self.answer = None
                 self.pending_prediction = None
                 self.candidate = None
-                self.status = "ACTIVE" if self._current_action() is not None else "UNRESOLVED"
+                self.status = (
+                    "ACTIVE" if self._guided or self._current_action() is not None
+                    else "UNRESOLVED"
+                )
                 self.stop_reason = "COUNTER_PREDICTION_CONTRADICTED"
             else:
                 self.status = "UNRESOLVED"
@@ -1452,15 +1587,31 @@ class CounterGateMachine:
                 self.stop_reason = "RATE_SUPPORTED_AWAITING_MIN_MAX_BOUNDARY"
         else:
             self.candidate = self._candidate_from_recent_suffix()
-            if self.candidate is not None:
+            if self.candidate is not None and any(
+                item["candidate_id"] == self.candidate.candidate_id
+                for item in self._rejected_candidates
+            ):
+                self.candidate = None
+            violations = [] if self.candidate is None else self._purity_violations(self.candidate)
+            if self.candidate is not None and violations:
+                self._reject_candidate("COUNTER_CANDIDATE_IMPURE", violations)
+            elif self.candidate is not None:
                 self._counter_only_action = self._select_counter_only_action(self.candidate)
                 self.status = "ANSWER_REQUIRED"
                 self.stop_reason = "RECURRENT_REMOTE_REWRITE_OBSERVED"
+            elif self._guided and self._click_coverage_complete():
+                self._close_without_observed_counter(
+                    "NO_RECURRENT_PROCESS_AFTER_FULL_CLICK_COVERAGE"
+                )
             elif self._world_type in {"NAVIGATION", "HYBRID"} and self._ranked_target() is None:
                 self._close_without_observed_counter(
                     "NO_RECURRENT_PROCESS_AFTER_COLLISION_SWEEP"
                 )
-            elif self._world_type == "CLICK_GOD_MODE" and self._current_action() is None:
+            elif (
+                not self._guided
+                and self._world_type == "CLICK_GOD_MODE"
+                and self._current_action() is None
+            ):
                 self._close_without_observed_counter(
                     "NO_RECURRENT_PROCESS_IN_BOUNDED_PROBES"
                 )
@@ -1504,20 +1655,23 @@ class CounterGateMachine:
         refs = _strings(raw.get("evidence_refs"), "evidence_refs")
         if set(refs) != set(self.candidate.witness_evidence_refs):
             raise GateContractError("G2 evidence_refs must exactly cite the candidate witnesses.")
-        if self._counter_only_action is None:
-            raise GateContractError(
-                "G2 has no isolated counter-only intervention for prospective confirmation."
-            )
         raw_prediction = raw.get("novel_prediction")
         if not isinstance(raw_prediction, Mapping):
             raise GateContractError("G2 answer requires novel_prediction in the supplied template shape.")
         predicted_action = raw_prediction.get("action")
         if not isinstance(predicted_action, Mapping):
             predicted_action = {"action": predicted_action}
-        if _canonical(_normalize_action_payload(predicted_action)) != _canonical(self._counter_only_action):
-            raise GateContractError("G2 novel_prediction must use the controller-supplied counter-only action.")
-        if str(raw_prediction.get("predicate") or "") != "COUNTER_REWRITE":
-            raise GateContractError("G2 novel_prediction predicate must be COUNTER_REWRITE.")
+        predicted_action = _normalize_action_payload(predicted_action)
+        if predicted_action["action"] not in {item.action for item in self.affordances}:
+            raise GateContractError(
+                "G2 novel_prediction.action must be one currently admissible action: "
+                f"{sorted({item.action for item in self.affordances})!r}."
+            )
+        predicate = str(raw_prediction.get("predicate") or "")
+        if predicate not in {"COUNTER_REWRITE", "COUNTER_SILENT"}:
+            raise GateContractError(
+                "G2 novel_prediction predicate must be COUNTER_REWRITE or COUNTER_SILENT."
+            )
         scope = raw_prediction.get("scope")
         scope = scope if isinstance(scope, Mapping) else {}
         scope_cells = _coordinate_cells(
@@ -1536,22 +1690,26 @@ class CounterGateMachine:
             predicted_amount = int(expected_parameters.get("amount"))
         except (TypeError, ValueError) as exc:
             raise GateContractError("G2 predicted amount must be an integer.") from exc
-        if predicted_amount != expected.expected_amount:
-            raise GateContractError("G2 predicted amount must match the recurrent observed rate.")
+        required_amount = 0 if predicate == "COUNTER_SILENT" else expected.expected_amount
+        if predicted_amount != required_amount:
+            raise GateContractError(
+                "G2 predicted amount must be 0 for COUNTER_SILENT and the recurrent observed "
+                "rate for COUNTER_REWRITE."
+            )
         because = str(raw_prediction.get("because") or "").strip()
         novelty = str(raw_prediction.get("novelty") or "").strip()
         if len(because.split()) < 5 or len(novelty.split()) < 5:
             raise GateContractError("G2 novel_prediction must explain both its basis and prospectiveness.")
         canonical_prediction = {
-            "action": dict(self._counter_only_action),
+            "action": dict(predicted_action),
             "scope": {
                 "representation": "CELLS",
                 "cells": [list(cell) for cell in sorted(scope_cells)],
             },
-            "predicate": "COUNTER_REWRITE",
+            "predicate": predicate,
             "expected_parameters": {
                 "rewrite": expected.expected_rewrite,
-                "amount": expected.expected_amount,
+                "amount": required_amount,
             },
             "because": because,
             "novelty": novelty,
@@ -1570,11 +1728,44 @@ class CounterGateMachine:
             novel_prediction=canonical_prediction,
         )
         self.answer = answer
-        self.pending_prediction = expected
+        self._prediction_predicate = predicate
+        self.pending_prediction = replace(expected, expected_amount=required_amount)
         self.status = "DEMONSTRATION_REQUIRED"
         self.stop_reason = None
         self.revision += 1
         return answer
+
+    def _grade_counter_prediction(
+        self, outcome: Mapping[str, Any], evidence_id: str
+    ) -> CounterComparison:
+        assert self.pending_prediction is not None and self.candidate is not None
+        comparison = compare_counter_prediction(
+            self.pending_prediction, outcome, evidence_ref=evidence_id
+        )
+        if self._prediction_predicate == "COUNTER_SILENT" and comparison.outcome == "SUPPORTED":
+            footprint = set(self.candidate.full_bar_footprint) | set(self.candidate.observed_support)
+            touched = [
+                item for item in outcome.get("changed_cells") or ()
+                if isinstance(item, Mapping)
+                and (int(item["row"]), int(item["col"])) in footprint
+            ]
+            if touched:
+                comparison = replace(comparison, outcome="CONTRADICTED", observed_amount=len(touched))
+        return comparison
+
+    def _reject_candidate(self, reason: str, violations: Sequence[str]) -> None:
+        """A candidate that fails purity is recorded and dropped; the search continues."""
+        assert self.candidate is not None
+        self._rejected_candidates.append({
+            "candidate_id": self.candidate.candidate_id,
+            "reason": reason,
+            "violations": list(violations)[:12],
+        })
+        self.candidate = None
+        self.answer = None
+        self.pending_prediction = None
+        self.status = "ACTIVE" if self._guided or self._current_action() is not None else "UNRESOLVED"
+        self.stop_reason = reason
 
     def snapshot(self) -> dict[str, Any]:
         current_target = None
@@ -1743,14 +1934,17 @@ def _target_registry() -> TargetRegistry:
         ),
         prerequisites=(GATE_ID,),
         admissible_probe_kinds=(
-            "varied intervention recurrence probe",
-            "prospective counter-law demonstration",
+            "any action Duck chooses (CLICK worlds: stated target)",
+            "varied intervention recurrence probe (embodied worlds)",
+            "prospective footprint-scoped counter prediction",
         ),
         completion_predicate=(
-            "Either Duck explains an evidence-bound recurrent bookkeeping process, a later "
-            "transition supports its frozen prediction, and the controller emits a reversible "
-            "mask that becomes a stable ignored baseline during later work; or the complete bounded opening records that no counter was "
-            "observed without claiming global absence."
+            "Axiom A1: find, label, mask. Duck explains an evidence-bound recurrent bookkeeping "
+            "process; the mask passes purity on the record (every footprint change follows the "
+            "counter law, no witness acted on the footprint); a later transition supports one "
+            "frozen footprint-scoped prediction on an action Duck chose; the mask becomes a stable "
+            "ignored baseline. Or the complete coverage records that no counter was observed, "
+            "without claiming global absence."
         ),
         memory_product_type="CounterGateProduct",
     ))
@@ -2058,7 +2252,11 @@ class _CounterTarget:
         self._sync_step()
         status = "SATISFIED" if self.counter.status == "CLOSED" else self.counter.status
         unmet = {
-            "ACTIVE": ("complete bounded recurrence probes",),
+            "ACTIVE": (
+                ("find a counter: act as you choose; the controller detects recurrent "
+                 "bookkeeping rewrites and checks purity")
+                if self.counter._guided else "complete bounded recurrence probes",
+            ),
             "ANSWER_REQUIRED": ("explain what the candidate tracks and why it is bookkeeping",),
             "DEMONSTRATION_REQUIRED": ("execute the prospective counter-law demonstration",),
             "BOUNDARY_CONFIRMATION_REQUIRED": (
@@ -5036,7 +5234,7 @@ class CyberneticGateMachine:
         if unexpected:
             if guided:
                 raise GateContractError(
-                    "A guided G4 action decision accepts only probe_token and an optional intent."
+                    "A guided action decision accepts only probe_token and an optional intent."
                 )
             if probe.admissible_actions:
                 raise GateContractError(
@@ -5066,7 +5264,7 @@ class CyberneticGateMachine:
         if guided:
             if len(supplied_actions) != 1 or supplied_actions[0]["action"] not in probe.admissible_actions:
                 raise GateContractError(
-                    "A guided G4 action is exactly one action from: "
+                    "A guided action is exactly one action from: "
                     f"{list(probe.admissible_actions)!r}."
                 )
             intent = str(decision.get("intent") or "").strip()[:240] or None
@@ -5183,6 +5381,41 @@ class CyberneticGateMachine:
             })
         return rows
 
+    def legal_move_status(self) -> dict[str, Any]:
+        """Axiom A2 (DOCTRINE_FRICTION_AXIOMS_v1): every gate state admits a move or declares an end.
+
+        Legal means an admissible probe is offered, or an answer is asked for with a template
+        to fill, or the gate declares a terminal/waiting state that asks nothing of Duck. The two
+        illegal signatures are the ones three live runs deadlocked on: an answer demanded with no
+        template (ft09 G2, 2026-09-27), and a probe demanded with none offered (vc33 G4.2,
+        2026-09-27; ls20 G2, 2026-09-22).
+        """
+        view = self.gate_view()
+        operation = str(view.get("next_operation") or "")
+        base = {
+            "gate_id": self.gate_id,
+            "status": view.get("status"),
+            "next_operation": operation,
+        }
+        if self.next_probe_capability() is not None:
+            return {**base, "legal": True, "move": "PROBE"}
+        if operation == "SUBMIT_GATE_ANSWER":
+            has_template = view.get("answer_template") is not None or bool(
+                view.get("answer_templates")
+            )
+            if "answer_template" in view and not has_template:
+                return {
+                    **base, "legal": False,
+                    "reason": "an answer is demanded but the card supplies no answer template",
+                }
+            return {**base, "legal": True, "move": "ANSWER"}
+        if operation in {"QUERY_NEXT_PROBE", "QUERY_NEXT_G3_TARGET"}:
+            return {
+                **base, "legal": False,
+                "reason": "a probe is demanded but no admissible probe is offered",
+            }
+        return {**base, "legal": True, "move": "DECLARED_STATE"}
+
     def gate_view(self) -> dict[str, Any]:
         contract = self.target_registry.get(self._effective_target_id())
         assessment = self.assessment()
@@ -5230,6 +5463,17 @@ class CyberneticGateMachine:
                 "goal_card": contract.goal_card(status=assessment.disposition),
                 "opening_protocol": snapshot["opening_protocol"],
                 "progress": snapshot["probe_progress"],
+                **({
+                    "target": COUNTER_TARGET,
+                    "done_when": (
+                        "A candidate's law and mask pass purity on the record (every footprint "
+                        "change follows the counter law; no witness acted on the footprint) and "
+                        "one frozen footprint-scoped prediction is supported. If no counter "
+                        "appears, G2 closes as not-observed once every ranked visual object has "
+                        "been clicked at least once."
+                    ),
+                    "rejected_candidates": list(self.counter._rejected_candidates),
+                } if self.counter._guided else {}),
                 "stop_reason": snapshot["stop_reason"],
                 "unmet_requirements": list(assessment.unmet_requirements),
                 "next_operation": next_operation,
@@ -5249,8 +5493,10 @@ class CyberneticGateMachine:
                 }
                 view["answer_template"] = self.counter.answer_template()
                 view["answer_template_note"] = (
-                    "Replace the example prose, but preserve the supplied candidate, evidence, "
-                    "counter-only action, full footprint, rewrite, and recurrent amount."
+                    "Replace the example prose. Keep the candidate, evidence refs, full footprint "
+                    "and rewrite. Choose the prediction's action yourself (any admissible action) "
+                    "and its predicate: COUNTER_REWRITE with the recurrent amount, or "
+                    "COUNTER_SILENT with amount 0. It is scored only on the counter footprint."
                 )
             if self.counter.pending_prediction is not None:
                 view["pending_prediction"] = asdict(self.counter.pending_prediction)

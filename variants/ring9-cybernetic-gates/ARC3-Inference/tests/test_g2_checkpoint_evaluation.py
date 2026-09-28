@@ -71,6 +71,13 @@ class _Recorder:
     def record_probe(self, machine, outcome_builder):
         capability = machine.next_probe_capability()
         assert capability is not None
+        # G2 in CLICK worlds is a stated target (Axiom A1): the capability admits Duck's own
+        # choice. This stand-in clicks the next untried ranked object, as Duck might.
+        actions = capability["actions"] or [
+            {"action": "ACTION6", "row": row, "col": col}
+            for row, col in capability["target"]["untried_object_anchors"][:1]
+        ]
+        capability = {**capability, "actions": actions}
         probe = machine.validate_probe(
             {"probe_token": capability["probe_token"]}, capability["actions"]
         )
@@ -357,7 +364,8 @@ def test_one_sided_mask_is_rejected(tmp_path):
     assert not report["passed"]
 
 
-def test_non_counter_only_confirmation_is_rejected(tmp_path):
+def test_world_change_outside_the_mask_does_not_fail_a_pure_confirmation(tmp_path):
+    """Axiom A1: purity, not isolation. A confirming action may also change the world."""
     recorder = _drive_locked_g2()
     comparison_ref = next(
         row["counter_comparison"]["evidence_ref"]
@@ -379,7 +387,31 @@ def test_non_counter_only_confirmation_is_rejected(tmp_path):
     _write_review(tmp_path, recorder, receipt_path)
     report = evaluate(tmp_path, [WORLD])
     game = report["games"][0]
-    assert not game["grades"]["prediction"]["checks"]["confirmation_counter_only"]["passed"]
+    assert game["grades"]["prediction"]["checks"]["confirmation_footprint_pure"]["passed"]
+
+
+def test_footprint_change_outside_the_counter_law_is_rejected(tmp_path):
+    recorder = _drive_locked_g2()
+    comparison_ref = next(
+        row["counter_comparison"]["evidence_ref"]
+        for row in recorder.events
+        if isinstance(row.get("counter_comparison"), dict)
+        and row["counter_comparison"]["outcome"] == "SUPPORTED"
+    )
+    for outcome in recorder.outcomes:
+        if outcome.get("evidence_id") != comparison_ref:
+            continue
+        outcome["changed_cells"] = [
+            item for item in outcome["changed_cells"] if item["col"] != 3
+        ] + [{"row": 0, "col": 3, "before": 7, "after": 9}]
+        for site in outcome["site_transitions"]:
+            if site["row"] == 0 and site["col"] == 3:
+                site["before"], site["after"], site["outcome"] = 7, 9, "CHANGED"
+    _, receipt_path = _materialize(tmp_path, recorder)
+    _write_review(tmp_path, recorder, receipt_path)
+    report = evaluate(tmp_path, [WORLD])
+    game = report["games"][0]
+    assert not game["grades"]["prediction"]["checks"]["confirmation_footprint_pure"]["passed"]
     assert not report["passed"]
 
 

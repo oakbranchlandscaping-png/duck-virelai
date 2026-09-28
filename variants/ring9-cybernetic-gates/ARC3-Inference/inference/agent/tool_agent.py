@@ -48,6 +48,8 @@ _RATE_LIMIT_DEFAULT_BACKOFF_SECONDS = 5.0
 _RATE_LIMIT_MAX_BACKOFF_SECONDS = 60.0
 _RATE_LIMIT_SAFETY_SECONDS = 1.0
 _GATED_GATE_CONTEXT_MAX_CHARS = 24_000
+# Axiom A2: consecutive no-legal-move checks before gated work is ended as a controller failure.
+_NO_LEGAL_MOVE_LIMIT = 3
 _RETRY_AFTER_PATTERN = re.compile(
     r"(?:try again in|retry after)\s+(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|seconds?)",
     re.IGNORECASE,
@@ -1293,6 +1295,35 @@ class ToolAgent:
                     "do not reuse a token from prior history."
                 )
         return context
+
+    def _controller_no_legal_move(self, state_path: Path) -> str:
+        """Axiom A2 watchdog (Claude, 2026-09-27): end gated work when no legal move exists.
+
+        Three live runs idled to their deadline in a gate state that offered neither an
+        admissible probe nor an answer template. The machine reports that signature through
+        ``legal_move_status``; after ``_NO_LEGAL_MOVE_LIMIT`` consecutive checks it is recorded as
+        a controller failure instead of spending the remaining budget.
+        """
+        if not getattr(self, "_virelai_gates_enabled", False):
+            return ""
+        machine = self._ensure_gate_machine(state_path)
+        if machine is None or not hasattr(machine, "legal_move_status"):
+            return ""
+        status = machine.legal_move_status()
+        if status.get("legal", True):
+            self._no_legal_move_streak = 0
+            return ""
+        self._no_legal_move_streak = getattr(self, "_no_legal_move_streak", 0) + 1
+        if self._no_legal_move_streak < _NO_LEGAL_MOVE_LIMIT:
+            return ""
+        return (
+            "controller_no_legal_move: gate={gate_id} status={status} next_operation={op}: "
+            "{reason}; recorded as a controller failure (Axiom A2) instead of idling to the "
+            "deadline"
+        ).format(
+            gate_id=status.get("gate_id"), status=status.get("status"),
+            op=status.get("next_operation"), reason=status.get("reason"),
+        )
 
     def _gate_context_update(self, state_path: Path) -> str:
         machine = self._ensure_gate_machine(state_path)
@@ -3056,6 +3087,15 @@ class ToolAgent:
                             "content": dispatch.content,
                         }
                     )
+                    no_legal_move = self._controller_no_legal_move(state_path)
+                    if no_legal_move:
+                        append_transcript("ANALYZER STATUS", no_legal_move)
+                        preserve_history = False
+                        return AnalyzerTurnResult(
+                            step_executed=step_executed,
+                            fatal_failure=no_legal_move,
+                            reasoning=captured_reasoning,
+                        )
                     if self._gate_transitioned_this_turn:
                         yielded_control_reason = "gate_transition"
                         break

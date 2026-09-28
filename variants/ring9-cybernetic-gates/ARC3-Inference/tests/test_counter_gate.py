@@ -318,12 +318,19 @@ def test_boundary_confirmation_batches_established_counter_only_action(monkeypat
     assert probe.actions == tuple({"action": "ACTION3"} for _ in range(8))
 
 
+def duck_choice(capability):
+    """G2 CLICK is a stated target: Duck picks the action. Stand-in: next untried object."""
+    if capability["actions"]:
+        return capability["actions"]
+    row, col = capability["target"]["untried_object_anchors"][0]
+    return [{"action": "ACTION6", "row": row, "col": col}]
+
+
 def execute_counter_probe(machine, step, changed_cell, *, game_over=False):
     capability = machine.next_probe_capability()
-    probe = machine.validate_probe(
-        {"probe_token": capability["probe_token"]}, capability["actions"]
-    )
-    action = capability["actions"][0]
+    actions = duck_choice(capability)
+    probe = machine.validate_probe({"probe_token": capability["probe_token"]}, actions)
+    action = actions[0]
     before_bar = {
         1: (7, 7, 7, 7),
         2: (7, 7, 4, 7),
@@ -515,18 +522,14 @@ def test_exhaustive_zero_delta_opening_closes_with_scoped_not_observed_product()
     while machine.counter.status == "ACTIVE":
         transition_id += 1
         capability = machine.next_probe_capability()
-        probe = machine.validate_probe(
-            {"probe_token": capability["probe_token"]}, capability["actions"]
-        )
+        actions = duck_choice(capability)
+        probe = machine.validate_probe({"probe_token": capability["probe_token"]}, actions)
         machine.record_outcome(probe, {
             "transition_id": transition_id,
             "shape_before": [4, 6],
             "shape_after": [4, 6],
-            "action": capability["actions"][0],
-            "acted_site": {
-                "row": capability["actions"][0]["row"],
-                "col": capability["actions"][0]["col"],
-            },
+            "action": actions[0],
+            "acted_site": {"row": actions[0]["row"], "col": actions[0]["col"]},
             "board_changed": False,
             "changed_cell_count": 0,
             "changed_cells": [],
@@ -536,6 +539,7 @@ def test_exhaustive_zero_delta_opening_closes_with_scoped_not_observed_product()
     assert machine.counter.stop_reason == "COUNTER_NOT_OBSERVED_WITHIN_OPENING"
     disposition = machine.counter.search_disposition
     assert disposition["scope"] == "BOUNDED_RANKED_OPENING_ONLY"
+    assert disposition["reason"] == "NO_RECURRENT_PROCESS_AFTER_FULL_CLICK_COVERAGE"
     assert disposition["probe_count"] == len(machine.counter._ranked_visual_targets)
     assert "absence" in disposition["epistemic_limit"].lower()
     product = machine.target_journal.active_product("G2-COUNTER")
@@ -567,10 +571,9 @@ def test_g2_contradiction_reopens_probe_hunt_without_mask():
         "novel_prediction": template["novel_prediction"],
     })
     capability = machine.next_probe_capability()
-    probe = machine.validate_probe(
-        {"probe_token": capability["probe_token"]}, capability["actions"]
-    )
-    action = capability["actions"][0]
+    actions = duck_choice(capability)
+    probe = machine.validate_probe({"probe_token": capability["probe_token"]}, actions)
+    action = actions[0]
     event = machine.record_outcome(probe, {
         "transition_id": 3,
         "shape_before": [4, 6],
