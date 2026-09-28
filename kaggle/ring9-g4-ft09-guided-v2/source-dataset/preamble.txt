@@ -1,0 +1,1 @@
+Ring 9 ft09 guided v2 exact-model checkpoint: ft09-0d8bbf25 only, one pass, 200 actions and 10800 seconds of behavior time after model setup. Source 4329185 (R9-R04 + R9-R05). Human review required.

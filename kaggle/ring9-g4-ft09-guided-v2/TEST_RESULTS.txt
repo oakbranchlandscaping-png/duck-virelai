@@ -1,0 +1,3 @@
+Source commit 4329185bd77eec5f3a4bb8c73d76f08bd36cb1ce (R9-R04 + R9-R05: G3 bounded card and counter trigger label; G3 entity identity survives recolour).
+Cloud Python 3.12, full suite: 411 passed, 1 skipped (a recorded ft09 artifact outside the source package). Director-run Mac pytest at the same commit with the protocol's two ignored suites: 400 passed.
+Offline ft09 ladder (tests/test_ft09_ladder_offline.py): the real 57-transition G2 record, then the recorded control law continued by hypothesis, reaches G4-A SATISFIED with both controls confirmed at transition 131 of 200; every binding card is under the 24,000-character budget (largest 15,792).

@@ -1,0 +1,53 @@
+{
+  "shared": {
+    "model_name": "qwen/qwen3.6-35b-a3b",
+    "base_url": "https://openrouter.ai/api/v1",
+    "provider": "openrouter",
+    "context_window": 65536
+  },
+  "experiments": {
+    "root_dir": "runs"
+  },
+  "environment": {
+    "dataset": "",
+    "online_arcade": true,
+    "include_tags": [],
+    "exclude_tags": [],
+    "games": ["ft09-0d8bbf25"],
+    "max_steps": 48,
+    "max_runtime_minutes": 24,
+    "max_experiment_runtime_minutes": 30,
+    "n_passes": 1,
+    "concurrent_jobs": 1
+  },
+  "deployment": {
+    "target": "inline",
+    "wait": true,
+    "source_repos": ["../tufa-arc-agi-framework"]
+  },
+  "analyzer": {
+    "app_name": "Virelai G4.3 ft09 Recurrence Fast Canary",
+    "max_output": 2048,
+    "thinking": true,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "timeout": 180,
+    "tool_steps": 12,
+    "max_no_tool_responses": 2,
+    "tool_timeout": 30,
+    "tool_output_tokens": 1024,
+    "save_request_logs": true,
+    "openrouter": {
+      "reasoning_effort": "medium",
+      "provider_only": "AtlasCloud",
+      "quantizations": "fp8",
+      "allow_fallbacks": false,
+      "require_parameters": true
+    }
+  },
+  "multimodal": {
+    "context": "current_grid",
+    "upscale": 16
+  }
+}
