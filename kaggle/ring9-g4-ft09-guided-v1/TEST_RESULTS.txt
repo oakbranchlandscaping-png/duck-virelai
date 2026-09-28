@@ -1,0 +1,3 @@
+Source commit 3c89c2191190b07810c9f3f7b92b7d1617157a3a (G4-A stated target fcc7f11 + G2 counter axiom and no-legal-move guard).
+Cloud Python 3.12, full suite: 396 passed, 1 skipped (a recorded ft09 artifact outside the source package). Director-run Mac pytest at the same commit with the protocol's two ignored suites: 385 passed.
+The real ft09 Kaggle v1 G2 record (56 transitions) reproduces the counter-only deadlock on 8cfb782 and closes G2 under axiom A1 on this commit (tests/test_g2_counter_axiom.py).

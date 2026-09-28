@@ -1,0 +1,25 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 200,
+    "max_output_tokens_per_turn": "server_default",
+    "max_runtime_seconds_per_world": 10800,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "mode": "gated",
+  "model": {
+    "id": "vrfai/Qwen3.6-27B-FP8"
+  },
+  "package": {
+    "manifest_sha256": "21251934302a19dc95faf0edd3703007f2c256cb98d071f7c9d8601ab5cf48ec",
+    "name": "ring9-g4-ft09-guided-v1",
+    "sha256": "ed456471b668af375a0a466b39097f091cd789dc23a466ef38785ea88608b1d8"
+  },
+  "passes": 1,
+  "schema": "virelai-g4-ft09-guided-execution-receipt-v1",
+  "worlds": [
+    "ft09-0d8bbf25"
+  ]
+}
