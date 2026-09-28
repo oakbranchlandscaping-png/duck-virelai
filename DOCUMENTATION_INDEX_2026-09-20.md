@@ -1,9 +1,11 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-09-27  
+**Updated:** 2026-09-28  
 **Active source:** `variants/ring9-cybernetic-gates/`  
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
+
+> **2026-09-28 STATUS (Claude, Alpha build seat) — signed.** ft09 guided v1 reviewed: **G2 closed live under axiom A1** (first live stated-target closure), then the run crashed at G3 entry on the 24,000-character card guard (card was 67,939). Director rulings: the ranked list stays; proceed with the bounded card and the trigger label; label every build revision (`R9-Rnn`, ledger in plan v4 §1). R9-R04 (G3 bounded card, axiom A6; counter trigger label, A1 v2) built and offline-green, pending Mac pytest (393) and commit. Next live test: `ring9-g4-ft09-guided-v2`. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-28.md`; doctrine: `DOCTRINE_FRICTION_AXIOMS_v2_2026-09-28.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v4_2026-09-28.md`. Security: never `git add kaggle/`.
 
 > **2026-09-27 EVENING STATUS (Claude, Alpha build seat) — signed.** Director rulings: a stated target is the goal when possible (G2 CLICK and G4 are stated targets; G3 scripted); every friction sharpens an axiom (`DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md`); NAV shelved; cross-level is G9; Kaggle is the test venue. G4-A guided lever study committed `fcc7f11`; G2 counter axiom + no-legal-move guard pending commit. Both Kaggle runs today reviewed (vc33 S1; ft09 stalled in G2). Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md`. Security: never `git add kaggle/`.
 
@@ -27,9 +29,15 @@ after a new package, hashes, receipt, and notebook version are created.
 
 | Document | Role |
 |---|---|
-| `DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md` | Director rulings as axioms A1–A5: counter purity (find, label, mask), no-legal-move, level boundary, continuity, guidance (stated targets). Every friction is routed here first. Claude, signed. |
-| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md` | Current state (supersedes the morning memory for status): rulings of the day, commit ledger, evidence, two gate modes, handoff actions, read order. Claude, signed. |
-| `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md` | Current plan (supersedes v1, v2): G2 and G4 as stated targets, G4-A/B/C, order of work, decisions owed. Claude, signed. |
+| `DOCTRINE_FRICTION_AXIOMS_v2_2026-09-28.md` | Current doctrine (supersedes v1): axioms A1–A6. A1 v2: the counter label's trigger must agree with the record. A5: the ranked-list ruling. A6 (new): the card is bounded regardless of world size. Every friction is routed here first. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-28.md` | Current state (supersedes 2026-09-27 PM for status): rulings of the day, revision ledger, guided-v1 evidence, A6 and A1 v2 for builders, handoff actions, read order. Claude, signed. |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-28.md` | Current minimal read order and position for a new builder. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v4_2026-09-28.md` | Current plan (supersedes v1–v3): **revision ledger R9-R01…R9-I02**, where we sit, targets, order of work, decisions owed, honest ledger. Claude, signed. |
+| `BUILD_SLICE_G3_BOUNDED_CARD_AND_COUNTER_TRIGGER_2026-09-28.md` | R9-R04: windowed G3 card (A6; ft09 entry card 67,939 → about 10,061 characters) and `record_trigger` with a required, record-checked `trigger` on the G2 answer (A1 v2); tests; known limits. Claude, signed. |
+| `REVIEW_G4_FT09_GUIDED_KAGGLE_V1_2026-09-28.md` | Graded ft09 guided v1: G2 closed live under A1 with a pure mask; wrong trigger label accepted; G3 card overflow crash; P not met, G4 ungraded; frictions routed to A6 and A1. Claude, signed. |
+| `DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md` | Superseded by v2. Director rulings as axioms A1–A5: counter purity (find, label, mask), no-legal-move, level boundary, continuity, guidance (stated targets). Every friction is routed here first. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md` | 2026-09-27 rulings and evidence (status superseded by 2026-09-28; supersedes the morning memory): rulings of the day, commit ledger, evidence, two gate modes, handoff actions, read order. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md` | Superseded by v4 (supersedes v1, v2): G2 and G4 as stated targets, G4-A/B/C, order of work, decisions owed. Claude, signed. |
 | `BUILD_SLICE_G2_COUNTER_AXIOM_AND_LEGAL_MOVE_GUARD_2026-09-27.md` | G2 under axiom A1 (purity, not isolation; stated target in CLICK worlds; REWRITE or SILENT prediction), `legal_move_status` and the runtime watchdog (A2); real ft09 replay fixture. Claude, signed. |
 | `REVIEW_G4_FT09_PHASE1_KAGGLE_V1_2026-09-27.md` | Graded ft09 run: G2 deadlock on the counter-only rule (effective-move counter), P not met, G4 ungraded; repair options. Claude, signed. |
 | `BUILD_SLICE_G4A_GUIDED_LEVER_STUDY_2026-09-27.md` | G4-A as a stated target (`fcc7f11`): Duck chooses presses, runs read from the record with in-run confirmation, G4.3 retired from the ladder. Claude, signed. |
@@ -167,13 +175,13 @@ confirmed that the served Duck used the gated protocol through G1 closure and G2
 |---|---|---|
 | Harness and G0 | **LIVE CONFIRMED** | Clean G0 v2 Kaggle checkpoint on vc33, ft09, and ls20. |
 | G1 Ego | **LIVE CONFIRMED ON ONE LOCAL ls20 PILOT** | Ordered Delphi probes, explanation, full-pattern prospective demonstration, and `EgoLaw` all completed. |
-| G2 Counter | **LIVE CONFIRMED (vc33, ls20); AXIOM A1 REBUILD PENDING COMMIT** | 2026-09-27: ft09 stalled on the counter-only rule. G2 now tests purity, not isolation, and is a stated target in CLICK worlds (`BUILD_SLICE_G2_COUNTER_AXIOM_AND_LEGAL_MOVE_GUARD_2026-09-27.md`). |
+| G2 Counter | **LIVE CONFIRMED (vc33, ls20); A1 STATED TARGET LIVE CONFIRMED ON ft09 (R9-R03, 2026-09-28); TRIGGER LABEL (A1 v2) PENDING COMMIT (R9-R04)** | ft09 guided v1: Duck-chosen `COUNTER_REWRITE` prediction supported, pure mask locked as baseline (`REVIEW_G4_FT09_GUIDED_KAGGLE_V1_2026-09-28.md`). The accepted label contradicted the record; R9-R04 requires the trigger to agree. |
 | Universal prompt | **LIVE CONFIRMED AS DELIVERED** | Present in the completed ls20 prompt trace; semantic benefit remains bounded by the failed G1 exit. |
 | Binding opening protocol | **LIVE CONFIRMED FOR NAV ENTRY** | G2 received the demonstrated ego footprint, bound rank-1 object `[32,20]`, and admitted two approach actions. CLICK and HYBRID remain unconfirmed. |
 | G1 closure reliability | **LIVE CONFIRMED ON ONE LOCAL ls20 PILOT** | Visible errors enabled correction; the exact multi-color prediction was accepted and supported. |
 | G2 productive closure/runtime | **LIVE CONFIRMED ON `ls20`** | The served run completed recognition, prediction, recurrence, masking, boundary focus, and extremal reset detection. |
-| G3 broad lever location | **LIVE CONFIRMED ON vc33 (OpenRouter v8; Kaggle 2026-09-27); SCRIPTED BY RULING** | vc33 v8 completed the ranked click sweep, accepted one inventory with 2 confirmed levers and 8 scoped no-lever responses, reported `SATISFIED`, and handed off with `WAIT_FOR_NEXT_TARGET`. |
-| G4 per-lever study | **G4.0/G4.1 LIVE CONFIRMED (vc33); G4-A STATED TARGET BUILT (`fcc7f11`), NOT YET LIVE** | 2026-09-27: G4 is a stated target (Duck chooses presses; runs read from the record; confirmation in-run). G4.3 retired; G4-B/G4-C specified. See `BUILD_PLAN_G4_CLICK_COMPLETION_v3_2026-09-27.md`. |
+| G3 broad lever location | **LIVE CONFIRMED ON vc33 (OpenRouter v8; Kaggle 2026-09-27); SCRIPTED BY RULING; ft09 CARD OVERFLOW FIXED OFFLINE (R9-R04, A6)** | vc33 v8 completed the ranked click sweep, accepted one inventory with 2 confirmed levers and 8 scoped no-lever responses, reported `SATISFIED`, and handed off with `WAIT_FOR_NEXT_TARGET`. |
+| G4 per-lever study | **G4.0/G4.1 LIVE CONFIRMED (vc33); G4-A STATED TARGET BUILT (R9-R02, `fcc7f11`), NOT YET LIVE** | G4 is a stated target (Duck chooses presses; runs read from the record; confirmation in-run). G4.3 retired; G4-B (R9-R05) and G4-C (R9-R06) planned. See `BUILD_PLAN_G4_CLICK_COMPLETION_v4_2026-09-28.md`. |
 | G5-G9 | **PLANNED** | Remaining gates still require port-first slices. |
 
 Use `CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-22.md` for detailed claims and exit decisions.

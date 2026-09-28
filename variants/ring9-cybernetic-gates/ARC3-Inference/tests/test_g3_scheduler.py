@@ -158,15 +158,22 @@ def test_g3_large_frontier_keeps_full_geometry_out_of_automatic_view():
 
     assert len(json.dumps(full_frontier)) > 24_000
     assert len(json.dumps(view)) < 24_000
-    assert compact_frontier["view"] == "COMPACT_ROSTER"
+    # Axiom A6 (2026-09-28): the card is a bounded window of the roster; the rest is one paged
+    # query away and the lossless roster stays in the snapshot.
+    assert compact_frontier["view"] == "WINDOWED_ROSTER"
     assert compact_frontier["accounting_complete"] is True
-    assert len(compact_frontier["candidates"]) == len(full_frontier["candidates"])
+    assert (
+        len(compact_frontier["candidates"]) + compact_frontier["candidates_omitted"]
+        == len(full_frontier["candidates"])
+    )
+    assert "inventory" in compact_frontier["roster_query"]
     assert all("cells" not in row and "original_cells" not in row
                for row in compact_frontier["candidates"])
     assert all(row["entity_id"] in row["detail_query"]
                for row in compact_frontier["candidates"])
+    listed = {row["member_id"] for row in compact_frontier["candidates"]}
     assert sum(row["cells_omitted"] for row in compact_frontier["candidates"]) == sum(
-        len(row["cells"]) for row in full_frontier["candidates"]
+        len(row["cells"]) for row in full_frontier["candidates"] if row["member_id"] in listed
     )
 
 

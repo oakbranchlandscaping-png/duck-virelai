@@ -432,6 +432,7 @@ def test_g2_routes_after_g1_and_stops_for_explanation_then_demonstration():
     machine.submit_answer({
         "answer_id": "G2-top-strip",
         "candidate_id": candidate.candidate_id,
+        "trigger": "EVERY_TRANSITION",  # axiom A1 v2: the bar ticks on every transition here
         "tracked_variable": "remaining visible units in the top strip",
         "mechanism": "one top-strip cell rewrites from integer seven to integer four per intervention",
         "bookkeeping_reason": "the rewrite recurs away from distinct selected sites under every tested intervention",
@@ -480,7 +481,13 @@ def test_g2_routes_after_g1_and_stops_for_explanation_then_demonstration():
     assert machine.gate_id == "G3-LEVERS"
     g3 = machine.gate_view()
     assert g3["status"] == "ACTIVE"
-    assert g3["source_frontier"] == frontier
+    # Axiom A6 (2026-09-28): the card carries the source frontier's summary; its candidate rows
+    # stay in the lossless snapshot.
+    assert g3["source_frontier"] == {
+        **{key: value for key, value in frontier.items() if key != "candidates"},
+        "candidates_omitted": len(frontier["candidates"]),
+    }
+    assert machine._adapters["G3-LEVERS"].snapshot()["source_frontier"] == frontier
     assert g3["inherited_frontier"]["schema"] == "virelai-g3-mask-filtered-frontier-v1"
     assert g3["inherited_frontier"]["original_candidate_count"] == frontier["candidate_count"]
     assert g3["inherited_frontier"]["accounting_complete"] is True
@@ -503,6 +510,7 @@ def test_g2_rejects_label_only_or_mismatched_evidence_explanation():
         machine.submit_answer({
             "answer_id": "bad",
             "candidate_id": candidate.candidate_id,
+            "trigger": "EVERY_TRANSITION",  # axiom A1 v2: the bar ticks on every transition here
             "tracked_variable": "a counter",
             "mechanism": "it is just a counter",
             "bookkeeping_reason": "it looks like a timer",
@@ -560,6 +568,7 @@ def test_g2_contradiction_reopens_probe_hunt_without_mask():
     machine.submit_answer({
         "answer_id": "G2-proposed",
         "candidate_id": candidate.candidate_id,
+        "trigger": "EVERY_TRANSITION",  # axiom A1 v2: the bar ticks on every transition here
         "tracked_variable": "remaining visible units in the top strip",
         "mechanism": "one top-strip cell rewrites from integer seven to integer four per intervention",
         "bookkeeping_reason": "the rewrite recurs away from distinct selected sites under every tested intervention",

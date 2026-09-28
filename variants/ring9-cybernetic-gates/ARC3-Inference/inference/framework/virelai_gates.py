@@ -239,6 +239,8 @@ class CounterAnswer:
     falsifier: str
     limitations: tuple[str, ...]
     novel_prediction: Mapping[str, Any]
+    # Axiom A1 (v2): what makes the counter tick, and it must agree with the whole record.
+    trigger: str = "UNSPECIFIED"
 
 
 @dataclass(frozen=True)
@@ -259,6 +261,7 @@ class CounterModel:
     boundary_ref: str
     boundary_kind: str
     tracked_variable_status: str = "DUCK_HYPOTHESIS_NOT_IDENTIFIED_BY_RECURRENCE"
+    trigger: str = "UNSPECIFIED"
 
 
 def _opaque_action_name(value: Any) -> str:
@@ -1073,6 +1076,7 @@ class CounterGateMachine:
         return {
             "answer_id": "G2-COUNTER-EXPLANATION-1",
             "candidate_id": self.candidate.candidate_id,
+            "trigger": self.record_trigger()["admissible_claims"][0],
             "tracked_variable": "Explain the visible quantity represented by the exchange.",
             "mechanism": "Explain the two-class rewrite, geometry, rate, and direction of progression.",
             "bookkeeping_reason": (
@@ -1097,6 +1101,16 @@ class CounterGateMachine:
                 "because": "Explain why the observed recurrence predicts this future rewrite.",
                 "novelty": "Explain why this is a prospective transition from a later state.",
             },
+            "trigger_options": {
+                "record": self.record_trigger(),
+                "rule": (
+                    "State what makes the counter tick. It must agree with the whole record: "
+                    "EVERY_TRANSITION, EFFECTIVE_TRANSITIONS_ONLY (only when something else "
+                    "changes), or IRREGULAR. When the record is OPEN either simple claim is "
+                    "admissible, and a COUNTER_SILENT prediction on an action you expect to change "
+                    "nothing would tell them apart."
+                ),
+            },
             "prediction_options": {
                 "action": (
                     "Any one admissible action you choose. The prediction is scored only on the "
@@ -1120,6 +1134,79 @@ class CounterGateMachine:
             if str(outcome.get("evidence_id") or "") in refs and isinstance(action, Mapping):
                 return _normalize_action_payload(action)
         return {"action": self.affordances[0].action}
+
+    def record_trigger(self) -> dict[str, Any]:
+        """Axiom A1 (v2): the trigger class the whole record supports for the active candidate.
+
+        A transition *ticks* when a footprint cell changes, and is *effective* when any cell
+        outside the footprint changes. EVERY_TRANSITION: it ticked on transitions that changed
+        nothing else, and never failed to tick. EFFECTIVE_TRANSITIONS_ONLY: it ticked on every
+        effective transition and on none that changed nothing else. OPEN: only effective, ticking
+        transitions so far, so the record cannot yet tell those two apart. IRREGULAR: anything
+        else. The record's class is always an admissible claim, so this check never deadlocks.
+        """
+        assert self.candidate is not None
+        footprint = set(self.candidate.full_bar_footprint) | set(self.candidate.observed_support)
+        counts = {
+            "effective_transitions_with_tick": 0,
+            "effective_transitions_without_tick": 0,
+            "null_transitions_with_tick": 0,
+            "null_transitions_without_tick": 0,
+        }
+        for outcome in self._lossless_outcomes:
+            cells = [
+                (int(item["row"]), int(item["col"]))
+                for item in outcome.get("changed_cells") or ()
+                if isinstance(item, Mapping)
+            ]
+            tick = any(cell in footprint for cell in cells)
+            effective = any(cell not in footprint for cell in cells)
+            key = ("effective" if effective else "null") + (
+                "_transitions_with_tick" if tick else "_transitions_without_tick"
+            )
+            counts[key] += 1
+        if counts["effective_transitions_without_tick"] == 0 and counts["null_transitions_without_tick"] == 0:
+            trigger = "EVERY_TRANSITION" if counts["null_transitions_with_tick"] else "OPEN"
+        elif (
+            counts["effective_transitions_without_tick"] == 0
+            and counts["null_transitions_with_tick"] == 0
+            and counts["effective_transitions_with_tick"] > 0
+        ):
+            trigger = "EFFECTIVE_TRANSITIONS_ONLY"
+        else:
+            trigger = "IRREGULAR"
+        admissible = (
+            ["EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY"] if trigger == "OPEN" else [trigger]
+        )
+        return {
+            "class": trigger,
+            "admissible_claims": admissible,
+            "null_transitions_without_tick": counts["null_transitions_without_tick"],
+            "null_transitions_with_tick": counts["null_transitions_with_tick"],
+            "effective_transitions_with_tick": counts["effective_transitions_with_tick"],
+            "effective_transitions_without_tick": counts["effective_transitions_without_tick"],
+            "transition_count": len(self._lossless_outcomes),
+        }
+
+    def _trigger_disagreement(self, claim: str, record: Mapping[str, Any]) -> str:
+        reasons = []
+        if claim == "EVERY_TRANSITION" and record["null_transitions_without_tick"]:
+            reasons.append(
+                f"{record['null_transitions_without_tick']} transitions changed nothing and did "
+                "not tick"
+            )
+        if claim in {"EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY"} and record[
+            "effective_transitions_without_tick"
+        ]:
+            reasons.append(
+                f"{record['effective_transitions_without_tick']} transitions changed the world "
+                "without a tick"
+            )
+        if claim == "EFFECTIVE_TRANSITIONS_ONLY" and record["null_transitions_with_tick"]:
+            reasons.append(
+                f"{record['null_transitions_with_tick']} transitions ticked with no other change"
+            )
+        return "; ".join(reasons) or f"the record's trigger class is {record['class']}"
 
     def _purity_violations(self, candidate: CounterCandidate) -> list[str]:
         """Axiom A1 purity: the mask may neither swallow nor leak lever data.
@@ -1442,6 +1529,7 @@ class CounterGateMachine:
                 str(boundary.boundary_kind)
                 if locked else "NOT_REQUIRED_AFTER_MASK_LOCK"
             ),
+            trigger=self.answer.trigger,
         )
         # G2's only downstream job is to provide a stable subtraction mask.
         # Once the prediction succeeds, later counter ticks are deliberately
@@ -1655,6 +1743,19 @@ class CounterGateMachine:
         refs = _strings(raw.get("evidence_refs"), "evidence_refs")
         if set(refs) != set(self.candidate.witness_evidence_refs):
             raise GateContractError("G2 evidence_refs must exactly cite the candidate witnesses.")
+        record = self.record_trigger()
+        trigger = str(raw.get("trigger") or "").strip().upper()
+        if not trigger:
+            raise GateContractError(
+                "G2 answer requires trigger (what makes the counter tick): one of "
+                f"{record['admissible_claims']!r}; the record supports {record['class']}."
+            )
+        if trigger not in record["admissible_claims"]:
+            raise GateContractError(
+                f"G2 trigger {trigger} disagrees with the record: "
+                f"{self._trigger_disagreement(trigger, record)}. The record supports "
+                f"{record['class']} (axiom A1: the label must agree with the whole record)."
+            )
         raw_prediction = raw.get("novel_prediction")
         if not isinstance(raw_prediction, Mapping):
             raise GateContractError("G2 answer requires novel_prediction in the supplied template shape.")
@@ -1726,6 +1827,7 @@ class CounterGateMachine:
             falsifier=text["falsifier"],
             limitations=_strings(raw.get("limitations", []), "limitations", required=False),
             novel_prediction=canonical_prediction,
+            trigger=trigger,
         )
         self.answer = answer
         self._prediction_predicate = predicate
@@ -3638,6 +3740,93 @@ class _LeverTarget:
             "state_counts": lifecycle_snapshot["state_counts"],
             "entities": lifecycle_entities,
         }
+        return self._bound_working_card(view)
+
+    # Axiom A6 (DOCTRINE_FRICTION_AXIOMS_v2): the card is bounded regardless of world size.
+    CARD_WINDOW_AHEAD = 6
+    CARD_NOTABLE_LIMIT = 8
+    NOTABLE_STATES = frozenset({"WITNESSED", "RESPONDED", "AMBIGUOUS", "G4-READY", "REOPENED"})
+
+    def _card_entity_ids(self) -> tuple[list[str], set[str]]:
+        """Entities the card must carry: the scheduler window, notable states, pending, roles."""
+        ledger = self._ensure_entity_ledger()
+        journal = self.lifecycle_journal
+        assert journal is not None
+        frontier = self._ensure_frontier()
+        start = min(self._target_index, len(frontier))
+        window = [
+            ledger.entity_for_member(str(row["member_id"])) or ""
+            for row in frontier[start:start + self.CARD_WINDOW_AHEAD]
+        ]
+        notable = [
+            entity_id for entity_id, item in sorted(journal.entities.items())
+            if item.state in self.NOTABLE_STATES
+        ][: self.CARD_NOTABLE_LIMIT]
+        keep = {item for item in window + notable if item}
+        keep.update(
+            entity_id
+            for entity_ids in ledger.role_bindings.values()
+            for entity_id in entity_ids
+        )
+        for pending in (self._pending_confirmation, self._pending_dossier):
+            if pending is not None:
+                entity_id = ledger.entity_for_member(str(pending.get("target_member_id") or ""))
+                if entity_id:
+                    keep.add(entity_id)
+        return [item for item in window if item], keep
+
+    def _bound_working_card(self, view: dict[str, Any]) -> dict[str, Any]:
+        """Window the roster, ledger and journal; everything else is a paged query away."""
+        window_ids, keep = self._card_entity_ids()
+        frontier = dict(view["inherited_frontier"])
+        rows = list(frontier.get("candidates") or ())
+        shown = [row for row in rows if str(row.get("entity_id") or "") in keep]
+        frontier.update({
+            "view": "WINDOWED_ROSTER",
+            "candidates": shown,
+            "candidates_omitted": len(rows) - len(shown),
+            "window": {
+                "scheduler_position": self._target_index,
+                "ahead": self.CARD_WINDOW_AHEAD,
+                "entity_ids": window_ids,
+            },
+            "roster_query": "virelai('inventory', offset=0, limit=10)",
+        })
+        view["inherited_frontier"] = frontier
+        source = view.get("source_frontier")
+        if isinstance(source, Mapping):
+            view["source_frontier"] = {
+                key: value for key, value in source.items() if key != "candidates"
+            }
+            view["source_frontier"]["candidates_omitted"] = len(source.get("candidates") or ())
+        ledger_view = dict(view["entity_ledger"])
+        entities = {
+            key: value for key, value in ledger_view["entities"].items() if key in keep
+        }
+        ledger_view["entities"] = entities
+        ledger_view["listed_entity_count"] = len(entities)
+        ledger_view["member_bindings"] = {
+            member: entity for member, entity in ledger_view["member_bindings"].items()
+            if entity in keep
+        }
+        ledger_view["omitted_entity_count"] = ledger_view["entity_count"] - len(entities)
+        view["entity_ledger"] = ledger_view
+        journal_view = dict(view["lifecycle_journal"])
+        listed = {
+            key: value for key, value in journal_view["entities"].items() if key in keep
+        }
+        journal_view["entities"] = listed
+        journal_view["listed_entity_count"] = len(listed)
+        journal_view["omitted_entity_count"] = journal_view["entity_count"] - len(listed)
+        journal_view["detail_query"] = "virelai('inventory', offset=0, limit=10)"
+        view["lifecycle_journal"] = journal_view
+        view["card_bound"] = {
+            "axiom": "A6",
+            "rule": (
+                "This card shows the scheduler window, notable entities and roles. The full "
+                "roster, ledger and journal are one paged query away; nothing is discarded."
+            ),
+        }
         return view
 
     def _completion_gate_view(self) -> dict[str, Any]:
@@ -5480,6 +5669,7 @@ class CyberneticGateMachine:
             }
             if self.counter.candidate is not None:
                 view["candidate"] = asdict(self.counter.candidate)
+                view["record_trigger"] = self.counter.record_trigger()
             if assessment.disposition == "ANSWER_REQUIRED":
                 view["answer_contract"] = {
                     "required_explanation": [

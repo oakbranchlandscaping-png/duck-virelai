@@ -1,5 +1,7 @@
 # Alpha Builder operating protocol — Cybernetic Duck
 
+> **2026-09-28 AMENDMENT (Director rulings; recorded by Claude, Alpha build seat).** (1) **The ranked list stays:** an exhaustive ranked search on a stated-target card is by design, not a lapse into scripting. (2) **The card is bounded regardless of world size (axiom A6):** detail is queried, never pushed; any card field that grows with the world must be windowed, with a test on the largest recorded world. (3) **A counter label must agree with the record (A1 v2).** (4) **Every build revision is labelled** `R9-Rnn` (harness `R9-Inn`) in its slice document, commit message and Kaggle package; ledger in `BUILD_PLAN_G4_CLICK_COMPLETION_v4_2026-09-28.md` §1. `DOCTRINE_FRICTION_AXIOMS_v2_2026-09-28.md` governs. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-28.md`.
+
 > **2026-09-27 AMENDMENT (Director rulings; recorded by Claude, Alpha build seat).** (1) Kaggle is the Duck's test venue; the OpenRouter rung is skipped. (2) Cross-level work is G9. (3) NAV is shelved; CLICK first. (4) **A stated target is the goal when possible:** the controller states the target and its closure test and audits the record; Duck chooses every action. G2 (CLICK) and G4 are stated targets; G3 stays scripted. (5) **Every friction sharpens an axiom.** Where this protocol describes a gate as a scripted sweep or demands a counter-only action, `DOCTRINE_FRICTION_AXIOMS_v1_2026-09-27.md` governs. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-27_PM.md`.
 
 **Date:** 2026-09-26  

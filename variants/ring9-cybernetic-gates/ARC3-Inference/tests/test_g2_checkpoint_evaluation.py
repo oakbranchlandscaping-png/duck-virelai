@@ -196,6 +196,7 @@ def _drive_locked_g2(*, lock_on_demonstration=True):
     recorder.record_answer(machine, {
         "answer_id": "G2-top-strip",
         "candidate_id": candidate.candidate_id,
+        "trigger": "EVERY_TRANSITION",  # axiom A1 v2: the bar ticks on every transition here
         "tracked_variable": "remaining visible units in the top strip",
         "mechanism": "one top-strip cell rewrites from integer seven to integer four per intervention",
         "bookkeeping_reason": "the rewrite recurs away from distinct selected sites under every tested intervention",

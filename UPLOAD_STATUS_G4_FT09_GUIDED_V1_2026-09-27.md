@@ -2,7 +2,7 @@
 
 **Prepared:** 2026-09-27
 **Author:** Claude (Alpha build seat), signed. Upload commands are executed by the Director.
-**Status:** packaged and verified; not yet uploaded.
+**Status:** uploaded, run on Kaggle (notebook version 1) and reviewed on 2026-09-28. Result: G2 closed live under axiom A1; the run then crashed at G3 entry on the 24,000-character card guard (card was 67,939 characters). P not met, so the G4 criteria are ungraded. Review: `REVIEW_G4_FT09_GUIDED_KAGGLE_V1_2026-09-28.md`. Successor: `ring9-g4-ft09-guided-v2`, carrying R9-R04. This package carries revision R9-R03.
 
 ## Identifiers
 
