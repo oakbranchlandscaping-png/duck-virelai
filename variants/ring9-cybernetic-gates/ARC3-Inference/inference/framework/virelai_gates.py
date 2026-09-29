@@ -5295,6 +5295,9 @@ class CyberneticGateMachine:
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
         self._consumed_capabilities: set[str] = set()
         self._counter_prepared_from_ego = False
+        # The record tier's in-memory index (DESIGN_VIRELAI_MEMORY_v1 §5.1): one sparse, lossless
+        # row per recorded transition, whatever gate recorded it. Read by MemoryStore only.
+        self.transition_index: list[dict[str, Any]] = []
 
     def _prepare_counter_from_ego(self) -> None:
         """Start G2 from Duck's demonstrated post-G1 world and ego binding."""
@@ -5482,7 +5485,11 @@ class CyberneticGateMachine:
     def record_outcome(
         self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
     ) -> dict[str, Any]:
-        return self._active_adapter().record_outcome(probe, outcome)
+        event = self._active_adapter().record_outcome(probe, outcome)
+        from inference.framework.memory_store import transition_index_row
+
+        self.transition_index.append(transition_index_row(probe, outcome, event))
+        return event
 
     def apply_counter_baseline(self, outcome: Mapping[str, Any]) -> dict[str, Any] | None:
         """Apply G2 as a stable mask and ignore later counter behavior.

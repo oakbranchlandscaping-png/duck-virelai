@@ -177,3 +177,53 @@ COMPACT_TOOL_SESSION_ADDENDUM = (
     "- Tool responses are capped to about {tool_output_tokens} tokens. If a response is cut off, the tool result will tell you that.\n"
     "- Keep code snippets short and purpose-built rather than dumping large frameworks into one call.\n"
 )
+
+
+def no_tool_followup_prompt(
+    *, gates_enabled: bool, controller_enabled: bool, tool_call_markup_in_text: bool
+) -> str:
+    """The retry prompt after a model response without a parsed tool call.
+
+    Moved out of ``ToolAgent.analyze`` unchanged (R9-R06, compensating extraction).
+    """
+    followup_prefix = "You have not acted yet. Investigate first. "
+    if tool_call_markup_in_text:
+        followup_prefix = (
+            "You did not call a tool. We detected `<tool_call>` markup inside your reasoning or assistant text, "
+            "so no parsed tool call was executed. On this retry, do not add a note or explanation first. "
+            "Emit exactly one `python` tool call directly as your next response. "
+            "Do not place `<tool_call>` markup inside reasoning, explanation, or notes. "
+        )
+    if gates_enabled:
+        action_guidance = (
+            "read the binding gate, execute its supplied current_probe directly (query "
+            "`virelai('next_probe')` only if none is supplied), or choose one admissible "
+            "ego-control action plus pilot_intent "
+            "for PILOT_TO_CONTACT, or any one admissible action you choose for GUIDED_ACTION, "
+            "using `action(actions, decision={'probe_token': token, ...})`, "
+            "or submit the required gate_answer. "
+        )
+    elif controller_enabled:
+        action_guidance = "then call `action(actions, decision={...})` inside Python with the active focus id and purpose. "
+    else:
+        action_guidance = "then call `action(actions)` inside Python with the best valid action or ordered batch that your code selected. "
+    if gates_enabled:
+        model_guidance = (
+            "Revise only the active gate model: live alternatives, admitted evidence, "
+            "candidate mechanism, falsifier, limitations, and next test. Do not guess "
+            "the win or pursue a later gate. "
+        )
+    else:
+        model_guidance = (
+            "Revise your working world model of what the level contains, what actions "
+            "appear to do, what the current goal seems to be, and what plan looks best. "
+        )
+    followup_prompt = (
+        f"{followup_prefix}{model_guidance}"
+        "Call the `python` tool with code that inspects `current_frame`, `previous_frame`, `last_transition`, `history`, or `valid_actions` -- use `current_frame.segmentation` as the primary view, and `.ascii` only for a small specific region -- "
+        "compare `previous_frame` to `current_frame` for the most recent change, "
+        "derives a compact board summary, programs a small search or scorer over candidate actions or short sequences, "
+        f"{action_guidance}"
+        f"{TOOL_CALL_FORMAT_GUIDANCE}"
+    )
+    return followup_prompt

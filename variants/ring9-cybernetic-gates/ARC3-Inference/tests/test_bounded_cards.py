@@ -12,24 +12,16 @@ real G2 record through a complete scripted G3 sweep and assert each binding card
 """
 from __future__ import annotations
 
-import json
-
 from inference.agent import tool_agent
+from inference.framework.gate_card import render_binding_gate_context
 from test_g2_counter_axiom import _act, _answer, _replay_real_segment
 
 BUDGET = tool_agent._GATED_GATE_CONTEXT_MAX_CHARS
 
 
 def _binding_context_chars(machine) -> int:
-    """Mirror ToolAgent._binding_gate_payload + _gate_context_update rendering."""
-    view = machine.gate_view()
-    context = dict(view)
-    if view.get("next_operation") == "QUERY_NEXT_PROBE":
-        capability = machine.next_probe_capability()
-        if capability is not None:
-            context["current_probe"] = capability
-            context["instruction"] = "x" * 110
-    return len("VIRELAI GATE (binding):\n" + json.dumps(context, sort_keys=True))
+    """The production renderer (R9-R06 moved it to inference.framework.gate_card)."""
+    return len(render_binding_gate_context(machine))
 
 
 def _close_g2_on_ft09():

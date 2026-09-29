@@ -25,7 +25,9 @@ from inference.agent.prompts import (
     MULTIMODAL_CONTEXT_ADDENDUM,
     TOOL_CALL_FORMAT_GUIDANCE,
     VISUAL_GAME_ADDENDUM,
+    no_tool_followup_prompt,
 )
+from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
 from inference.agent.virelai_ontology import (
     ARC_GRID_MULTIVERSE_ONTOLOGY,
     CYBERNETIC_TARGETING_MISSION,
@@ -320,79 +322,6 @@ def _normalize_summary_text(value: Any, *, max_chars: int | None = 280) -> str:
         return text
     omitted = len(text) - max_chars
     return f"{text[:max_chars].rstrip()}... [{omitted} chars omitted]"
-
-
-def _extract_labeled_blocks(content: str, labels: list[str]) -> dict[str, str]:
-    normalized_labels = {label.lower(): label for label in labels}
-    targets = tuple(f"{label.lower()}:" for label in labels)
-    extracted: dict[str, list[str]] = {label: [] for label in labels}
-    current_label: str | None = None
-
-    for raw_line in content.splitlines():
-        stripped = raw_line.strip()
-        candidate = stripped
-        while candidate.startswith(("-", "*")):
-            candidate = candidate[1:].lstrip()
-        lowered = candidate.lower()
-
-        matched_label: str | None = None
-        inline_value = ""
-        for target in targets:
-            if lowered.startswith(target):
-                matched_label = normalized_labels[target[:-1]]
-                inline_value = candidate[len(target):].strip()
-                break
-
-        if matched_label is not None:
-            current_label = matched_label
-            if inline_value:
-                extracted[current_label].append(inline_value)
-            continue
-
-        if current_label is not None and stripped:
-            extracted[current_label].append(stripped)
-
-    return {
-        label: _normalize_summary_text("\n".join(lines).strip(), max_chars=None)
-        for label, lines in extracted.items()
-        if "\n".join(lines).strip()
-    }
-
-
-def _extract_scientist_note(content: str) -> dict[str, str]:
-    if not content.strip():
-        return {}
-    extracted = _extract_labeled_blocks(
-        content,
-        [
-            "World model",
-            "Goal model",
-            "Action model",
-            "Recent findings",
-            "Open questions",
-            "Plan",
-            "Cross-level notes",
-            "Hypothesis",
-            "History check",
-            "Next test",
-        ],
-    )
-    result = {
-        "world_model": extracted.get("World model", ""),
-        "goal_model": extracted.get("Goal model", ""),
-        "action_model": extracted.get("Action model", ""),
-        "recent_findings": extracted.get("Recent findings", ""),
-        "open_questions": extracted.get("Open questions", ""),
-        "current_plan": extracted.get("Plan", ""),
-        "cross_level_notes": extracted.get("Cross-level notes", ""),
-    }
-    if not result["world_model"]:
-        result["world_model"] = extracted.get("Hypothesis", "")
-    if not result["recent_findings"]:
-        result["recent_findings"] = extracted.get("History check", "")
-    if not result["current_plan"]:
-        result["current_plan"] = extracted.get("Next test", "")
-    return result
 
 
 def _empty_world_model() -> dict[str, str]:
@@ -1183,6 +1112,7 @@ class ToolAgent:
         self._session_total_tokens = 0
         self._session_generated_tokens = 0
         self._step_env_callback: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+        self._turn_ledger: Any = None
         self._virelai_query_callback: Callable[[str, dict[str, Any] | None], dict[str, Any]] | None = None
         self._current_valid_actions: list[str] = []
         self._last_step_summary: dict[str, Any] | None = None
@@ -1284,17 +1214,9 @@ class ToolAgent:
                 self._gate_reset_steps_observed.add(transition_id)
 
     def _binding_gate_payload(self, machine: Any) -> dict[str, Any]:
-        compact_gate = machine.gate_view()
-        context: dict[str, Any] = dict(compact_gate)
-        if compact_gate.get("next_operation") == "QUERY_NEXT_PROBE":
-            capability = machine.next_probe_capability()
-            if capability is not None:
-                context["current_probe"] = capability
-                context["instruction"] = (
-                    "Execute current_probe directly. Its token is current for this turn; "
-                    "do not reuse a token from prior history."
-                )
-        return context
+        from inference.framework.gate_card import binding_gate_payload
+
+        return binding_gate_payload(machine)
 
     def _controller_no_legal_move(self, state_path: Path) -> str:
         """Axiom A2 watchdog (Claude, 2026-09-27): end gated work when no legal move exists.
@@ -1329,8 +1251,9 @@ class ToolAgent:
         machine = self._ensure_gate_machine(state_path)
         if machine is None:
             return ""
-        context = self._binding_gate_payload(machine)
-        rendered = "VIRELAI GATE (binding):\n" + json.dumps(context, sort_keys=True)
+        from inference.framework.gate_card import render_binding_gate_context
+
+        rendered = render_binding_gate_context(machine)
         if len(rendered) > _GATED_GATE_CONTEXT_MAX_CHARS:
             raise RuntimeError(
                 "binding gate context exceeds its 24000-character budget; compact the model-facing view"
@@ -2089,6 +2012,104 @@ class ToolAgent:
             compact["error"] = payload.get("error")
         return compact
 
+    def _gate_probe_begin(
+        self,
+        state_path: Path,
+        gate_machine: Any,
+        decision: dict[str, Any] | None,
+        normalized_actions: list[dict[str, Any]],
+        *,
+        executor: str,
+    ) -> tuple[Any, Any, list[str]]:
+        """Validate a gate action and write its envelope before the environment moves.
+
+        Shared by Duck's action path and the controller executor (DESIGN_VIRELAI_MEMORY_v1 §5.5),
+        so both leave identical evidence; ``executor`` records who acted.
+        """
+        from inference.framework.virelai_gates import GateContractError
+
+        try:
+            gate_probe = gate_machine.validate_probe(decision, normalized_actions)
+        except GateContractError as exc:
+            raise ControllerContractError(str(exc)) from None
+        probe_path = state_path.with_name(
+            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_envelopes.jsonl")
+        )
+        probe_path.parent.mkdir(parents=True, exist_ok=True)
+        with probe_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({
+                "schema": "virelai-cybernetic-gates-v1",
+                "probe_token": str((decision or {}).get("probe_token") or ""),
+                "executor": executor,
+                **asdict(gate_probe),
+            }, sort_keys=True) + "\n")
+        probe_before_frame, _ = load_runtime_state(state_path)
+        return gate_probe, probe_before_frame, list(self._current_valid_actions)
+
+    def _gate_probe_record(
+        self,
+        state_path: Path,
+        gate_machine: Any,
+        gate_probe: Any,
+        normalized_actions: list[dict[str, Any]],
+        raw_payload: dict[str, Any],
+        probe_before_frame: Any,
+        probe_actions_before: list[str],
+    ) -> dict[str, Any]:
+        """Compile the lossless outcome of an executed gate action and persist its evidence."""
+        from inference.framework.probe_evidence import (
+            compile_probe_outcome,
+            frame_archive_rows,
+        )
+
+        probe_after_frame, _ = load_runtime_state(state_path)
+        after_actions = raw_payload.get("valid_actions")
+        if not isinstance(after_actions, list):
+            after_actions = list(self._current_valid_actions)
+        transition_id = int(
+            raw_payload.get("transition_id")
+            or raw_payload.get("action_num")
+            or (probe_after_frame.step if probe_after_frame is not None else 0)
+            or gate_machine.observed_through_step + 1
+        )
+        full_outcome = compile_probe_outcome(
+            probe_id=gate_probe.probe_id,
+            transition_id=transition_id,
+            action=normalized_actions[0],
+            before_frame=probe_before_frame,
+            after_frame=probe_after_frame,
+            available_actions_before=probe_actions_before,
+            available_actions_after=[str(item).strip() for item in after_actions],
+            callback_payload=raw_payload,
+        )
+        # Keep the lossless H2 outcome visible to the scoped verifier.
+        # The gate compacts only the copy stored in its prompt-facing event.
+        gate_event = gate_machine.record_outcome(gate_probe, full_outcome)
+        full_outcome["evidence_id"] = gate_event["evidence_id"]
+        event_path = state_path.with_name(
+            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_gate_events.jsonl")
+        )
+        with event_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(gate_event, sort_keys=True) + "\n")
+        outcome_path = state_path.with_name(
+            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_outcomes.jsonl")
+        )
+        with outcome_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(full_outcome, sort_keys=True) + "\n")
+        frame_path = state_path.with_name(
+            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_frames.jsonl")
+        )
+        with frame_path.open("a", encoding="utf-8") as handle:
+            for frame_row in frame_archive_rows(probe_before_frame, probe_after_frame):
+                handle.write(json.dumps({
+                    **frame_row,
+                    "evidence_id": gate_event["evidence_id"],
+                    "probe_id": gate_probe.probe_id,
+                }, sort_keys=True) + "\n")
+        if isinstance(raw_payload.get("valid_actions"), list):
+            gate_machine.update_action_metadata(raw_payload["valid_actions"])
+        return gate_event
+
     def _run_python_tool(self, state_path: Path, arguments: dict[str, Any]) -> _ToolDispatchResult:
         self._ensure_session(state_path)
         code = str(arguments.get("code", "")).rstrip()
@@ -2178,25 +2199,10 @@ class ToolAgent:
             probe_before_frame = None
             probe_actions_before: list[str] = []
             if self._virelai_gates_enabled:
-                from inference.framework.virelai_gates import GateContractError
-
                 assert gate_machine is not None
-                try:
-                    gate_probe = gate_machine.validate_probe(decision, normalized_actions)
-                except GateContractError as exc:
-                    raise ControllerContractError(str(exc)) from None
-                probe_path = state_path.with_name(
-                    state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_envelopes.jsonl")
+                gate_probe, probe_before_frame, probe_actions_before = self._gate_probe_begin(
+                    state_path, gate_machine, decision, normalized_actions, executor="DUCK"
                 )
-                probe_path.parent.mkdir(parents=True, exist_ok=True)
-                with probe_path.open("a", encoding="utf-8") as handle:
-                    handle.write(json.dumps({
-                        "schema": "virelai-cybernetic-gates-v1",
-                        "probe_token": str((decision or {}).get("probe_token") or ""),
-                        **asdict(gate_probe),
-                    }, sort_keys=True) + "\n")
-                probe_before_frame, _ = load_runtime_state(state_path)
-                probe_actions_before = list(self._current_valid_actions)
             elif self._virelai_controller_enabled:
                 if not isinstance(decision, dict):
                     raise ControllerContractError(
@@ -2260,57 +2266,10 @@ class ToolAgent:
                     },
                 )
             if gate_probe is not None and raw_payload.get("executed"):
-                from inference.framework.probe_evidence import (
-                    compile_probe_outcome,
-                    frame_archive_rows,
+                gate_event = self._gate_probe_record(
+                    state_path, gate_machine, gate_probe, normalized_actions, raw_payload,
+                    probe_before_frame, probe_actions_before,
                 )
-
-                probe_after_frame, _ = load_runtime_state(state_path)
-                after_actions = raw_payload.get("valid_actions")
-                if not isinstance(after_actions, list):
-                    after_actions = list(self._current_valid_actions)
-                transition_id = int(
-                    raw_payload.get("transition_id")
-                    or raw_payload.get("action_num")
-                    or (probe_after_frame.step if probe_after_frame is not None else 0)
-                    or gate_machine.observed_through_step + 1
-                )
-                full_outcome = compile_probe_outcome(
-                    probe_id=gate_probe.probe_id,
-                    transition_id=transition_id,
-                    action=normalized_actions[0],
-                    before_frame=probe_before_frame,
-                    after_frame=probe_after_frame,
-                    available_actions_before=probe_actions_before,
-                    available_actions_after=[str(item).strip() for item in after_actions],
-                    callback_payload=raw_payload,
-                )
-                # Keep the lossless H2 outcome visible to the scoped verifier.
-                # The gate compacts only the copy stored in its prompt-facing event.
-                gate_event = gate_machine.record_outcome(gate_probe, full_outcome)
-                full_outcome["evidence_id"] = gate_event["evidence_id"]
-                event_path = state_path.with_name(
-                    state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_gate_events.jsonl")
-                )
-                with event_path.open("a", encoding="utf-8") as handle:
-                    handle.write(json.dumps(gate_event, sort_keys=True) + "\n")
-                outcome_path = state_path.with_name(
-                    state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_outcomes.jsonl")
-                )
-                with outcome_path.open("a", encoding="utf-8") as handle:
-                    handle.write(json.dumps(full_outcome, sort_keys=True) + "\n")
-                frame_path = state_path.with_name(
-                    state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_frames.jsonl")
-                )
-                with frame_path.open("a", encoding="utf-8") as handle:
-                    for frame_row in frame_archive_rows(probe_before_frame, probe_after_frame):
-                        handle.write(json.dumps({
-                            **frame_row,
-                            "evidence_id": gate_event["evidence_id"],
-                            "probe_id": gate_probe.probe_id,
-                        }, sort_keys=True) + "\n")
-                if isinstance(raw_payload.get("valid_actions"), list):
-                    gate_machine.update_action_metadata(raw_payload["valid_actions"])
             compact_payload = self._compact_action_result(raw_payload)
             if gate_event is not None:
                 compact_payload["virelai_evidence_id"] = gate_event["evidence_id"]
@@ -2346,6 +2305,8 @@ class ToolAgent:
             operation: str,
             parameters: dict[str, Any],
         ) -> dict[str, Any]:
+            if getattr(self, "_turn_ledger", None) is not None:
+                self._turn_ledger.query(operation)
             if self._virelai_gates_enabled:
                 assert gate_machine is not None
                 if operation == "gate":
@@ -2742,6 +2703,38 @@ class ToolAgent:
             return list(messages)
         return [system_message, *history]
 
+    def _begin_turn_ledger(
+        self, state_path: Path, analysis_step: int | None, action_num: int, sections: dict[str, str]
+    ) -> Any:
+        """Memory law M10 (DESIGN_VIRELAI_MEMORY_v1 §7): record what this Duck turn is shown."""
+        from inference.agent.turn_ledger import TurnLedger
+
+        machine = self._ensure_gate_machine(state_path) if self._virelai_gates_enabled else None
+        suffix = f"_{RUNTIME_STATE_FILENAME}"
+        stem = state_path.name[: -len(suffix)] if state_path.name.endswith(suffix) else state_path.stem
+        return TurnLedger(
+            state_path.with_name(f"{stem}_turn_ledger.jsonl"),
+            analysis_step=analysis_step,
+            action_num=action_num,
+            executor="DUCK",
+            gate_before=None if machine is None else machine.gate_id,
+            sections=sections,
+        )
+
+    def _finish_turn_ledger(
+        self, state_path: Path, step_executed: bool, yielded_control_reason: str | None
+    ) -> None:
+        ledger = getattr(self, "_turn_ledger", None)
+        if ledger is None:
+            return
+        machine = self._ensure_gate_machine(state_path) if self._virelai_gates_enabled else None
+        ledger.finish(
+            gate_after=None if machine is None else machine.gate_id,
+            step_executed=step_executed,
+            outcome="step" if step_executed else (yielded_control_reason or "no_step"),
+        )
+        self._turn_ledger = None
+
     def analyze(
         self,
         state_path: Path,
@@ -2784,12 +2777,13 @@ class ToolAgent:
             history_entries=history_entries,
             previous_step_summary=self._last_step_summary,
         )
-        if automatic_virelai_update:
-            user_prompt = f"{user_prompt}\n\n{automatic_virelai_update}"
-        if controller_focus_update:
-            user_prompt = f"{user_prompt}\n\n{controller_focus_update}"
-        if gate_context_update:
-            user_prompt = f"{user_prompt}\n\n{gate_context_update}"
+        self._turn_ledger = self._begin_turn_ledger(state_path, analysis_step, action_num, {
+            "prompt_body": user_prompt, "automatic_update": automatic_virelai_update,
+            "controller_focus": controller_focus_update, "gate_card": gate_context_update,
+        })
+        for section in (automatic_virelai_update, controller_focus_update, gate_context_update):
+            if section:
+                user_prompt = f"{user_prompt}\n\n{section}"
         display_action_num = _display_action_number(action_num)
 
         with open(analyzer_log, "a", encoding="utf-8") as f:
@@ -2900,6 +2894,7 @@ class ToolAgent:
                         )
                     result = self._chat_completion(messages, **request_kwargs)
                     self._accumulate_usage_tokens(result.usage)
+                    self._turn_ledger.request(result.usage)
                     if self._save_request_logs:
                         _append_request_snapshot(
                             _resolve_request_log_path(state_path),
@@ -3006,45 +3001,10 @@ class ToolAgent:
                     yielded_control_reason = control_yield_reason()
                     if yielded_control_reason is not None:
                         break
-                    followup_prefix = "You have not acted yet. Investigate first. "
-                    if tool_call_markup_in_text:
-                        followup_prefix = (
-                            "You did not call a tool. We detected `<tool_call>` markup inside your reasoning or assistant text, "
-                            "so no parsed tool call was executed. On this retry, do not add a note or explanation first. "
-                            "Emit exactly one `python` tool call directly as your next response. "
-                            "Do not place `<tool_call>` markup inside reasoning, explanation, or notes. "
-                        )
-                    if getattr(self, "_virelai_gates_enabled", False):
-                        action_guidance = (
-                            "read the binding gate, execute its supplied current_probe directly (query "
-                            "`virelai('next_probe')` only if none is supplied), or choose one admissible "
-                            "ego-control action plus pilot_intent "
-                            "for PILOT_TO_CONTACT, or any one admissible action you choose for GUIDED_ACTION, "
-                            "using `action(actions, decision={'probe_token': token, ...})`, "
-                            "or submit the required gate_answer. "
-                        )
-                    elif getattr(self, "_virelai_controller_enabled", False):
-                        action_guidance = "then call `action(actions, decision={...})` inside Python with the active focus id and purpose. "
-                    else:
-                        action_guidance = "then call `action(actions)` inside Python with the best valid action or ordered batch that your code selected. "
-                    if getattr(self, "_virelai_gates_enabled", False):
-                        model_guidance = (
-                            "Revise only the active gate model: live alternatives, admitted evidence, "
-                            "candidate mechanism, falsifier, limitations, and next test. Do not guess "
-                            "the win or pursue a later gate. "
-                        )
-                    else:
-                        model_guidance = (
-                            "Revise your working world model of what the level contains, what actions "
-                            "appear to do, what the current goal seems to be, and what plan looks best. "
-                        )
-                    followup_prompt = (
-                        f"{followup_prefix}{model_guidance}"
-                        "Call the `python` tool with code that inspects `current_frame`, `previous_frame`, `last_transition`, `history`, or `valid_actions` -- use `current_frame.segmentation` as the primary view, and `.ascii` only for a small specific region -- "
-                        "compare `previous_frame` to `current_frame` for the most recent change, "
-                        "derives a compact board summary, programs a small search or scorer over candidate actions or short sequences, "
-                        f"{action_guidance}"
-                        f"{TOOL_CALL_FORMAT_GUIDANCE}"
+                    followup_prompt = no_tool_followup_prompt(
+                        gates_enabled=getattr(self, "_virelai_gates_enabled", False),
+                        controller_enabled=getattr(self, "_virelai_controller_enabled", False),
+                        tool_call_markup_in_text=tool_call_markup_in_text,
                     )
                     append_transcript("USER PROMPT", followup_prompt)
                     messages.append({"role": "user", "content": followup_prompt})
@@ -3167,6 +3127,7 @@ class ToolAgent:
                 )
             else:
                 self._history_messages = previous_history_messages
+            self._finish_turn_ledger(state_path, step_executed, yielded_control_reason)
             self._step_env_callback = None
             self._virelai_query_callback = None
             self._current_valid_actions = []
