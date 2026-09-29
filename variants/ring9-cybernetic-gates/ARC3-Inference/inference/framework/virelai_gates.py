@@ -5555,7 +5555,9 @@ class CyberneticGateMachine:
     def submit_answer(
         self, raw: Mapping[str, Any]
     ) -> ActionMetadataAnswer | GateAnswer | CounterAnswer:
-        return self._active_adapter().submit_answer(raw)
+        from inference.framework.card_builder import fill_certified_fields
+
+        return self._active_adapter().submit_answer(fill_certified_fields(self, raw))
 
     def record_reuse(self, raw: Mapping[str, Any]) -> dict[str, Any]:
         if self.target_journal.active_product(ACTION_METADATA_GATE_ID) is None:

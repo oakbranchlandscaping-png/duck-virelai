@@ -28,6 +28,7 @@ from inference.agent.prompts import (
     no_tool_followup_prompt,
 )
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
+from inference.framework.card_builder import card_template
 from inference.agent.virelai_ontology import (
     ARC_GRID_MULTIVERSE_ONTOLOGY,
     CYBERNETIC_TARGETING_MISSION,
@@ -2319,7 +2320,7 @@ class ToolAgent:
                     capability = gate_machine.next_probe_capability()
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
-                        "data": capability if capability is not None else gate_machine.gate_view(),
+                        "data": capability if capability is not None else self._binding_gate_payload(gate_machine),
                         "error": (
                             None if capability is not None
                             else "No probe is admissible now; follow the gate's next_operation."
@@ -2346,7 +2347,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc),
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
                             "truncated": False,
                         }
                     return {
@@ -2366,7 +2367,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc), "truncated": False,
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc), "truncated": False,
                         }
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
@@ -2382,7 +2383,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc),
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
                             "truncated": False,
                         }
                     return {
@@ -2399,7 +2400,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc),
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
                             "truncated": False,
                         }
                     return {
@@ -2416,7 +2417,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc),
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
                             "truncated": False,
                         }
                     return {
@@ -2431,7 +2432,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc), "truncated": False,
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc), "truncated": False,
                         }
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
@@ -2445,7 +2446,7 @@ class ToolAgent:
                         answer = gate_machine.submit_answer(parameters.get("answer"))
                     except GateContractError as exc:
                         gate_view = gate_machine.gate_view()
-                        answer_template = gate_view.get("answer_template")
+                        answer_template = card_template(gate_machine.gate_id, gate_view.get("answer_template"))
                         already_accepted = (
                             "aggregate answer is already accepted" in str(exc)
                             and answer_template is None
@@ -2508,7 +2509,7 @@ class ToolAgent:
                     except GateContractError as exc:
                         return {
                             "schema": "virelai-query-v1", "operation": operation,
-                            "data": gate_machine.gate_view(), "error": str(exc), "truncated": False,
+                            "data": self._binding_gate_payload(gate_machine), "error": str(exc), "truncated": False,
                         }
                     reuse_path = state_path.with_name(
                         state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_gate_reuse.jsonl")
@@ -2517,12 +2518,12 @@ class ToolAgent:
                         handle.write(json.dumps(event, sort_keys=True) + "\n")
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
-                        "data": gate_machine.gate_view(), "error": None, "truncated": False,
+                        "data": self._binding_gate_payload(gate_machine), "error": None, "truncated": False,
                     }
                 if operation == "agenda":
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
-                        "data": gate_machine.gate_view(),
+                        "data": self._binding_gate_payload(gate_machine),
                         "error": (
                             "The passive agenda is suspended while cybernetic gates are active; "
                             "follow this binding gate card."

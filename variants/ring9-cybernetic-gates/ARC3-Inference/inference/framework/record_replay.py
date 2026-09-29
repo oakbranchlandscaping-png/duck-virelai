@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from inference.framework.card_builder import build_card
 from inference.framework.gate_card import render_binding_gate_context
 from inference.framework.virelai_gates import CyberneticGateMachine
 
@@ -48,6 +49,7 @@ class ReplayResult:
     answers_used: int
     samples: list[CardSample] = field(default_factory=list)
     stopped: str | None = None
+    measure: bool = True
 
     def largest(self, gate_id: str | None = None) -> CardSample:
         rows = [item for item in self.samples if gate_id is None or item.gate_id == gate_id]
@@ -153,6 +155,8 @@ def _answer_due(machine: CyberneticGateMachine) -> bool:
 
 
 def _sample(result: ReplayResult, after_transition: int, moment: str) -> None:
+    if not result.measure:
+        return
     view = result.machine.gate_view()
     result.samples.append(CardSample(
         after_transition=after_transition,
@@ -164,14 +168,21 @@ def _sample(result: ReplayResult, after_transition: int, moment: str) -> None:
     ))
 
 
-def replay(record: Mapping[str, Any], *, max_steps: int | None = None) -> ReplayResult:
-    """Replay a recorded world; stop cleanly where the record or the machine ends."""
+def replay(
+    record: Mapping[str, Any], *, max_steps: int | None = None, answer_source: str = "view",
+    measure: bool = True,
+) -> ReplayResult:
+    """Replay a recorded world; stop cleanly where the record or the machine ends.
+
+    ``answer_source="card"`` builds each answer from the template on Duck's card (certified fields
+    left marked for the controller to fill), proving an answer written from the card is accepted.
+    """
     grid = decode_grid(record["initial_grid"])
     machine = click_world_machine(grid, record.get("valid_actions") or ["ACTION6"])
     pending = {}
     for answer in record.get("answers") or ():
         pending.setdefault(answer["gate_id"], []).append(answer)
-    result = ReplayResult(machine=machine, grid=grid, steps_replayed=0, answers_used=0)
+    result = ReplayResult(machine=machine, grid=grid, steps_replayed=0, answers_used=0, measure=measure)
     last = 0
     for step in record["steps"][: max_steps if max_steps is not None else None]:
         while _answer_due(machine):
@@ -181,7 +192,10 @@ def replay(record: Mapping[str, Any], *, max_steps: int | None = None) -> Replay
                 _sample(result, last, "final")
                 return result
             _sample(result, last, "before-answer")
-            template = machine.gate_view().get("answer_template") or {}
+            template = (
+                build_card(machine).payload.get("answer_template")
+                if answer_source == "card" else machine.gate_view().get("answer_template")
+            ) or {}
             machine.submit_answer(merge_recorded_answer(template, queue.pop(0)))
             result.answers_used += 1
         capability = machine.next_probe_capability()

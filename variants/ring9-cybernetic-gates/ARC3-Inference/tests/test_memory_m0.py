@@ -47,12 +47,19 @@ def test_the_real_v2_record_replays_through_the_gate_machine(v2):
     assert witnesses == list(range(112, 122))  # five levers, each witnessed then confirmed
 
 
-def test_regression_anchor_the_card_that_crashed_v2_is_reproduced_exactly(v2):
-    """T2. Today's card, not a target: stage M-1's slot-built card must replace this number."""
+def test_regression_anchor_the_card_that_crashed_v2_is_now_within_budget(v2):
+    """T2, amended by R9-R07 (memory stage M-1).
+
+    At R9-R06 this replay reproduced the card that crashed the Kaggle run exactly: 25,502
+    characters after transition 121 (G3, answer required), against the 24,000 guard. The
+    slot-built card replaces it; the same state now renders within the card budget.
+    """
+    from inference.framework.card_builder import CARD_BUDGET
+
     final = v2.samples[-1]
     assert (final.after_transition, final.gate_id, final.status) == (121, "G3-LEVERS", "ANSWER_REQUIRED")
-    assert final.chars == 25_502
-    assert v2.largest("G2-COUNTER").chars < 24_000
+    assert final.chars < CARD_BUDGET < 24_000
+    assert all(sample.chars < CARD_BUDGET for sample in v2.samples)
 
 
 def test_the_harness_measures_the_production_renderer(tmp_path):

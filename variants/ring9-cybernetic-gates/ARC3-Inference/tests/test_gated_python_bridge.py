@@ -108,7 +108,7 @@ def test_gate_query_result_is_visible_without_an_environment_call(tmp_path):
     visible = json.loads(payload["stdout"])
     assert visible["data"]["gate_id"] == "G0-ACTION-METADATA"
     assert visible["data"]["next_operation"] == "SUBMIT_GATE_ANSWER"
-    assert visible["data"]["action_metadata"] == [
+    assert visible["data"]["subject"]["action_metadata"] == [
         {"action": "ACTION1", "requires_coordinates": False},
         {"action": "ACTION2", "requires_coordinates": False},
     ]
