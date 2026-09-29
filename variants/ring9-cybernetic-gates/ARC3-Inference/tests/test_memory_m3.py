@@ -73,6 +73,7 @@ def test_t4_injected_and_pulled_recall_reach_the_messages_duck_is_sent(at_g4, mo
     first = script.user_text(0)
     assert '\\"next_operation\\": \\"SUBMIT_ORIENTATION\\"' in first  # the orientation turn is due
     assert '\\"recall\\"' in first and f"{entity} is a certified lever" in first  # injected (M6)
+    assert "If next_operation is SUBMIT_ORIENTATION, submit `virelai('orient'" in first  # told every turn
     pulled = script.tool_text(1)
     assert "subject" in pulled and entity in pulled  # pulled, and delivered in the next request
     assert "truncation_note" not in pulled and "[truncated" not in pulled  # whole: fitted (PULL_CHARS)
@@ -94,7 +95,7 @@ def test_after_orientation_the_notes_are_shown_labelled_and_the_gate_resumes(at_
         if script.requests:
             break
     after = script.user_text(0)
-    assert "SUBMIT_ORIENTATION" not in after
+    assert '\\"next_operation\\": \\"SUBMIT_ORIENTATION\\"' not in after  # the card has moved on
     assert f"[UNCERTIFIED] {entity} NAME: a tile that toggles between two colours" in after
     assert "uncertified_note" in after  # the subject's note is recalled, labelled
     certified = [line for line in world_model_digest(machine) if not line.startswith("[UNCERTIFIED]")]

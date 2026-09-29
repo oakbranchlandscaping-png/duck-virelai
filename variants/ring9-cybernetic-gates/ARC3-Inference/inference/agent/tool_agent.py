@@ -1714,7 +1714,11 @@ class ToolAgent:
                 "is PILOT_TO_CONTACT; then choose one listed admissible action and include pilot_intent. "
                 "If it is GUIDED_ACTION, the target is binding but the move is yours: choose one "
                 "admissible action that advances the stated target. "
-                "If status is ANSWER_REQUIRED, submit `virelai('gate_answer', answer={...})` instead of acting."
+                "If status is ANSWER_REQUIRED, submit `virelai('gate_answer', answer={...})` instead of acting. "
+                "If next_operation is SUBMIT_ORIENTATION, submit `virelai('orient', notes=[...])` as the "
+                "card's orientation block shows. When a CONTROLLER HANDOFF says why this step is yours, "
+                "take that step: a confirmed lever run is explained with `virelai('gate_answer', ...)`, "
+                "not pressed again."
             )
         elif getattr(self, "_virelai_controller_enabled", False):
             lines.append(
