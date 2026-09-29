@@ -95,6 +95,7 @@ from inference.framework.g4_guided import (
     LeverRun,
     is_terminal,
     level_changed,
+    restudy_next_life,
 )
 from inference.framework.g4_limits import (
     G4LimitError,
@@ -2632,7 +2633,7 @@ class _LeverTarget:
             compact["frozen_target"] = target
         compact["frozen_target_summary"] = {
             "cell_count": len(target_cells),
-            "bbox": self._cell_bbox(target_cells),
+            "bbox": cell_bbox(target_cells),
             "detail_query": (
                 "virelai('entity', id=%r, offset=0, limit=128)"
                 % str(record.get("entity_id") or "")
@@ -2642,7 +2643,7 @@ class _LeverTarget:
             cells = list(record.get(field) or [])
             compact[field.removesuffix("_cells") + "_summary"] = {
                 "cell_count": len(cells),
-                "bbox": self._cell_bbox(cells),
+                "bbox": cell_bbox(cells),
                 "evidence_query": (
                     "virelai('evidence', id=%r)"
                     % str(record.get("witness_evidence_ref") or "")
@@ -3589,7 +3590,6 @@ class _LeverTarget:
             "unmet_requirements": list(self.assess().unmet_requirements),
         }
 
-    _cell_bbox = staticmethod(cell_bbox)
 
     def compact_gate_view(self) -> dict[str, Any]:
         """Return bounded model context while snapshot() retains full evidence."""
@@ -3635,7 +3635,7 @@ class _LeverTarget:
                         "transition_id": current.transition_id,
                         "integer": current.integer,
                         "cell_count": len(cells),
-                        "bbox": self._cell_bbox(cells),
+                        "bbox": cell_bbox(cells),
                         "relation": current.relation,
                         "evidence_ref": current.evidence_ref,
                     }
@@ -4045,7 +4045,7 @@ class _LeverTarget:
                     "relation": current.relation,
                     "evidence_ref": current.evidence_ref,
                     "cell_count": len(cells),
-                    "bbox": self._cell_bbox(cells),
+                    "bbox": cell_bbox(cells),
                     "cells_page": [list(cell) for cell in cells[offset:offset + limit]],
                     "page": {"offset": offset, "limit": limit, "total": len(cells)},
                 }
@@ -4056,7 +4056,7 @@ class _LeverTarget:
                     "frame": sighting.frame,
                     "integer": sighting.integer,
                     "cell_count": len(sighting.cells),
-                    "bbox": self._cell_bbox(sighting.cells),
+                    "bbox": cell_bbox(sighting.cells),
                     "relation": sighting.relation,
                     "evidence_ref": sighting.evidence_ref,
                 }
@@ -4337,7 +4337,7 @@ class _LeverStudyTarget:
         "closes this level's study; cross-level work is G9."
     )
     RULES = (
-        "You choose every action, in any order. The controller does not pick your moves.",
+        "Any action may be taken, in any order. With the controller executor (D3), it presses each lever to its endpoint and you explain each confirmed run; ask for an extra run with virelai('rerun', id=ENTITY_ID, presses=N).",
         "A press counts only if it is the lever's exact listed click (action and coordinates).",
         "Any other action, a reset, or a boundary ends an unconfirmed run; start it again when "
         "you are ready. Ended runs stay on the record as evidence.",
@@ -4361,6 +4361,7 @@ class _LeverStudyTarget:
         self._interruptions: dict[str, dict[str, Any]] = {}
         # Set once a level transition occurs; closes this level's G4 study (G9 owns transfer).
         self._level_closed: dict[str, Any] | None = None
+        self._life_restudies: dict[str, int] = {}  # D4: same-level deaths per lever
 
     def _reaction_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
@@ -4598,7 +4599,7 @@ class _LeverStudyTarget:
         if active.complete:
             self._completed[lever] = active
             self._interruptions.pop(lever, None)
-        elif active.status == INTERRUPTED:
+        elif active.status == INTERRUPTED and not restudy_next_life(self._life_restudies, lever, boundary_state):
             self._interruptions[lever] = {
                 "entity_id": lever,
                 "run_id": active.run_id,
@@ -4676,6 +4677,7 @@ class _LeverStudyTarget:
                 ],
                 "answers": [asdict(self._answers[item]) for item in completed],
                 "lever_classes": {item: self._completed[item].lever_class() for item in completed},
+                "life_restudies": dict(self._life_restudies),
                 "action_count": self._action_count,
                 "epistemic_limit": (
                     "Confirmed endpoints and recurrences are state-scoped observations, not "
@@ -5487,10 +5489,6 @@ class CyberneticGateMachine:
             "transition_id": int(outcome.get("transition_id") or 0),
             "mask_law_ref": None if mask is None else mask.law_version_id,
         }
-
-    def monitor_counter_transition(self, outcome: Mapping[str, Any]) -> dict[str, Any] | None:
-        """Compatibility alias for the former cross-gate monitor."""
-        return self.apply_counter_baseline(outcome)
 
     def observe_system_reset(self, outcome: Mapping[str, Any]) -> EntityTransition | None:
         """Deliver a harness-owned reset to the active G3 continuity ledger."""

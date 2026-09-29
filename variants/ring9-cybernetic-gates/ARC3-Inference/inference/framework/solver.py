@@ -398,7 +398,12 @@ class _HarnessGameSession:
             remaining = None
         else:
             remaining = max(0.0, self.solver.max_runtime_s_per_game - elapsed)
-        return {"run_elapsed_seconds": elapsed, "time_remaining_seconds": remaining}
+        cap = self.solver.max_actions_per_game
+        return {
+            "run_elapsed_seconds": elapsed, "time_remaining_seconds": remaining,
+            # The executor's action-budget wake (R9-R10) reads this.
+            "actions_remaining": None if cap is None else max(0, cap - self.action_count),
+        }
 
     def request_timeout_seconds(self) -> float | None:
         candidates: list[float] = []

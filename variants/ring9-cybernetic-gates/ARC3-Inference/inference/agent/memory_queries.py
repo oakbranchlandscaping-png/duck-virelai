@@ -7,6 +7,7 @@ Author: Claude (Alpha build seat), 2026-09-29. R9-R09 (DESIGN_VIRELAI_MEMORY_v2 
 ``orbit``, ``limit``, ``evidence``) are kept as aliases and moved here unchanged from
 ``tool_agent.py``. ``virelai('orient', notes=[…])`` and ``virelai('annotate', notes=[…])`` write
 Duck's notes to the UNCERTIFIED lane, persisted as ``{stem}_annotations.jsonl``.
+``virelai('rerun', id=ENTITY, presses=N)`` asks the controller for an extra G4-A run (D3, R9-R10).
 """
 from __future__ import annotations
 
@@ -63,6 +64,11 @@ def gated_memory_query(
         return _reply(operation, data, None if data is not None else "Nothing is recorded under that key.")
     if operation in {"orient", "annotate"}:
         return _submit(agent, state_path, machine, operation, parameters.get("notes"))
+    if operation == "rerun":
+        from inference.agent.controller_turn import request_rerun
+
+        refusal = request_rerun(agent, machine, parameters)
+        return _reply(operation, agent._binding_gate_payload(machine), refusal)
     return None
 
 

@@ -205,6 +205,8 @@ def replay(
             _sample(result, last, "final")
             return result
         capability = machine.next_probe_capability()
+        while capability is None and _answer_due(machine) and _submit_due_answers(result, pending, answer_source, last):
+            capability = machine.next_probe_capability()  # probing closed a roster; its answers came due
         _sample(result, last, "before-step")
         if capability is None:
             result.stopped = f"no capability at {machine.gate_id} before transition {step['transition_id']}"

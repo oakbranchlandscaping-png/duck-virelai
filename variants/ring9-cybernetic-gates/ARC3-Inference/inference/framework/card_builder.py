@@ -67,7 +67,10 @@ INDEX_BY_GATE = {
         "virelai('evidence', id=EVIDENCE_ID)",
     ),
     "G4-REACTIONS": ("virelai('reaction', id=ENTITY_ID)", "virelai('entity', id=ENTITY_ID)"),
-    "G4.2-LEVER-ORBITS": ("virelai('orbit', id=ENTITY_ID)", "virelai('entity', id=ENTITY_ID)"),
+    "G4.2-LEVER-ORBITS": (
+        "virelai('orbit', id=ENTITY_ID)", "virelai('rerun', id=ENTITY_ID, presses=N)",
+        "virelai('memory', kind='subject', id=ENTITY_ID)",
+    ),
 }
 
 

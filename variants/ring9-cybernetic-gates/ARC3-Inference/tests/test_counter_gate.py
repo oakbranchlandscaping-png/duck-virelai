@@ -462,7 +462,7 @@ def test_g2_routes_after_g1_and_stops_for_explanation_then_demonstration():
     assert provisional is not None
     assert provisional.payload["boundary_obligation"] is None
 
-    boundary = machine.monitor_counter_transition(
+    boundary = machine.apply_counter_baseline(
         later_counter_outcome(4, (0, 0), game_over=True)
     )
     assert boundary["policy"] == "MASK_AND_IGNORE_AFTER_G2"

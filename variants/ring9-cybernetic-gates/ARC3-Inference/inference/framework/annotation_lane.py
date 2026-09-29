@@ -6,10 +6,11 @@ ruling D6: "clearly labelled and never promoted without a gate").
 Duck contributes language, not facts. A note names a subject (an entity, a gate, or the world),
 says what kind of contribution it is, and says it in a sentence. The controller stores it, labels
 it UNCERTIFIED wherever it is shown, and never lets it into the certified world model: only a gate
-certifies. Notes arrive two ways: the orientation turn at G3 close (Duck's first turn when the
-controller ran G0-G3), and an optional ``annotations`` list on any gate answer.
+certifies. Notes arrive two ways: the orientation turn (Duck's first turn when the controller ran
+G0 through G4.1), and an optional ``annotations`` list on any gate answer.
 
-The orientation turn is due once G3's inventory is certified and Duck has not yet oriented. While
+The orientation turn is due once G4.1's anatomy set is certified and Duck has not yet oriented
+(R9-R10 moved it from G3 close: the controller now certifies the anatomy too). While
 it is due, the card's next operation is SUBMIT_ORIENTATION and actions and answers wait for it.
 """
 from __future__ import annotations
@@ -22,7 +23,7 @@ WORLD = "WORLD"
 MAX_NOTE_WORDS = 60
 MAX_NOTES_PER_SUBMISSION = 12
 LABEL = "UNCERTIFIED: Duck's note; only a gate certifies"
-ORIENTATION_GATE = "G3-LEVERS"
+ORIENTATION_GATE = "G4-REACTIONS"
 
 
 class AnnotationError(ValueError):
@@ -108,7 +109,7 @@ def submit_notes(machine: Any, raw: Any, *, source: str, gate_id: str | None = N
     ``annotations``, stored under the answering ``gate_id`` once the answer is accepted).
     """
     if source == "ORIENTATION" and not orientation_due(machine):
-        raise AnnotationError("No orientation is due: it opens once G3's inventory is certified, once.")
+        raise AnnotationError("No orientation is due: it opens once G4.1's anatomy set is certified, once.")
     notes = validate_notes(machine, raw, source, gate_id)
     machine.annotations.notes.extend(notes)
     if source == "ORIENTATION":
@@ -126,7 +127,7 @@ def split_annotations(answer: Any) -> tuple[Any, Any]:
 def orientation_block(machine: Any, then: Any) -> dict[str, Any]:
     return {
         "why": (
-            "The controller ran G0-G3 without you. world_model is everything certified so far. "
+            "The controller ran G0 through G4.1 without you. world_model is everything certified so far. "
             "This turn is yours: name what you see, record hunches, propose what to study next. "
             "Notes are stored UNCERTIFIED; only a gate certifies."
         ),

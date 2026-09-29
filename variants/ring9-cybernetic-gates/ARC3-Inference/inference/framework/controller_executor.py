@@ -1,6 +1,7 @@
 """The controller executor: who owns the next step (memory law M8, DESIGN_VIRELAI_MEMORY_v2 §5.5).
 
-Author: Claude (Alpha build seat), 2026-09-29. R9-R08 (memory stage M-2). Rulings D2 and D5.
+Author: Claude (Alpha build seat), 2026-09-29. R9-R08 (memory stage M-2), rulings D2 and D5;
+extended through G4 in R9-R10 (stage M-4), rulings D3 and D4.
 
 Before every analyzer turn the executor asks one question of the gate machine: can the controller
 compute this step, or does it need judgment? A computable step is taken by the controller, with no
@@ -17,10 +18,15 @@ What the controller owns (D2, CLICK worlds only; NAV is shelved):
   EFFECTIVE_TRANSITIONS_ONLY: a COUNTER_REWRITE on the template's certified action.
 - Every bound G2 and G3 probe action (demonstration, sweep, confirmation).
 - G3 dossiers and the inventory, when nothing is ambiguous.
+- G4.1 anatomy answers (M-4): the channels are certified; the prose is rendered from them.
+- G4-A lever runs (D3): each lever is pressed, one press per step, until its run is confirmed,
+  diverged or ended; a same-level death returns it to the study (D4, in the gate).
+- An extra run Duck asks for (D3): up to 8 presses of one lever's click.
 
-Duck owns: G4 onward (its first turn there is the orientation turn, M-3), an OPEN or IRREGULAR
-trigger record (the discriminating prediction is a choice, not a computation), ambiguity,
-unbound or multi-action probes, and every stop-and-wake condition (``wake_reason``).
+Duck owns: the orientation turn (M-3; due once G4.1 is certified), every G4-A orbit explanation,
+an OPEN or IRREGULAR trigger record (the discriminating prediction is a choice, not a
+computation), ambiguity, unbound or multi-action probes, every gate past G4-A, and every
+stop-and-wake condition (``wake_reason``), including the counter, action and time budgets.
 
 The prose in a controller answer is rendered deterministically from the certified fields; the
 certified content is the structured part (M7). It is marked as controller-rendered.
@@ -30,15 +36,23 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from inference.framework.annotation_lane import orientation_due
 from inference.framework.card_builder import world_budgets
 from inference.framework.memory_store import cell_bbox as _bbox
 from inference.framework.virelai_gates import control_archetype_prior
 
 CONTROLLER, DUCK = "CONTROLLER", "DUCK"
 ANSWER, ACTION = "ANSWER", "ACTION"
-CONTROLLER_GATES = ("G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS")
+ORBITS = "G4.2-LEVER-ORBITS"
+CONTROLLER_GATES = ("G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", ORBITS)
 OWNED_TRIGGERS = ("EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY")
+STUDY_ORDER = ("RUNNING", "CONFIRMING", "RUN_ENDED_RESTART_NEEDED", "NOT_STARTED")
+MAX_RERUN_PRESSES = 8
+# Budget wakes fire once, when a budget crosses its threshold (so once per life for the counter).
+# Provisional until the D7 throughput run measures real per-game budgets.
 WAKE_TICKS_REMAINING = 2
+WAKE_ACTIONS_REMAINING = 10
+WAKE_SECONDS_REMAINING = 120.0
 RENDERED = "Controller-rendered from certified state; the certified content is the structured fields."
 AMBIGUOUS_DISPOSITIONS = ("AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION")
 BOUNDARY_KEYS = ("done", "level_completed", "game_over", "run_complete")
@@ -64,15 +78,24 @@ def _answer_due(view: Mapping[str, Any]) -> bool:
     return view.get("status") == "ANSWER_REQUIRED" or view.get("next_operation") == "SUBMIT_GATE_ANSWER"
 
 
-def next_owned_step(machine: Any, *, refused: frozenset | set = frozenset()) -> OwnedStep:
-    """Who owns the next step, and, for the controller, exactly what it is."""
+def next_owned_step(
+    machine: Any, *, refused: frozenset | set = frozenset(), rerun: Mapping[str, Any] | None = None,
+) -> OwnedStep:
+    """Who owns the next step, and, for the controller, exactly what it is.
+
+    ``rerun`` is an extra run Duck asked for (D3): ``{"entity_id", "click", "left"}``.
+    """
     world = control_archetype_prior(machine.ego.affordances)["world_type"]
     if world != "CLICK_GOD_MODE":
         return _duck(machine, f"the controller executes CLICK worlds only; this is {world}")
     if machine.gate_id not in CONTROLLER_GATES:
         return _duck(machine, f"{machine.gate_id} needs judgment")
+    if orientation_due(machine):
+        return _duck(machine, "the orientation turn is due")
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
     view = machine.gate_view()
+    if machine.gate_id == ORBITS:
+        return _orbit_step(machine, capability, view, rerun)
     key = (machine.gate_id, int(view.get("revision") or 0))
     if key in refused:
         return _duck(machine, f"{machine.gate_id} refused the controller's answer at this revision")
@@ -90,6 +113,32 @@ def next_owned_step(machine: Any, *, refused: frozenset | set = frozenset()) -> 
         CONTROLLER, machine.gate_id, reason, ACTION, action=action,
         probe_token=str(capability["probe_token"]),
     )
+
+
+def _orbit_step(
+    machine: Any, capability: Mapping[str, Any] | None, view: Mapping[str, Any],
+    rerun: Mapping[str, Any] | None,
+) -> OwnedStep:
+    """G4-A (D3): the controller presses; Duck explains each confirmed orbit."""
+    if capability is not None and rerun and int(rerun.get("left") or 0) > 0:
+        return OwnedStep(
+            CONTROLLER, ORBITS, f"extra run of {rerun['entity_id']} Duck asked for", ACTION,
+            action=dict(rerun["click"]), probe_token=str(capability["probe_token"]),
+        )
+    awaiting = [item for item in view.get("answer_templates") or () if isinstance(item, Mapping)]
+    if awaiting:
+        return _duck(machine, f"the run of {awaiting[0].get('entity_id')} is confirmed: explaining it is Duck's")
+    if capability is None:
+        return _duck(machine, "G4-A has no lever left to run")
+    levers = [item for item in (capability.get("target") or {}).get("levers") or () if isinstance(item, Mapping)]
+    for status in STUDY_ORDER:
+        lever = next((item for item in levers if item.get("status") == status), None)
+        if lever is not None:
+            return OwnedStep(
+                CONTROLLER, ORBITS, f"G4-A: run {lever.get('entity_id')} ({status})", ACTION,
+                action=dict(lever["click"]), probe_token=str(capability["probe_token"]),
+            )
+    return _duck(machine, "G4-A has no lever the controller can run")
 
 
 def _bound_action(capability: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:
@@ -123,6 +172,8 @@ def controller_answer(machine: Any, view: Mapping[str, Any]) -> tuple[dict[str, 
         return dict(template), "G1 pointer ego from metadata"
     if gate == "G2-COUNTER":
         return _counter_answer(machine, template)
+    if template.get("answer_kind") == "LEVER_EFFECT_ANATOMY":
+        return _anatomy_answer(template), "G4.1 anatomy from the certified channels"
     if template.get("answer_kind") == "LEVER_DOSSIER":
         return _dossier_answer(template), "G3 dossier from the effect summary"
     if template.get("answer_kind") == "LEVER_INVENTORY" and "lever_entities" in template:
@@ -201,6 +252,23 @@ def _dossier_answer(template: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _anatomy_answer(template: Mapping[str, Any]) -> dict[str, Any]:
+    entity = template["entity_id"]
+    phrases = [
+        f"{channel.get('channel_id')} rewrites "
+        + ", ".join(f"{before}->{after}" for before, after, *_rest in channel.get("integer_transitions") or ())
+        + f" over {channel.get('changed_cell_count')} {str(channel.get('locality') or '').lower()} cells"
+        for channel in template.get("effect_channels") or ()
+    ]
+    return {
+        **template,
+        "mechanism_explanation": f"Lever {entity}: " + "; ".join(phrases) + ", counter changes masked.",
+        "competing_models": ["A hidden process changed the region at the same moment as the click."],
+        "falsifier": "The same click from the same masked state produces a different exact residue.",
+        "limitations": [*template.get("limitations", ()), RENDERED],
+    }
+
+
 def _inventory_answer(template: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:
     if template.get("ambiguous_entities"):
         return None, "G3 has bounded ambiguity: the coverage report is Duck's"
@@ -220,9 +288,23 @@ def _inventory_answer(template: Mapping[str, Any]) -> tuple[dict[str, Any] | Non
 
 # ---- stop-and-wake ----------------------------------------------------------------------------
 
-def wake_signals(machine: Any) -> dict[str, int]:
-    """Counters read before a controller action, so ``wake_reason`` sees only what it changed."""
-    return {"rejected_candidates": len(getattr(machine.counter, "_rejected_candidates", ()) or ())}
+def wake_signals(machine: Any, result: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """What ``wake_reason`` compares before and after a controller action.
+
+    The counter's ticks come from the certified budget; actions and seconds remaining come from
+    the environment's step payload (``solver.timing_payload``).
+    """
+    result = result or {}
+    return {
+        "rejected_candidates": len(getattr(machine.counter, "_rejected_candidates", ()) or ()),
+        "ticks": (world_budgets(machine) or {}).get("counter_ticks_remaining"),
+        "actions": result.get("actions_remaining"),
+        "seconds": result.get("time_remaining_seconds"),
+    }
+
+
+def _crossed(before: Any, after: Any, threshold: float) -> bool:
+    return after is not None and after <= threshold and (before is None or before > threshold)
 
 
 def wake_reason(
@@ -236,7 +318,9 @@ def wake_reason(
     comparison = event.get("counter_comparison") or {}
     if comparison.get("outcome") == "CONTRADICTED" and comparison.get("evidence_ref") == event.get("evidence_id"):
         return "the frozen G2 prediction was contradicted"
-    if before is not None and wake_signals(machine)["rejected_candidates"] > before["rejected_candidates"]:
+    after = wake_signals(machine, result)
+    before = before or {}
+    if after["rejected_candidates"] > int(before.get("rejected_candidates", after["rejected_candidates"])):
         return "G2 rejected its counter candidate"
     if event.get("gate_status_after") in {"UNRESOLVED", "REOPENED"}:
         return f"{event.get('gate_id')} is {event['gate_status_after']}"
@@ -248,10 +332,12 @@ def wake_reason(
         return f"attribution is {attribution.get('disposition') or 'ambiguous'}"
     if attribution.get("boundary_state"):
         return "a boundary interrupted the attribution"
-    budgets = world_budgets(machine) or {}
-    ticks = budgets.get("counter_ticks_remaining")
-    if ticks is not None and ticks <= WAKE_TICKS_REMAINING:
-        return f"the counter has {ticks} ticks left"
+    for name, threshold, unit in (
+        ("ticks", WAKE_TICKS_REMAINING, "counter ticks"), ("actions", WAKE_ACTIONS_REMAINING, "actions"),
+        ("seconds", WAKE_SECONDS_REMAINING, "seconds"),
+    ):
+        if _crossed(before.get(name), after[name], threshold):
+            return f"the budget is nearly spent: {after[name]:g} {unit} left"
     return None
 
 

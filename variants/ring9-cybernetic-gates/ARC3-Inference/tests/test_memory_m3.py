@@ -36,6 +36,7 @@ class Script:
         if not self.codes:
             raise RuntimeError("script exhausted")
         code = self.codes.pop(0)
+        code = code() if callable(code) else code
         call = {"id": f"c{len(self.requests)}", "type": "function",
                 "function": {"name": "python", "arguments": json.dumps({"code": code})}}
         return _ChatCompletionResult(message={"role": "assistant", "content": "", "tool_calls": [call]},
@@ -61,7 +62,7 @@ def at_g4(tmp_path, monkeypatch):
     run = Run(tmp_path, monkeypatch)
     run.until_duck()
     machine = run.agent._gate_machine
-    return run, machine, machine.gate_view()["current_lever"]["entity_id"]
+    return run, machine, build_card(machine).payload["recall"]["key"]["entity"]
 
 
 def test_t4_injected_and_pulled_recall_reach_the_messages_duck_is_sent(at_g4, monkeypatch):
@@ -88,7 +89,10 @@ def test_after_orientation_the_notes_are_shown_labelled_and_the_gate_resumes(at_
     run.turn()
     script = Script()
     monkeypatch.setattr(run.agent, "_chat_completion", script)
-    run.turn()
+    for _ in range(40):  # the controller runs the first lever (D3); Duck is woken to explain it
+        run.turn()
+        if script.requests:
+            break
     after = script.user_text(0)
     assert "SUBMIT_ORIENTATION" not in after
     assert f"[UNCERTIFIED] {entity} NAME: a tile that toggles between two colours" in after
@@ -105,27 +109,36 @@ def test_actions_and_answers_wait_for_the_orientation_turn(at_g4):
 
 
 def test_a_gate_answer_may_carry_notes_and_a_bad_note_refuses_the_whole_answer(at_g4, monkeypatch):
+    """After orientation the controller runs the first lever (D3); Duck explains it, with notes."""
     run, machine, entity = at_g4
     submit_notes(machine, [{"subject": "WORLD", "kind": "HUNCH", "text": "oriented"}], source="ORIENTATION")
-    answer = card_duck._answer(build_card(machine).payload, None, set())
-    bad = {**answer, "annotations": [{"subject": "E9999", "kind": "NAME", "text": "nothing"}]}
-    good = {**answer, "annotations": [{"subject": entity, "kind": "HUNCH", "text": "one of a family of tiles"}]}
     code = "import json\nprint(virelai('gate_answer', answer=json.loads({!r})))"
-    revision = machine.gate_view()["revision"]
-    monkeypatch.setattr(run.agent, "_chat_completion", Script(code.format(json.dumps(bad)), code.format(json.dumps(good))))
-    script = run.agent._chat_completion
-    run.turn()
+
+    def answer(subject):
+        card = build_card(machine).payload
+        drafted = card_duck._answer({**card, "answer_template": card["answer_template"]}, None, set())
+        return code.format(json.dumps({**drafted, "annotations": [
+            {"subject": subject, "kind": "HUNCH", "text": "one of a family of tiles"}]}))
+
+    script = Script(lambda: answer("E9999"), lambda: answer(entity))
+    monkeypatch.setattr(run.agent, "_chat_completion", script)
+    revision = None
+    for _ in range(40):
+        revision = machine.gate_view()["revision"]
+        run.turn()
+        if script.requests:
+            break
     assert "E9999" in script.tool_text(1)  # the first call was refused, naming the bad note
     assert [note.subject for note in machine.annotations.notes] == ["WORLD", entity]  # E9999 never stored
     assert machine.gate_view().get("revision") != revision or machine.gate_id != "G4-REACTIONS"
     stored = machine.annotations.notes[-1]
-    assert (stored.subject, stored.source, stored.gate_id) == (entity, "ANSWER", "G4-REACTIONS")
+    assert (stored.subject, stored.source, stored.gate_id) == (entity, "ANSWER", "G4.2-LEVER-ORBITS")
 
 
 # ---- the lane and the recall slot, in isolation -------------------------------------------------
 
 def test_notes_are_validated_and_orientation_happens_once():
-    machine, _world = _ft09_machine_at("G4-REACTIONS")
+    machine, _world = _ft09_machine_at("G4.2-LEVER-ORBITS")
     for bad in ([], [{"subject": "NOPE", "kind": "NAME", "text": "x"}],
                 [{"subject": "WORLD", "kind": "FACT", "text": "x"}],
                 [{"subject": "WORLD", "kind": "NAME", "text": "word " * 61}]):
@@ -137,7 +150,7 @@ def test_notes_are_validated_and_orientation_happens_once():
 
 
 def test_the_world_model_shows_notes_only_in_the_room_certified_lines_leave():
-    machine, _world = _ft09_machine_at("G4-REACTIONS")
+    machine, _world = _ft09_machine_at("G4.2-LEVER-ORBITS")
     certified = world_model_digest(machine)
     submit_notes(machine, [{"subject": "WORLD", "kind": "HUNCH", "text": "x"}], source="ORIENTATION")
     for index in range(8):
@@ -193,7 +206,7 @@ def test_recall_keys_a_pending_dossier_and_never_calls_a_witnessed_lever_null():
 
 
 def test_a_scoped_null_subject_is_recalled_as_one():
-    machine, _world = _ft09_machine_at("G4-REACTIONS")
+    machine, _world = _ft09_machine_at("G4.2-LEVER-ORBITS")
     lever = machine._adapters["G3-LEVERS"]
     null_entity = next(
         entity for entity, life in lever.lifecycle_journal.entities.items()

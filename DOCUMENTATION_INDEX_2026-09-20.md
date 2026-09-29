@@ -1,10 +1,12 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-09-29 (evening)  
+**Updated:** 2026-09-29 (night)  
 **Active source:** `variants/ring9-cybernetic-gates/`  
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-09-29 NIGHT STATUS (Claude, Alpha build seat) — signed.** R9-R09 (memory M-3) committed `e2c2b06` (Mac 461). **R9-R10 (memory M-4, G4 economy and lives)** built: ft09 offline reaches a satisfied G4-A in 92 actions and 7 Duck turns (orientation, 5 orbit explanations, 1 budget wake); the controller certifies G4.1 and runs every lever (D3), Duck may ask for an extra run, a same-level death re-studies the lever (D4), and the counter, action and time budgets wake Duck once on crossing (ruled 2026-09-29). Finding: on the continued-law world the ft09 bar does not cover the full five-lever protocol. Pending Mac pytest (470) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_NIGHT.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v10_2026-09-29.md`. Next: M-5, the package and the D7 throughput run.
+>
 > **2026-09-29 EVENING STATUS (Claude, Alpha build seat) — signed.** R9-R08 (memory M-2, the controller executor) committed `2941f53` (Mac 450). **R9-R09 (memory M-3)** built: at G3 close Duck's first turn is the orientation turn; its notes go to an UNCERTIFIED lane no gate reads (D6); every card carries keyed recall; `virelai('memory', …)` is the one pull interface, and every pull is fitted to reach Duck whole (T4 found a subject file that would have been truncated). Pending Mac pytest (461) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_EVENING.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v9_2026-09-29.md`. Next: M-4, G4 economy and lives.
 >
 > **2026-09-29 PM STATUS (Claude, Alpha build seat) — signed.** R9-R07 (memory M-1) committed `ee826ab` (Mac 431, the full suite). **R9-R08 (memory M-2, the controller executor)** built: the production agent carries ft09 from G0 to G3 closure with zero model calls in 72 actions (live v2: 121 actions, G3 not closed); G3 inherits G2's 54 total nulls (D5); every envelope carries the recording protocol. Five design deviations await ratification. Pending Mac pytest (450) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_PM.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v8_2026-09-29.md`. Next: M-3, recall and the orientation turn.
@@ -41,9 +43,13 @@ after a new package, hashes, receipt, and notebook version are created.
 |---|---|
 | `DOCTRINE_FRICTION_AXIOMS_v2_2026-09-28.md` | Superseded by v3 (supersedes v1): axioms A1–A6. A1 v2: the counter label's trigger must agree with the record. A5: the ranked-list ruling. A6 (new): the card is bounded regardless of world size. Every friction is routed here first. Claude, signed. |
 | `DESIGN_VIRELAI_MEMORY_v2_2026-09-29.md` | **Current governing design** (supersedes v1; RATIFIED): v1 plus the M-1 revisions — tuned slot budgets, the card's presentation to Duck, §5.3.1 certified fields filled by the controller. Claude, signed. |
-| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_EVENING.md` | Current state (supersedes 2026-09-29 PM): stage table, test commands, builder notes on pulls, orientation and notes. Claude, signed. |
-| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29_EVENING.md` | Current minimal read order and position. Claude, signed. |
-| `BUILD_PLAN_G4_CLICK_COMPLETION_v9_2026-09-29.md` | Current revision ledger (supersedes v8): R9-R08 committed, R9-R09 built; honest ledger. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_NIGHT.md` | Current state (supersedes 2026-09-29 evening): stage table, builder notes on the G4 executor, the lives rule and budget wakes, handoff actions. Claude, signed. |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29_NIGHT.md` | Current minimal read order, position and Kaggle procedure. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v10_2026-09-29.md` | Current revision ledger (supersedes v9): R9-R09 committed, R9-R10 built, M-5 next; honest ledger. Claude, signed. |
+| `BUILD_SLICE_MEMORY_M4_G4_ECONOMY_AND_LIVES_2026-09-29.md` | R9-R10: controller G4.1 and G4-A runs, extra runs (D3), the lives rule (D4), budget wakes; ft09 offline to a satisfied G4-A (92 actions, 7 Duck turns); the ft09 bar finding. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_EVENING.md` | 2026-09-29 evening state (superseded by night; supersedes 2026-09-29 PM): stage table, test commands, builder notes on pulls, orientation and notes. Claude, signed. |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29_EVENING.md` | Superseded by 2026-09-29 night. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v9_2026-09-29.md` | Superseded by v10 (supersedes v8): R9-R08 committed, R9-R09 built; honest ledger. Claude, signed. |
 | `BUILD_SLICE_MEMORY_M3_RECALL_AND_ORIENTATION_2026-09-29.md` | R9-R09: orientation turn, UNCERTIFIED lane (D6), injected recall (M6), the one pull interface and PULL_CHARS; T4 on the production path. Claude, signed. |
 | `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_PM.md` | 2026-09-29 PM state (superseded by evening; its test commands and executor notes still apply): stage table, the Mac and cloud test commands, executor builder notes, handoff actions. Claude, signed. |
 | `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29_PM.md` | Superseded by 2026-09-29 evening. Claude, signed. |

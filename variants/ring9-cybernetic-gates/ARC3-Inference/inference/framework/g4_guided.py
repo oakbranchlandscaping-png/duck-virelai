@@ -50,6 +50,23 @@ def level_changed(boundary_state: Mapping[str, Any] | None) -> bool:
     )
 
 
+MAX_LIFE_RESTUDIES = 2
+
+
+def restudy_next_life(counts: dict[str, int], lever: str, boundary_state: Mapping[str, Any] | None) -> bool:
+    """Ruling D4 (R9-R10): a lever study cut off by a death on the same level resumes next life.
+
+    Knowledge persists and the world resets, so the lever returns to the study. A level change is
+    G9's, never re-studied here. A lever is re-studied after each of its first
+    ``MAX_LIFE_RESTUDIES`` deaths; the next death releases it as before (the boundary release of
+    8cfb782), so Phase 1 can never deadlock on a lethal lever.
+    """
+    if level_changed(boundary_state):
+        return False
+    counts[lever] = counts.get(lever, 0) + 1
+    return counts[lever] <= MAX_LIFE_RESTUDIES
+
+
 class LeverRun:
     """One run of consecutive same-click presses on one lever, plus its confirmation tail."""
 
@@ -199,7 +216,9 @@ __all__ = [
     "DIVERGED",
     "INTERRUPTED",
     "LeverRun",
+    "MAX_LIFE_RESTUDIES",
     "RUNNING",
     "is_terminal",
     "level_changed",
+    "restudy_next_life",
 ]

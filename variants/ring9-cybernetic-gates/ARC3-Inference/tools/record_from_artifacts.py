@@ -30,6 +30,10 @@ DUCK_FIELDS = {
         "falsifier", "trigger", "conditions", "limitations", "novel_prediction",
     ),
     "G3-LEVERS": ("answer_kind", "explanation", "competing_models", "falsifier", "conditions", "limitations"),
+    "G4-REACTIONS": ("answer_kind", "mechanism_explanation", "competing_models", "falsifier", "limitations"),
+    "G4.2-LEVER-ORBITS": (
+        "answer_kind", "entity_id", "mechanism_explanation", "competing_models", "falsifier", "limitations",
+    ),
 }
 PREDICTION_FIELDS = ("action", "predicate", "expected_parameters", "because", "novelty")
 
@@ -99,7 +103,7 @@ def main() -> int:
     args = parser.parse_args()
     record = build_record(args.artifacts, args.stem, args.world)
     write_record(record, args.out)
-    print(f"wrote {args.out}: {len(record['steps'])} transitions, {len(record['answers'])} Duck answers")
+    print(f"wrote {args.out}: {len(record['steps'])} transitions, {len(record['answers'])} written answers")
     if args.replay:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from inference.framework.record_replay import load_record, replay

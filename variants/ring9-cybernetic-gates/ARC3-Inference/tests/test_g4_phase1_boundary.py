@@ -5,9 +5,10 @@ Author: Claude (Alpha build seat), 2026-09-27.
 Regression for REVIEW_G4_PHASE1_DRAIN_KAGGLE_V1_2026-09-27.md (the S1 hold deadlocked on a lever
 whose orbit a level transition interrupted). Director rulings, 2026-09-27: cross-level work is a
 separate gate (G9); G4 becomes stated targets that Duck executes as needed. These tests carry the
-boundary-release semantics of 8cfb782 into the guided G4-A study: a boundary releases the lever it
-cut off, a level transition closes the level's G4 study, and the machine always rests in a
-coherent state.
+boundary-release semantics of 8cfb782 into the guided G4-A study: a level transition closes the
+level's G4 study, and the machine always rests in a coherent state. Since R9-R10 (ruling D4) a
+death on the same level returns the lever to the study for the next life, and only a lever that
+keeps dying is released.
 """
 from __future__ import annotations
 
@@ -153,18 +154,43 @@ def test_level_transition_interrupts_the_lever_and_closes_the_level_study():
     assert machine.next_probe_capability() is None
 
 
-def test_same_level_boundary_releases_the_lever_and_the_rest_drains():
+def test_same_level_death_returns_the_lever_to_the_study_next_life():
+    """Ruling D4 (R9-R10): knowledge persists and the world resets, so the lever is re-studied."""
     machine = _machine(_g(2), SYNTHETIC_LEVERS)
     _act(machine, A, _g(2), _g(3), 1, GAME_OVER)
 
     payload = _orbit_product(machine)
+    assert payload["interrupted_lever_entities"] == []
+    assert payload["pending_lever_entities"] == ["E-A", "E-B"]
+    assert payload["life_restudies"] == {"E-A": 1}
+    assert machine.orbit_view("E-A")["status"] == "RUN_ENDED_RESTART_NEEDED"
+
+    _act(machine, A, _g(3), _g(3), 2)  # the next life: the same lever, run again
+    _act(machine, A, _g(3), _g(3), 3)
+    _explain(machine, "E-A")
+    _act(machine, B, _g(3), _g(3), 4)
+    _act(machine, B, _g(3), _g(3), 5)
+    _explain(machine, "E-B")
+    payload = _orbit_product(machine)
+    assert payload["lever_entities"] == ["E-A", "E-B"]
+    assert payload["phase1_status"] == "COMPLETE"
+    assert machine.status == "SATISFIED"
+
+
+def test_a_lever_that_keeps_dying_is_released_after_the_life_cap_and_the_rest_drains():
+    """The 8cfb782 boundary release still holds, after MAX_LIFE_RESTUDIES deaths: no deadlock."""
+    machine = _machine(_g(2), SYNTHETIC_LEVERS)
+    for life in range(3):
+        _act(machine, A, _g(2 + life), _g(3 + life), 1 + life, GAME_OVER)
+
+    payload = _orbit_product(machine)
     assert payload["interrupted_lever_entities"] == ["E-A"]
     assert payload["pending_lever_entities"] == ["E-B"]
+    assert payload["life_restudies"] == {"E-A": 3}
     assert payload["phase1_status"] == "IN_PROGRESS"
-    assert machine.gate_id == ORBITS
 
-    _act(machine, B, _g(3), _g(3), 2)
-    _act(machine, B, _g(3), _g(3), 3)
+    _act(machine, B, _g(5), _g(5), 4)
+    _act(machine, B, _g(5), _g(5), 5)
     _explain(machine, "E-B")
     payload = _orbit_product(machine)
     assert payload["lever_entities"] == ["E-B"]

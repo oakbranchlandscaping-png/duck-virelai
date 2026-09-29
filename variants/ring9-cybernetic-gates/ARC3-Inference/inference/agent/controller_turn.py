@@ -33,6 +33,8 @@ class ControllerSession:
     handoff: str = ""
     actions: int = 0
     answers: int = 0
+    last_raw: dict[str, Any] = field(default_factory=dict)  # the last step payload (budgets)
+    rerun: dict[str, Any] | None = None  # an extra run Duck asked for (D3)
 
     def take_handoff(self) -> str:
         text, self.handoff = self.handoff, ""
@@ -62,7 +64,7 @@ def run_controller_turn(
 
     machine = agent._ensure_gate_machine(state_path)
     for _ in range(MAX_ANSWERS_PER_TURN):
-        step = next_owned_step(machine, refused=session.refused)
+        step = next_owned_step(machine, refused=session.refused, rerun=session.rerun)
         if step.owner == DUCK:
             session.hand_to_duck(step.reason)
             return None
@@ -113,7 +115,8 @@ def _controller_action(
         _ledger_path(state_path), analysis_step=analysis_step, action_num=action_num,
         executor=CONTROLLER, gate_before=machine.gate_id, sections={},
     )
-    before = wake_signals(machine)
+    before = wake_signals(machine, session.last_raw)
+    rerun_press = bool(session.rerun) and step.gate_id == "G4.2-LEVER-ORBITS"
     try:
         probe, before_frame, actions_before = agent._gate_probe_begin(
             state_path, machine, {"probe_token": step.probe_token}, [step.action], executor=CONTROLLER,
@@ -132,10 +135,16 @@ def _controller_action(
     result = agent._apply_step_result(raw, event)
     executed = bool(result.get("executed"))
     session.actions += int(executed)
+    session.last_raw = dict(raw)
     session.wake = (
-        wake_reason(machine, event, result, before) if executed
+        wake_reason(machine, event, raw, before) if executed
         else f"the environment did not execute the controller's action ({raw.get('error') or 'no detail'})"
     )
+    if rerun_press:
+        session.rerun["left"] -= 1
+        if session.rerun["left"] <= 0:
+            session.wake = session.wake or f"the extra run of {session.rerun['entity_id']} you asked for is done"
+            session.rerun = None
     _log(analyzer_log, (
         f"{step.gate_id}: {step.reason}: {json.dumps(step.action, sort_keys=True)}; "
         f"executed={executed}; gate now {machine.gate_id}"
@@ -143,6 +152,32 @@ def _controller_action(
     ))
     ledger.finish(gate_after=machine.gate_id, step_executed=executed, outcome="controller_step")
     return AnalyzerTurnResult(step_executed=executed)
+
+
+def request_rerun(agent: Any, machine: Any, parameters: dict[str, Any]) -> str | None:
+    """D3: Duck asks the controller for an extra run of one G4-A lever; None if accepted."""
+    from inference.framework.controller_executor import MAX_RERUN_PRESSES, ORBITS
+
+    session: ControllerSession = agent._controller
+    if not session.enabled:
+        return "The controller executor is off in this run; press the lever yourself."
+    if machine.gate_id != ORBITS:
+        return f"An extra run is a G4-A request; the gate is {machine.gate_id}."
+    entity = str(parameters.get("id") or "").strip()
+    capability = machine.next_probe_capability() or {}
+    lever = next((item for item in (capability.get("target") or {}).get("levers") or ()
+                  if item.get("entity_id") == entity), None)
+    if lever is None:
+        return f"{entity!r} is not a G4-A lever the controller can press now."
+    try:
+        presses = int(parameters.get("presses") or 1)
+    except (TypeError, ValueError):
+        presses = 0
+    if not 1 <= presses <= MAX_RERUN_PRESSES:
+        return f"presses must be 1 to {MAX_RERUN_PRESSES}."
+    session.rerun = {"entity_id": entity, "click": dict(lever["click"]), "left": presses}
+    agent._gate_transitioned_this_turn = True
+    return None
 
 
 def _ledger_path(state_path: Path) -> Path:
@@ -153,4 +188,4 @@ def _ledger_path(state_path: Path) -> Path:
     return state_path.with_name(f"{stem}_turn_ledger.jsonl")
 
 
-__all__ = ["ControllerSession", "run_controller_turn"]
+__all__ = ["ControllerSession", "request_rerun", "run_controller_turn"]

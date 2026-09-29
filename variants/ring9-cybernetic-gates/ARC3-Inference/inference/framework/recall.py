@@ -50,6 +50,9 @@ def recall_key(gate_id: str, view: Mapping[str, Any], capability: Mapping[str, A
         active = [item for item in levers if isinstance(item, Mapping) and item.get("status") in {"RUNNING", "CONFIRMING", "NOT_STARTED"}]
         if active:
             entity, actions = str(active[0].get("entity_id")), [active[0].get("click") or {}]
+    template = view.get("answer_template")
+    if isinstance(template, Mapping) and template.get("entity_id"):  # the subject Duck must explain
+        entity, actions = str(template["entity_id"]), [template.get("intervention") or {}]
     if actions and isinstance(actions[0], Mapping) and "row" in actions[0] and "col" in actions[0]:
         site = [int(actions[0]["row"]), int(actions[0]["col"])]
     return {"gate": gate_id, "entity": entity, "site": site}
@@ -59,7 +62,7 @@ def _certified_lines(machine: Any, entity: str) -> list[str]:
     lines: list[str] = []
     for row in machine.completed_gate_rows():
         payload = row["answer"]
-        if entity in (payload.get("lever_entities") or ()):
+        if row["gate_id"] == "G3-LEVERS" and entity in (payload.get("lever_entities") or ()):
             lines.append(f"[{row['gate_id']}] {entity} is a certified lever")
         if entity in (payload.get("clean_null_entities") or ()):
             lines.append(f"[{row['gate_id']}] {entity} closed with scoped null evidence")
@@ -84,6 +87,19 @@ def _scoped_null(subject: Mapping[str, Any]) -> bool:
     }
 
 
+def _outcome_line(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A recalled transition, compact: the full row is one pull away (``kind='transition'``)."""
+    line = {
+        "transition_id": row.get("transition_id"), "gate_id": row.get("gate_id"),
+        "evidence_id": row.get("evidence_id"), "changed_cells": row.get("changed_cell_count"),
+    }
+    if row.get("disposition"):
+        line["disposition"] = row["disposition"]
+    if row.get("boundary_state") not in (None, "NOT_FINISHED"):
+        line["boundary_state"] = row["boundary_state"]
+    return line
+
+
 def _facts(machine: Any, key: Mapping[str, Any]) -> list[tuple[str, Any]]:
     store = MemoryStore(machine)
     entity, site = key.get("entity"), key.get("site")
@@ -100,11 +116,11 @@ def _facts(machine: Any, key: Mapping[str, Any]) -> list[tuple[str, Any]]:
     if subject is not None:
         for row in subject["aimed_transitions"]["rows"]:
             seen.add(row.get("transition_id"))
-            facts.append(("outcome", row))
+            facts.append(("outcome", _outcome_line(row)))
     if site is not None:
         for row in store.site(site[0], site[1], limit=20)["rows"]:
             if row.get("transition_id") not in seen:
-                facts.append(("site_outcome", row))
+                facts.append(("site_outcome", _outcome_line(row)))
     if subject is not None and _scoped_null(subject):
         facts.append(("scoped_null", {"lifecycle_state": subject["lifecycle_state"]}))
     lane = getattr(machine, "annotations", None)

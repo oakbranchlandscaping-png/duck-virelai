@@ -106,13 +106,16 @@ def ft09_run(tmp_path_factory):
 
 
 def test_t6_ft09_g0_to_g3_closure_with_zero_model_calls(ft09_run):
-    """T6: the controller closes G0-G3; the first model call comes only at G4, and it is Duck's."""
+    """T6: the controller closes G0-G3 (and, since R9-R10, certifies G4.1): the first model call is
+    Duck's orientation turn at G4-A."""
     machine = ft09_run.agent._gate_machine
-    assert machine.gate_id == "G4-REACTIONS"
+    assert machine.gate_id == "G4.2-LEVER-ORBITS"
     inventory = machine.target_journal.active_product("G3-LEVERS").payload
     assert len(inventory["lever_entities"]) == 5
-    assert len(ft09_run.model_prompts) == 1  # exactly one attempted call: Duck's first turn, at G4
+    assert machine.target_journal.active_product("G4-REACTIONS") is not None
+    assert len(ft09_run.model_prompts) == 1  # exactly one attempted call: Duck's orientation turn
     assert "CONTROLLER HANDOFF" in ft09_run.model_prompts[0]
+    assert "SUBMIT_ORIENTATION" in ft09_run.model_prompts[0]
     assert len(ft09_run.env_calls) == 72  # the v2 run spent 121 and never closed G3
 
 
@@ -125,7 +128,7 @@ def test_one_action_per_turn_and_every_artifact_says_who_acted(ft09_run):
     assert {json.dumps(row["protocol"]) for row in envelopes} == {'{"g3_inherits_g2_nulls": true}'}
     answers = ft09_run.rows("_gate_answers.jsonl")
     assert [row["gate_id"] for row in answers] == [
-        "G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", *["G3-LEVERS"] * 6,
+        "G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", *["G3-LEVERS"] * 6, *["G4-REACTIONS"] * 5,
     ]
     assert {row["executor"] for row in answers} == {CONTROLLER}
     ledger = ft09_run.rows("_turn_ledger.jsonl")
@@ -154,7 +157,7 @@ def test_the_run_replays_offline_under_its_recorded_protocol(ft09_run, tmp_path)
     record_tool.write_record(record, out)
     result = replay(load_record(out), measure=False)
     assert (result.steps_replayed, result.stopped) == (72, None)
-    assert result.machine.gate_id == "G4-REACTIONS"
+    assert result.machine.gate_id == "G4.2-LEVER-ORBITS"  # the anatomy answers replay too
 
 
 def test_duck_is_handed_the_step_after_a_wake_and_the_controller_resumes(tmp_path, monkeypatch):
@@ -185,12 +188,12 @@ def _ft09_machine_at(gate_id: str) -> tuple[CyberneticGateMachine, Ft09World]:
     return machine, world
 
 
-def test_navigation_worlds_and_g4_belong_to_duck():
+def test_navigation_worlds_and_the_orientation_turn_belong_to_duck():
     nav = CyberneticGateMachine(valid_actions=["ACTION1", "ACTION2", "ACTION3", "ACTION4"], initial_grid=[[0, 1], [1, 0]])
     assert next_owned_step(nav).owner == DUCK
-    machine, _world = _ft09_machine_at("G4-REACTIONS")
+    machine, _world = _ft09_machine_at("G4.2-LEVER-ORBITS")
     step = next_owned_step(machine)
-    assert (step.owner, step.gate_id) == (DUCK, "G4-REACTIONS")
+    assert (step.owner, step.gate_id, step.reason) == (DUCK, "G4.2-LEVER-ORBITS", "the orientation turn is due")
 
 
 def test_an_open_trigger_record_is_ducks_prediction_to_choose():
@@ -237,4 +240,5 @@ def test_a_nearly_spent_counter_wakes_duck(monkeypatch):
     machine, _world = _ft09_machine_at("G3-LEVERS")
     assert wake_reason(machine, {}, {}) is None
     monkeypatch.setattr(executor, "world_budgets", lambda _machine: {"counter_ticks_remaining": 2})
-    assert "2 ticks left" in wake_reason(machine, {}, {})
+    assert "2 counter ticks left" in wake_reason(machine, {}, {}, {"ticks": 3})
+    assert wake_reason(machine, {}, {}, {"ticks": 2}) is None  # a budget wake fires once, on crossing
