@@ -23,6 +23,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
+from inference.framework.annotation_lane import orientation_block, orientation_due
+from inference.framework.memory_store import cell_bbox as _bbox
+from inference.framework.recall import recall_key, recall_slot
+
 SCHEMA = "virelai-card-v1"
 CERTIFIED = "CERTIFIED: the controller fills this field"
 WINDOW = 6
@@ -34,7 +38,8 @@ SLOT_BUDGETS: dict[str, int] = {
     "template": 3_000,  # current_probe + instruction, or answer_template
     "last_transition": 600,
     "world_model": 3_000,
-    "recall": 2_000,  # filled from stage M-3
+    "recall": 2_000,  # injected recall (M-3, recall.py)
+    "orientation": 600,  # present only while the orientation turn is due (M-3, annotation_lane.py)
     "progress": 1_500,
     "index": 800,
 }
@@ -68,12 +73,6 @@ INDEX_BY_GATE = {
 
 def _chars(value: Any) -> int:
     return len(json.dumps(value, sort_keys=True, default=str))
-
-
-def _bbox(cells: Sequence[Sequence[int]]) -> list[int] | None:
-    rows = [int(cell[0]) for cell in cells]
-    cols = [int(cell[1]) for cell in cells]
-    return [min(rows), min(cols), max(rows), max(cols)] if rows else None
 
 
 def windowed(value: Any, *, window: int = WINDOW) -> Any:
@@ -481,7 +480,21 @@ def world_model_digest(machine: Any, budget: int = SLOT_BUDGETS["world_model"]) 
         position = next((i for i, (gate, _) in enumerate(lines) if gate == oldest), 0)
         kept.insert(position, (oldest, f"[{oldest}] certified; recall virelai('gate_audit')"))
         lines = kept
-    return [text for _, text in lines]
+    return [text for _, text in lines] + _uncertified_lines(machine, [text for _, text in lines], budget)
+
+
+def _uncertified_lines(machine: Any, certified: list[str], budget: int) -> list[str]:
+    """Duck's notes, newest first, only in the room the certified lines leave (D6)."""
+    lane = getattr(machine, "annotations", None)
+    notes = list(reversed(lane.notes)) if lane is not None else []
+    shown: list[str] = []
+    for note in notes:
+        if _chars([*certified, *shown, note.line()]) > budget - 80:
+            break
+        shown.append(note.line())
+    if len(shown) < len(notes):
+        shown.append(f"[UNCERTIFIED] {len(notes) - len(shown)} more notes: virelai('memory', kind='notes')")
+    return shown
 
 
 # ---- the card ----------------------------------------------------------------------------------
@@ -512,9 +525,13 @@ def build_card(machine: Any) -> Card:
         "template": _template_slot(gate_id, view, capability),
         "last_transition": _last_transition_slot(machine),
         "world_model": world_model_digest(machine),
+        "recall": recall_slot(machine, recall_key(gate_id, view, capability)),
         "progress": _progress_slot(gate_id, view, machine),
         "index": _index_slot(gate_id, view),
     }
+    if orientation_due(machine):
+        slots["orientation"] = orientation_block(machine, next_operation)
+        next_operation = "SUBMIT_ORIENTATION"
     slot_chars = {name: _chars(value) for name, value in slots.items() if value}
     over = sorted(name for name, size in slot_chars.items() if size > SLOT_BUDGETS[name])
     template = slots.pop("template")

@@ -69,6 +69,8 @@ from inference.framework.lever_attribution import (
 from inference.framework.entity_observation import EntityLedger, EntityTransition, ObservationScope
 from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
+from inference.framework.annotation_lane import AnnotationLane
+from inference.framework.memory_store import cell_bbox
 from inference.framework.lever_dossier import (
     LeverDossierAnswer,
     LeverDossierError,
@@ -3587,13 +3589,7 @@ class _LeverTarget:
             "unmet_requirements": list(self.assess().unmet_requirements),
         }
 
-    @staticmethod
-    def _cell_bbox(cells: Sequence[Sequence[int]]) -> list[int] | None:
-        if not cells:
-            return None
-        rows = [int(cell[0]) for cell in cells]
-        cols = [int(cell[1]) for cell in cells]
-        return [min(rows), min(cols), max(rows), max(cols)]
+    _cell_bbox = staticmethod(cell_bbox)
 
     def compact_gate_view(self) -> dict[str, Any]:
         """Return bounded model context while snapshot() retains full evidence."""
@@ -5247,6 +5243,7 @@ class CyberneticGateMachine:
         # The recording protocol, stamped on every probe envelope so a record replays under the
         # protocol it was made with (ruling D5 changed G3's sweep in R9-R08).
         self.protocol = {"g3_inherits_g2_nulls": bool(g3_inherits_g2_nulls)}
+        self.annotations = AnnotationLane()  # Duck's UNCERTIFIED notes (D6); never read by a gate
         self.ego = EgoGateMachine(
             valid_actions=valid_actions,
             initial_grid=initial_grid,

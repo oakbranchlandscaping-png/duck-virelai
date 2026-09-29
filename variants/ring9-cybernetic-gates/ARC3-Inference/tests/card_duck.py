@@ -16,6 +16,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from inference.framework.annotation_lane import submit_notes
 from inference.framework.card_builder import CERTIFIED, build_card
 from inference.framework.record_replay import click_world_machine, lossless_outcome
 
@@ -133,6 +134,14 @@ def _answer(card: dict[str, Any], world: StressWorld, clicked: set[tuple[int, in
     }
 
 
+def _orientation_notes(card: dict[str, Any]) -> list[dict[str, str]]:
+    """Name what the certified world model shows, from the card alone."""
+    return [
+        {"subject": "G3-LEVERS", "kind": "NAME", "text": "the levers are small tiles that recolour themselves"},
+        {"subject": "WORLD", "kind": "PROPOSAL", "text": "study each lever's repeated presses first"},
+    ]
+
+
 def _choose(card: dict[str, Any]) -> dict[str, Any]:
     probe = card["current_probe"]
     if probe.get("purpose") != "GUIDED_ACTION":
@@ -175,6 +184,9 @@ def run_ladder(levers: int, *, max_steps: int = 2_000, wide_last: bool = False) 
         run.over_budget.update(card_obj.over_budget)
         if machine.gate_id not in run.gates:
             run.gates.append(machine.gate_id)
+        if card["next_operation"] == "SUBMIT_ORIENTATION":
+            submit_notes(machine, _orientation_notes(card), source="ORIENTATION")
+            continue
         if "answer_template" in card:
             machine.submit_answer(json.loads(json.dumps(_answer(card, world, clicked))))
             continue

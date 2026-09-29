@@ -20,6 +20,11 @@ from typing import Any, Mapping
 
 SCHEMA = "virelai-memory-store-v1"
 MAX_PAGE = 50
+# A pull must reach Duck whole. The sandbox prints every query as indented JSON (about twice the
+# compact size) and the tool result is capped at about 4,096 characters, so a pulled result is
+# fitted to 1,800 compact characters: a page shrinks, a large field becomes a pull handle.
+PULL_CHARS = 1_800
+FIT_PROTECTED = frozenset({"schema", "kind", "total", "offset", "limit", "remaining", "rows", "label"})
 
 
 def transition_index_row(
@@ -76,12 +81,11 @@ def _field_summary(name: str, value: Any) -> Any:
     return {"omitted": True, "type": kind, "length": length, "chars": len(rendered), "query_field": name}
 
 
-def _bbox(cells: list[list[int]]) -> list[int] | None:
-    if not cells:
-        return None
-    rows = [cell[0] for cell in cells]
-    cols = [cell[1] for cell in cells]
-    return [min(rows), min(cols), max(rows), max(cols)]
+def cell_bbox(cells: Any) -> list[int] | None:
+    """[min row, min col, max row, max col] of ``(row, col)`` cells; None when there are none."""
+    rows = [int(cell[0]) for cell in cells]
+    cols = [int(cell[1]) for cell in cells]
+    return [min(rows), min(cols), max(rows), max(cols)] if rows else None
 
 
 def _compact_transition(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -92,7 +96,7 @@ def _compact_transition(row: Mapping[str, Any]) -> dict[str, Any]:
         "evidence_id": row.get("evidence_id"),
         "action": row.get("action"),
         "changed_cell_count": len(changed),
-        "changed_bbox": _bbox([cell[:2] for cell in changed]),
+        "changed_bbox": cell_bbox([cell[:2] for cell in changed]),
         "disposition": row.get("disposition"),
         "boundary_state": row.get("boundary_state"),
     }
@@ -177,23 +181,26 @@ class MemoryStore:
         return {"schema": SCHEMA, "kind": "evidence", **self._machine.evidence_view(evidence_id)}
 
     # ---- a subject's file ---------------------------------------------------------------
-    def subject(self, entity_id: str) -> dict[str, Any] | None:
+    def subject(
+        self, entity_id: str, field: str | None = None, offset: int = 0, limit: int = 20
+    ) -> dict[str, Any] | None:
         """Everything recorded about one persistent object, bounded.
 
         Identity (sightings), lifecycle, attributed evidence, G3 confirmation and dossier, and
-        every transition aimed at the object's current cells. Opens once G3 has a ledger.
+        every transition aimed at the object's current cells, most recent first. Opens once G3 has
+        a ledger. With ``field``, that one part of the file, paged if it is a list.
         """
         lever = self._machine._adapters.get("G3-LEVERS")
         ledger = getattr(lever, "entity_ledger", None)
         requested = str(entity_id or "").strip()
         if ledger is None or requested not in ledger.entities:
             return None
-        entity = lever.entity_view(requested, offset=0, limit=16)
+        entity = lever.entity_view(requested, offset=0, limit=4)
         journal = getattr(lever, "lifecycle_journal", None)
         lifecycle = journal.entities.get(requested) if journal is not None else None
         member_ids = set(entity.get("member_ids") or ())
         confirmations = [
-            dict(record)
+            lever._compact_confirmation_record(record)
             for record in getattr(lever, "_confirmation_records", ())
             if record.get("entity_id") == requested
         ]
@@ -205,11 +212,11 @@ class MemoryStore:
         cells = {tuple(cell) for cell in ledger.cells_for(requested)}
         aimed = [
             _compact_transition(item)
-            for item in self._machine.transition_index
+            for item in reversed(self._machine.transition_index)
             if item.get("acted_site")
             and (item["acted_site"]["row"], item["acted_site"]["col"]) in cells
         ]
-        return {
+        file = {
             "schema": SCHEMA,
             "kind": "subject",
             "entity": entity,
@@ -221,3 +228,77 @@ class MemoryStore:
             "dossiers": dossiers[-2:],
             "aimed_transitions": _page(aimed, 0, 20),
         }
+        if field is None:
+            return file
+        value = aimed if field == "aimed_transitions" else file.get(field)
+        head = {"schema": SCHEMA, "kind": "subject_field", "entity_id": requested, "field": field}
+        if isinstance(value, list):
+            return {**head, **_page(value, offset, limit)}
+        return {**head, "value": value}
+
+    # ---- Duck's UNCERTIFIED lane (D6) -------------------------------------------------------
+    def notes(self, subject: str | None = None, offset: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Duck's notes, newest first, optionally about one subject; always labelled."""
+        lane = getattr(self._machine, "annotations", None)
+        rows = [asdict(note) for note in reversed(lane.notes if lane is not None else [])
+                if subject in (None, "", note.subject)]
+        return {"schema": SCHEMA, "kind": "notes", "label": "UNCERTIFIED: Duck's notes; only a gate certifies",
+                **_page(rows, offset, limit)}
+
+    # ---- the one pull interface -------------------------------------------------------------
+    def query(self, kind: str, **params: Any) -> dict[str, Any] | None:
+        """``virelai('memory', kind=…, …)``: one bounded read, fitted to ``PULL_CHARS``."""
+        result = self._query(kind, **params)
+        ident = params.get("id")
+        return _fit(result, lambda name: (
+            f"virelai('memory', kind={kind!r}" + (f", id={ident!r}" if ident is not None else "")
+            + f", field={name!r})"
+        ))
+
+    def _query(self, kind: str, **params: Any) -> dict[str, Any] | None:
+        paging = {name: int(params[name]) for name in ("offset", "limit") if params.get(name) is not None}
+        ident = params.get("id")
+        if kind not in QUERY_KINDS:
+            raise ValueError(f"memory kind must be one of {list(QUERY_KINDS)}.")
+        if kind == "products":
+            return self.products()
+        if kind == "product":
+            return self.product(str(ident or ""), params.get("field"), **paging)
+        if kind == "transitions":
+            return self.transitions(**paging)
+        if kind == "transition":
+            return self.transition(int(ident or 0), **paging)
+        if kind == "site":
+            return self.site(int(params.get("row", -1)), int(params.get("col", -1)), **paging)
+        if kind == "evidence":
+            return self.evidence(str(ident or ""))
+        if kind == "subject":
+            return self.subject(str(ident or ""), params.get("field"), **paging)
+        return self.notes(params.get("subject") or ident, **paging)
+
+
+QUERY_KINDS = ("products", "product", "transitions", "transition", "site", "evidence", "subject", "notes")
+
+
+def _fit(result: dict[str, Any] | None, pull: Any) -> dict[str, Any] | None:
+    """Shrink a pulled result to ``PULL_CHARS``: first its page, then its largest fields."""
+    if result is None or _chars(result) <= PULL_CHARS:
+        return result
+    out = dict(result)
+    if isinstance(out.get("rows"), list):
+        rows = list(out["rows"])
+        while len(rows) > 1 and _chars({**out, "rows": rows}) > PULL_CHARS:
+            rows.pop()
+        out.update(rows=rows, limit=len(rows), remaining=int(out["total"]) - int(out["offset"]) - len(rows))
+    while _chars(out) > PULL_CHARS:
+        names = [name for name, value in out.items()
+                 if name not in FIT_PROTECTED and not (isinstance(value, dict) and value.get("omitted"))]
+        if not names:
+            break
+        name = max(names, key=lambda item: _chars(out[item]))
+        out[name] = {"omitted": True, "chars": _chars(result[name]), "pull": pull(name)}
+    return out
+
+
+def _chars(value: Any) -> int:
+    return len(json.dumps(value, sort_keys=True, default=str))

@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from inference.framework.card_builder import world_budgets
+from inference.framework.memory_store import cell_bbox as _bbox
 from inference.framework.virelai_gates import control_archetype_prior
 
 CONTROLLER, DUCK = "CONTROLLER", "DUCK"
@@ -127,11 +128,6 @@ def controller_answer(machine: Any, view: Mapping[str, Any]) -> tuple[dict[str, 
     if template.get("answer_kind") == "LEVER_INVENTORY" and "lever_entities" in template:
         return _inventory_answer(template)
     return None, f"{gate} answer shape {template.get('answer_kind')!r} is not controller-owned"
-
-
-def _bbox(cells: list[list[int]]) -> list[int]:
-    rows, cols = [cell[0] for cell in cells], [cell[1] for cell in cells]
-    return [min(rows), min(cols), max(rows), max(cols)]
 
 
 def _counter_answer(machine: Any, template: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:

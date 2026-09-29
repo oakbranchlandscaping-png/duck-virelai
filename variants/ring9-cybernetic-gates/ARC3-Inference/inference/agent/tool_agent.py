@@ -30,6 +30,13 @@ from inference.agent.prompts import (
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
 from inference.agent.controller_turn import ControllerSession, run_controller_turn
 from inference.agent.gate_artifacts import record_gate_answer, record_probe_outcome
+from inference.agent.memory_queries import gated_memory_query, orientation_refusal, record_notes
+from inference.framework.annotation_lane import (
+    AnnotationError,
+    split_annotations,
+    submit_notes,
+    validate_notes,
+)
 from inference.framework.card_builder import card_template
 from inference.agent.virelai_ontology import (
     ARC_GRID_MULTIVERSE_ONTOLOGY,
@@ -2033,6 +2040,8 @@ class ToolAgent:
         """
         from inference.framework.virelai_gates import GateContractError
 
+        if orientation_refusal(gate_machine):
+            raise ControllerContractError(orientation_refusal(gate_machine))
         try:
             gate_probe = gate_machine.validate_probe(decision, normalized_actions)
         except GateContractError as exc:
@@ -2277,6 +2286,9 @@ class ToolAgent:
                 self._turn_ledger.query(operation)
             if self._virelai_gates_enabled:
                 assert gate_machine is not None
+                memory_reply = gated_memory_query(self, state_path, gate_machine, operation, parameters)
+                if memory_reply is not None:
+                    return memory_reply
                 if operation == "gate":
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
@@ -2294,124 +2306,22 @@ class ToolAgent:
                         ),
                         "truncated": False,
                     }
-                if operation == "gate_audit":
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": gate_machine.gate_audit_view(
-                            offset=parameters.get("offset", 0),
-                            limit=parameters.get("limit", 20),
-                        ),
-                        "error": None, "truncated": False,
-                    }
-                if operation == "inventory":
-                    from inference.framework.virelai_gates import GateContractError
-
-                    try:
-                        inventory = gate_machine.inventory_view(
-                            offset=parameters.get("offset", 0),
-                            limit=parameters.get("limit", 10),
-                        )
-                    except GateContractError as exc:
-                        return {
-                            "schema": "virelai-query-v1", "operation": operation,
-                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
-                            "truncated": False,
-                        }
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": inventory, "error": None,
-                        "truncated": bool(inventory.get("truncated")),
-                    }
-                if operation == "entity":
-                    from inference.framework.virelai_gates import GateContractError
-
-                    try:
-                        entity = gate_machine.entity_view(
-                            str(parameters.get("id") or ""),
-                            offset=parameters.get("offset", 0),
-                            limit=parameters.get("limit", 128),
-                        )
-                    except GateContractError as exc:
-                        return {
-                            "schema": "virelai-query-v1", "operation": operation,
-                            "data": self._binding_gate_payload(gate_machine), "error": str(exc), "truncated": False,
-                        }
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": entity, "error": None, "truncated": False,
-                    }
-                if operation == "reaction":
-                    from inference.framework.virelai_gates import GateContractError
-
-                    try:
-                        reaction = gate_machine.reaction_view(
-                            str(parameters.get("id") or "")
-                        )
-                    except GateContractError as exc:
-                        return {
-                            "schema": "virelai-query-v1", "operation": operation,
-                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
-                            "truncated": False,
-                        }
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": reaction, "error": None, "truncated": False,
-                    }
-                if operation == "orbit":
-                    from inference.framework.virelai_gates import GateContractError
-
-                    try:
-                        orbit = gate_machine.orbit_view(
-                            str(parameters.get("id") or "")
-                        )
-                    except GateContractError as exc:
-                        return {
-                            "schema": "virelai-query-v1", "operation": operation,
-                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
-                            "truncated": False,
-                        }
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": orbit, "error": None, "truncated": False,
-                    }
-                if operation == "limit":
-                    from inference.framework.virelai_gates import GateContractError
-
-                    try:
-                        limit = gate_machine.limit_view(
-                            str(parameters.get("id") or "")
-                        )
-                    except GateContractError as exc:
-                        return {
-                            "schema": "virelai-query-v1", "operation": operation,
-                            "data": self._binding_gate_payload(gate_machine), "error": str(exc),
-                            "truncated": False,
-                        }
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": limit, "error": None, "truncated": False,
-                    }
-                if operation == "evidence":
-                    from inference.framework.virelai_gates import GateContractError
-
-                    try:
-                        evidence = gate_machine.evidence_view(parameters.get("id", ""))
-                    except GateContractError as exc:
-                        return {
-                            "schema": "virelai-query-v1", "operation": operation,
-                            "data": self._binding_gate_payload(gate_machine), "error": str(exc), "truncated": False,
-                        }
-                    return {
-                        "schema": "virelai-query-v1", "operation": operation,
-                        "data": evidence, "error": None, "truncated": False,
-                    }
                 if operation == "gate_answer":
                     from inference.framework.virelai_gates import GateContractError
 
                     answering_gate_id = gate_machine.gate_id
+                    submitted, notes = split_annotations(parameters.get("answer"))
                     try:
-                        answer = gate_machine.submit_answer(parameters.get("answer"))
-                    except GateContractError as exc:
+                        if orientation_refusal(gate_machine):
+                            raise GateContractError(orientation_refusal(gate_machine))
+                        if notes is not None:
+                            validate_notes(gate_machine, notes, "ANSWER")
+                        answer = gate_machine.submit_answer(submitted)
+                        if notes is not None:
+                            record_notes(state_path, submit_notes(
+                                gate_machine, notes, source="ANSWER", gate_id=answering_gate_id,
+                            ))
+                    except (GateContractError, AnnotationError) as exc:
                         gate_view = gate_machine.gate_view()
                         answer_template = card_template(gate_machine.gate_id, gate_view.get("answer_template"))
                         already_accepted = (
