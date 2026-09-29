@@ -163,6 +163,7 @@ def test_turn_ledger_records_the_card_sections_and_the_cost_of_the_turn(tmp_path
     assert (row["executor"], row["analysis_step"], row["action_num"]) == ("DUCK", 3, 7)
     assert row["section_chars"] == {
         "prompt_body": 300, "automatic_update": 0, "controller_focus": 5, "gate_card": 1200,
+        "controller_handoff": 0,
     }
     assert row["card_chars"] == 1505
     assert row["request_count"] == 2

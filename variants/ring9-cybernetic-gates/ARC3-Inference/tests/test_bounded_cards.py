@@ -12,6 +12,8 @@ real G2 record through a complete scripted G3 sweep and assert each binding card
 """
 from __future__ import annotations
 
+import pytest
+
 from inference.agent import tool_agent
 from inference.framework.gate_card import render_binding_gate_context
 from test_g2_counter_axiom import _act, _answer, _replay_real_segment
@@ -61,8 +63,12 @@ def test_ft09_g3_card_fits_the_budget_on_entry():
     assert capability["target"]["member_id"] in {row["member_id"] for row in frontier["candidates"]}
 
 
-def test_every_card_through_a_full_ft09_g3_sweep_fits_the_budget():
+@pytest.mark.parametrize("inherits, clicks, inherited", [(False, 64, 0), (True, 10, 54)])
+def test_every_card_through_a_full_ft09_g3_sweep_fits_the_budget(inherits, clicks, inherited):
+    """Pre-D5 protocol: G3 clicks the whole roster. R9-R08 (ruling D5): G2's 54 total nulls are
+    inherited as scoped nulls, so G3 clicks only the 10 objects G2 never saw null."""
     machine, grid = _close_g2_on_ft09()
+    machine.protocol["g3_inherits_g2_nulls"] = inherits
     worst = _binding_context_chars(machine)
     transition_id = 58
     while machine.gate_id == "G3-LEVERS" and machine.next_probe_capability() is not None:
@@ -70,7 +76,9 @@ def test_every_card_through_a_full_ft09_g3_sweep_fits_the_budget():
         transition_id += 1
         worst = max(worst, _binding_context_chars(machine))
         assert worst < BUDGET, f"card reached {worst} characters at transition {transition_id}"
-    assert transition_id - 58 >= 60, "the sweep should visit the whole ft09 roster"
+    assert transition_id - 58 == clicks
+    inheritance = machine._adapters["G3-LEVERS"]._inheritance
+    assert (0 if inheritance is None else inheritance.count) == inherited
 
 
 def test_every_g2_card_of_the_real_ft09_record_fits_the_budget():

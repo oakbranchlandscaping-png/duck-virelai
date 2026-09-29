@@ -5,8 +5,9 @@ Author: Claude (Alpha build seat), 2026-09-28. R9-R06 (DESIGN_VIRELAI_MEMORY_v1 
 
 Reads ``{stem}_probe_outcomes.jsonl`` (lossless transitions) and ``{stem}_gate_answers.jsonl``
 (accepted answers) from a run's artifacts directory and writes a ``virelai-recorded-world-v1``
-fixture: the initial grid, each transition's sparse changes, and only the Duck-written fields of
-the G2 and G3 answers (everything the controller derives is re-derived at replay).
+fixture: the initial grid, each transition's sparse changes, only the written fields of the G2 and
+G3 answers (everything the controller derives is re-derived at replay), and the recording protocol
+stamped on the run's probe envelopes (R9-R08; absent before, which means the pre-D5 protocol).
 
 Usage:
   python3 tools/record_from_artifacts.py ARTIFACTS_DIR STEM OUT.json.gz [--world ID] [--replay]
@@ -42,6 +43,10 @@ def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
     answers = [
         json.loads(line) for line in answers_path.read_text().splitlines() if line.strip()
     ] if answers_path.exists() else []
+    envelopes_path = artifacts / f"{stem}_probe_envelopes.jsonl"
+    first_envelope = next((
+        json.loads(line) for line in envelopes_path.read_text().splitlines() if line.strip()
+    ), {}) if envelopes_path.exists() else {}
     rows, cols = outcomes[0]["shape_before"]
     grid = [[0] * cols for _ in range(rows)]
     for site in outcomes[0]["site_transitions"]:
@@ -61,6 +66,9 @@ def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
         "schema": "virelai-recorded-world-v1",
         "source": f"{artifacts}/{stem}_probe_outcomes.jsonl and _gate_answers.jsonl",
         "world": world,
+        "protocol": {
+            "g3_inherits_g2_nulls": bool((first_envelope.get("protocol") or {}).get("g3_inherits_g2_nulls")),
+        },
         "valid_actions": sorted({str(o["action"]["action"]) for o in outcomes}),
         "initial_grid": ["".join(HEX[value] for value in row) for row in grid],
         "steps": [

@@ -1,10 +1,12 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-09-29  
+**Updated:** 2026-09-29 (PM)  
 **Active source:** `variants/ring9-cybernetic-gates/`  
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-09-29 PM STATUS (Claude, Alpha build seat) — signed.** R9-R07 (memory M-1) committed `ee826ab` (Mac 431, the full suite). **R9-R08 (memory M-2, the controller executor)** built: the production agent carries ft09 from G0 to G3 closure with zero model calls in 72 actions (live v2: 121 actions, G3 not closed); G3 inherits G2's 54 total nulls (D5); every envelope carries the recording protocol. Five design deviations await ratification. Pending Mac pytest (450) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_PM.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v8_2026-09-29.md`. Next: M-3, recall and the orientation turn.
+>
 > **2026-09-29 STATUS (Claude, Alpha build seat) — signed.** R9-R06 (memory M-0) committed `1a4b6bd` (Mac 409). **R9-R07 (memory M-1, the slot-built card)** built: the v2 crash card is now ~4,700 characters (was 25,502); a Duck that reads only the card carries stress worlds with 2, 8 and 20 levers from G2 to G4-A satisfied, every card flat in the lever count; certified fields are filled by the controller. Design v2 records the M-1 revisions. Pending Mac pytest (419) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v7_2026-09-29.md`. Next: M-2, the controller executor.
 
 > **2026-09-28 EVENING STATUS (Claude, Alpha build seat) — signed.** R9-R05 committed `4329185`; ft09 guided v2 ran: G2 closed, **G3 confirmed five levers (R9-R05 held live)**, then the card overflowed at the fifth dossier (25,502). Prior-art survey done. Director: "the controller should execute scripted moves when possible"; build memory as one comprehensive design. **`DESIGN_VIRELAI_MEMORY_v1` RATIFIED (D1–D7)**: three tiers (record, certified world model, slot-built card), injected recall, controller executor for G0–G3, lives persist. Doctrine v3 adds memory laws M1–M10. R9-R06 (memory M-0: replay harness, record index, memory store, turn ledger) built, pending Mac pytest (409) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-28_EVENING.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v6_2026-09-28.md`.
@@ -37,9 +39,13 @@ after a new package, hashes, receipt, and notebook version are created.
 |---|---|
 | `DOCTRINE_FRICTION_AXIOMS_v2_2026-09-28.md` | Superseded by v3 (supersedes v1): axioms A1–A6. A1 v2: the counter label's trigger must agree with the record. A5: the ranked-list ruling. A6 (new): the card is bounded regardless of world size. Every friction is routed here first. Claude, signed. |
 | `DESIGN_VIRELAI_MEMORY_v2_2026-09-29.md` | **Current governing design** (supersedes v1; RATIFIED): v1 plus the M-1 revisions — tuned slot budgets, the card's presentation to Duck, §5.3.1 certified fields filled by the controller. Claude, signed. |
-| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29.md` | Current state (supersedes 2026-09-28 evening): stage table, builder notes on the card builder, certified fields and the card-only Duck, handoff actions. Claude, signed. |
-| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29.md` | Current minimal read order and position. Claude, signed. |
-| `BUILD_PLAN_G4_CLICK_COMPLETION_v7_2026-09-29.md` | Current revision ledger (supersedes v6): R9-R06 committed, R9-R07 built. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_PM.md` | Current state (supersedes 2026-09-29): stage table, the Mac and cloud test commands, executor builder notes, handoff actions. Claude, signed. |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29_PM.md` | Current minimal read order and position. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v8_2026-09-29.md` | Current revision ledger (supersedes v7): R9-R07 committed, R9-R08 built; R9-I02 stays open; honest ledger with the design deviations. Claude, signed. |
+| `BUILD_SLICE_MEMORY_M2_CONTROLLER_EXECUTOR_2026-09-29.md` | R9-R08: the controller executor (ownership, controller answers, stop-and-wake), D5 inherited nulls, the recording protocol; T6 measured 72 actions and 0 model calls through G3 on ft09; five deviations for ratification. Claude, signed. |
+| `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29.md` | 2026-09-29 morning state (superseded by 2026-09-29 PM; supersedes 2026-09-28 evening): stage table, builder notes on the card builder, certified fields and the card-only Duck, handoff actions. Claude, signed. |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-09-29.md` | Superseded by 2026-09-29 PM. Claude, signed. |
+| `BUILD_PLAN_G4_CLICK_COMPLETION_v7_2026-09-29.md` | Superseded by v8 (supersedes v6): R9-R06 committed, R9-R07 built. Claude, signed. |
 | `BUILD_SLICE_MEMORY_M1_SLOT_CARD_2026-09-29.md` | R9-R07: the slot-built card (card_builder.py), certified fields, preflight; measured 25,502 → ~4,700; card-only Duck on 2/8/20-lever stress worlds; T1/T3/T5/T7/T10/T11. Claude, signed. |
 | `DESIGN_VIRELAI_MEMORY_v1_2026-09-28.md` | Superseded by v2 (RATIFIED 2026-09-28) (D1–D7): memory laws M1–M10, three tiers (record / certified world model / slot-built card), injected + pulled recall, controller executor (G0–G3 without Duck), lives and levels, instrumentation, acceptance tests T1–T11, staged build M-0…M-6. Claude, signed. |
 | `DOCTRINE_FRICTION_AXIOMS_v3_2026-09-28.md` | Current doctrine (supersedes v2): A5 revised (controller executes computable moves), A6 v2 (bounded regardless of findings), memory laws M1–M10 ratified, D4–D7 recorded; A7 still proposed. Claude, signed. |

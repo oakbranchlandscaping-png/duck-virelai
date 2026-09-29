@@ -1411,6 +1411,10 @@ class HarnessSolver(Solver):
             virelai_enabled=self.virelai_mode in {"tool", "controller", "gated"},
             virelai_controller_enabled=self.virelai_mode == "controller",
             virelai_gates_enabled=self.virelai_mode == "gated",
+            controller_executor_enabled=(
+                self.virelai_mode == "gated"
+                and os.environ.get("VIRELAI_CONTROLLER_EXECUTOR", "1").strip() != "0"
+            ),
         )
 
     def _play_one(

@@ -467,3 +467,60 @@ def masked_grid(
         tuple(MASK_SENTINEL if (row, col) in hidden else int(value) for col, value in enumerate(values))
         for row, values in enumerate(grid)
     )
+
+
+def trigger_record(
+    lossless_outcomes: Iterable[Mapping[str, Any]], footprint: Iterable[tuple[int, int]]
+) -> dict[str, Any]:
+    """Axiom A1 (v2): the trigger class the whole record supports for the active candidate.
+
+    A transition *ticks* when a footprint cell changes, and is *effective* when any cell
+    outside the footprint changes. EVERY_TRANSITION: it ticked on transitions that changed
+    nothing else, and never failed to tick. EFFECTIVE_TRANSITIONS_ONLY: it ticked on every
+    effective transition and on none that changed nothing else. OPEN: only effective, ticking
+    transitions so far, so the record cannot yet tell those two apart. IRREGULAR: anything
+    else. The record's class is always an admissible claim, so this check never deadlocks.
+    """
+    footprint = set(footprint)
+    outcomes = list(lossless_outcomes)
+    transitions = len(outcomes)
+    counts = {
+        "effective_transitions_with_tick": 0,
+        "effective_transitions_without_tick": 0,
+        "null_transitions_with_tick": 0,
+        "null_transitions_without_tick": 0,
+    }
+    for outcome in outcomes:
+        cells = [
+            (int(item["row"]), int(item["col"]))
+            for item in outcome.get("changed_cells") or ()
+            if isinstance(item, Mapping)
+        ]
+        tick = any(cell in footprint for cell in cells)
+        effective = any(cell not in footprint for cell in cells)
+        key = ("effective" if effective else "null") + (
+            "_transitions_with_tick" if tick else "_transitions_without_tick"
+        )
+        counts[key] += 1
+    if counts["effective_transitions_without_tick"] == 0 and counts["null_transitions_without_tick"] == 0:
+        trigger = "EVERY_TRANSITION" if counts["null_transitions_with_tick"] else "OPEN"
+    elif (
+        counts["effective_transitions_without_tick"] == 0
+        and counts["null_transitions_with_tick"] == 0
+        and counts["effective_transitions_with_tick"] > 0
+    ):
+        trigger = "EFFECTIVE_TRANSITIONS_ONLY"
+    else:
+        trigger = "IRREGULAR"
+    admissible = (
+        ["EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY"] if trigger == "OPEN" else [trigger]
+    )
+    return {
+        "class": trigger,
+        "admissible_claims": admissible,
+        "null_transitions_without_tick": counts["null_transitions_without_tick"],
+        "null_transitions_with_tick": counts["null_transitions_with_tick"],
+        "effective_transitions_with_tick": counts["effective_transitions_with_tick"],
+        "effective_transitions_without_tick": counts["effective_transitions_without_tick"],
+        "transition_count": transitions,
+    }

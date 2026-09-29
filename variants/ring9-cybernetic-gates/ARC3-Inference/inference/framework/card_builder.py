@@ -327,7 +327,7 @@ def _progress_slot(gate_id: str, view: Mapping[str, Any], machine: Any) -> dict[
         rejected = view.get("rejected_candidates")
         if isinstance(rejected, (list, tuple)):
             candidates.append(("rejected_candidate_count", len(rejected)))
-    candidates.append(("budgets", _budgets(machine)))
+    candidates.append(("budgets", world_budgets(machine)))
     return _fill_to_budget(candidates, SLOT_BUDGETS["progress"])
 
 
@@ -348,7 +348,7 @@ def _current_grid(machine: Any) -> list[list[int]] | None:
     return grid
 
 
-def _budgets(machine: Any) -> dict[str, Any] | None:
+def world_budgets(machine: Any) -> dict[str, Any] | None:
     """The budgets the world itself imposes, once a gate has certified them."""
     product = machine.target_journal.active_product("G2-COUNTER")
     counter = getattr(machine, "counter", None)

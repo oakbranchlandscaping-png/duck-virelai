@@ -34,6 +34,7 @@ from inference.framework.cybernetic_targeting import (
     TargetRouter,
 )
 from inference.framework.counter_verification import (
+    trigger_record,
     CounterBoundary,
     CounterCandidate,
     CounterComparison,
@@ -67,6 +68,7 @@ from inference.framework.lever_attribution import (
 )
 from inference.framework.entity_observation import EntityLedger, EntityTransition, ObservationScope
 from inference.framework.lever_lifecycle import LifecycleJournal
+from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.lever_dossier import (
     LeverDossierAnswer,
     LeverDossierError,
@@ -1136,57 +1138,12 @@ class CounterGateMachine:
         return {"action": self.affordances[0].action}
 
     def record_trigger(self) -> dict[str, Any]:
-        """Axiom A1 (v2): the trigger class the whole record supports for the active candidate.
-
-        A transition *ticks* when a footprint cell changes, and is *effective* when any cell
-        outside the footprint changes. EVERY_TRANSITION: it ticked on transitions that changed
-        nothing else, and never failed to tick. EFFECTIVE_TRANSITIONS_ONLY: it ticked on every
-        effective transition and on none that changed nothing else. OPEN: only effective, ticking
-        transitions so far, so the record cannot yet tell those two apart. IRREGULAR: anything
-        else. The record's class is always an admissible claim, so this check never deadlocks.
-        """
+        """Axiom A1 (v2): the trigger class the whole record supports (``trigger_record``)."""
         assert self.candidate is not None
-        footprint = set(self.candidate.full_bar_footprint) | set(self.candidate.observed_support)
-        counts = {
-            "effective_transitions_with_tick": 0,
-            "effective_transitions_without_tick": 0,
-            "null_transitions_with_tick": 0,
-            "null_transitions_without_tick": 0,
-        }
-        for outcome in self._lossless_outcomes:
-            cells = [
-                (int(item["row"]), int(item["col"]))
-                for item in outcome.get("changed_cells") or ()
-                if isinstance(item, Mapping)
-            ]
-            tick = any(cell in footprint for cell in cells)
-            effective = any(cell not in footprint for cell in cells)
-            key = ("effective" if effective else "null") + (
-                "_transitions_with_tick" if tick else "_transitions_without_tick"
-            )
-            counts[key] += 1
-        if counts["effective_transitions_without_tick"] == 0 and counts["null_transitions_without_tick"] == 0:
-            trigger = "EVERY_TRANSITION" if counts["null_transitions_with_tick"] else "OPEN"
-        elif (
-            counts["effective_transitions_without_tick"] == 0
-            and counts["null_transitions_with_tick"] == 0
-            and counts["effective_transitions_with_tick"] > 0
-        ):
-            trigger = "EFFECTIVE_TRANSITIONS_ONLY"
-        else:
-            trigger = "IRREGULAR"
-        admissible = (
-            ["EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY"] if trigger == "OPEN" else [trigger]
+        return trigger_record(
+            self._lossless_outcomes,
+            set(self.candidate.full_bar_footprint) | set(self.candidate.observed_support),
         )
-        return {
-            "class": trigger,
-            "admissible_claims": admissible,
-            "null_transitions_without_tick": counts["null_transitions_without_tick"],
-            "null_transitions_with_tick": counts["null_transitions_with_tick"],
-            "effective_transitions_with_tick": counts["effective_transitions_with_tick"],
-            "effective_transitions_without_tick": counts["effective_transitions_without_tick"],
-            "transition_count": len(self._lossless_outcomes),
-        }
 
     def _trigger_disagreement(self, claim: str, record: Mapping[str, Any]) -> str:
         reasons = []
@@ -2486,10 +2443,28 @@ class _LeverTarget:
         self._eligible_frontier: tuple[dict[str, Any], ...] | None = None
         self._excluded_frontier: tuple[dict[str, Any], ...] | None = None
         self._frontier_mask_version: str | None = None
+        self._inheritance: G2NullInheritance | None = None
 
     @property
     def _world_type(self) -> str:
         return control_archetype_prior(self.machine.ego.affordances)["world_type"]
+
+    def _roster_after_inherited_nulls(self) -> tuple[dict[str, Any], ...]:
+        """Ruling D5: a roster head G2 already clicked to a total null is recorded, not re-clicked.
+
+        Safe before the pending checks: a pending confirmation or dossier holds a head that is no
+        longer UNTOUCHED, and the inheritance stops at any such head.
+        """
+        candidates = self._ensure_frontier()
+        if self._phase != "CLICK" or not self.machine.protocol["g3_inherits_g2_nulls"]:
+            return candidates
+        if self._inheritance is None:
+            nulls = inherited_total_nulls(candidates, self.machine.counter._lossless_outcomes)
+            self._inheritance = G2NullInheritance(nulls)
+        self._target_index = self._inheritance.apply(
+            candidates, self._target_index, self._ensure_entity_ledger(), self.lifecycle_journal
+        )
+        return candidates
 
     def _close_scoped_null_entities(self) -> None:
         """Close only entities whose complete sweep produced scoped null evidence."""
@@ -2842,7 +2817,7 @@ class _LeverTarget:
     def next_probe(self) -> ProbeEnvelope | None:
         self._counter_product()
         ledger = self._ensure_entity_ledger()
-        candidates = self._ensure_frontier()
+        candidates = self._roster_after_inherited_nulls()
         if self._pending_dossier is not None:
             return None
         if self._pending_confirmation is not None:
@@ -5267,7 +5242,11 @@ class CyberneticGateMachine:
         valid_actions: Iterable[Any],
         initial_grid: Sequence[Sequence[int]],
         observed_through_step: int = 0,
+        g3_inherits_g2_nulls: bool = True,
     ) -> None:
+        # The recording protocol, stamped on every probe envelope so a record replays under the
+        # protocol it was made with (ruling D5 changed G3's sweep in R9-R08).
+        self.protocol = {"g3_inherits_g2_nulls": bool(g3_inherits_g2_nulls)}
         self.ego = EgoGateMachine(
             valid_actions=valid_actions,
             initial_grid=initial_grid,

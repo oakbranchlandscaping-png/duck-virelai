@@ -13,7 +13,9 @@ renderer after every step. No model is called.
 
 Fixture format (``virelai-recorded-world-v1``, gzip JSON): ``initial_grid`` (hex rows),
 ``valid_actions``, ``steps`` [{transition_id, action, changed: [[r, c, before, after], ...]}],
-``answers`` [{gate_id, ...Duck-written fields}] in acceptance order.
+``answers`` [{gate_id, ...Duck-written fields}] in acceptance order, and ``protocol``: the gate
+machine's recording protocol (``{"g3_inherits_g2_nulls": bool}``). A record without ``protocol``
+predates R9-R08 and was made with G3 re-clicking G2's nulls, so it replays that way.
 """
 from __future__ import annotations
 
@@ -64,9 +66,19 @@ def decode_grid(rows: Sequence[str]) -> list[list[int]]:
     return [[HEX.index(ch) for ch in row] for row in rows]
 
 
-def click_world_machine(grid: Sequence[Sequence[int]], valid_actions: Sequence[str]) -> CyberneticGateMachine:
+def record_protocol(record: Mapping[str, Any]) -> dict[str, bool]:
+    """The protocol a record was made under; records without one predate ruling D5."""
+    protocol = record.get("protocol") or {}
+    return {"g3_inherits_g2_nulls": bool(protocol.get("g3_inherits_g2_nulls", False))}
+
+
+def click_world_machine(
+    grid: Sequence[Sequence[int]], valid_actions: Sequence[str], *, g3_inherits_g2_nulls: bool = True,
+) -> CyberneticGateMachine:
     """A machine past G0 and G1 for a coordinate-action world (both derivable from metadata)."""
-    machine = CyberneticGateMachine(valid_actions=list(valid_actions), initial_grid=grid)
+    machine = CyberneticGateMachine(
+        valid_actions=list(valid_actions), initial_grid=grid, g3_inherits_g2_nulls=g3_inherits_g2_nulls,
+    )
     machine.submit_answer({
         "answer_id": "G0-replay",
         "action_metadata": [
@@ -178,26 +190,20 @@ def replay(
     left marked for the controller to fill), proving an answer written from the card is accepted.
     """
     grid = decode_grid(record["initial_grid"])
-    machine = click_world_machine(grid, record.get("valid_actions") or ["ACTION6"])
+    machine = click_world_machine(
+        grid, record.get("valid_actions") or ["ACTION6"], **record_protocol(record)
+    )
     pending = {}
     for answer in record.get("answers") or ():
         pending.setdefault(answer["gate_id"], []).append(answer)
     result = ReplayResult(machine=machine, grid=grid, steps_replayed=0, answers_used=0, measure=measure)
     last = 0
-    for step in record["steps"][: max_steps if max_steps is not None else None]:
-        while _answer_due(machine):
-            queue = pending.get(machine.gate_id) or []
-            if not queue:
-                result.stopped = f"no recorded answer for {machine.gate_id} before transition {step['transition_id']}"
-                _sample(result, last, "final")
-                return result
-            _sample(result, last, "before-answer")
-            template = (
-                build_card(machine).payload.get("answer_template")
-                if answer_source == "card" else machine.gate_view().get("answer_template")
-            ) or {}
-            machine.submit_answer(merge_recorded_answer(template, queue.pop(0)))
-            result.answers_used += 1
+    steps = record["steps"][: max_steps if max_steps is not None else None]
+    for step in steps:
+        if not _submit_due_answers(result, pending, answer_source, last):
+            result.stopped = f"no recorded answer for {machine.gate_id} before transition {step['transition_id']}"
+            _sample(result, last, "final")
+            return result
         capability = machine.next_probe_capability()
         _sample(result, last, "before-step")
         if capability is None:
@@ -210,5 +216,27 @@ def replay(
         machine.record_outcome(probe, outcome)
         result.steps_replayed += 1
         last = int(step["transition_id"])
+    if max_steps is None or max_steps >= len(record["steps"]):
+        machine.next_probe_capability()  # a completed roster asks for its answer only when probed
+        _submit_due_answers(result, pending, answer_source, last)  # answers after the last action
     _sample(result, last, "final")
     return result
+
+
+def _submit_due_answers(
+    result: ReplayResult, pending: dict[str, list], answer_source: str, last: int
+) -> bool:
+    """Submit every answer the machine demands now; False if the record has none to give."""
+    machine = result.machine
+    while _answer_due(machine):
+        queue = pending.get(machine.gate_id) or []
+        if not queue:
+            return False
+        _sample(result, last, "before-answer")
+        template = (
+            build_card(machine).payload.get("answer_template")
+            if answer_source == "card" else machine.gate_view().get("answer_template")
+        ) or {}
+        machine.submit_answer(merge_recorded_answer(template, queue.pop(0)))
+        result.answers_used += 1
+    return True

@@ -28,6 +28,8 @@ from inference.agent.prompts import (
     no_tool_followup_prompt,
 )
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
+from inference.agent.controller_turn import ControllerSession, run_controller_turn
+from inference.agent.gate_artifacts import record_gate_answer, record_probe_outcome
 from inference.framework.card_builder import card_template
 from inference.agent.virelai_ontology import (
     ARC_GRID_MULTIVERSE_ONTOLOGY,
@@ -1063,6 +1065,7 @@ class ToolAgent:
         virelai_enabled: bool = False,
         virelai_controller_enabled: bool = False,
         virelai_gates_enabled: bool = False,
+        controller_executor_enabled: bool = False,
     ) -> None:
         resolved_model = _resolve_analyzer_model(model)
         if base_url is not None or provider is not None:
@@ -1095,6 +1098,7 @@ class ToolAgent:
         if self._virelai_controller_enabled and self._virelai_gates_enabled:
             raise ValueError("controller and gated modes are mutually exclusive")
         self._gate_machine = None
+        self._controller = ControllerSession(enabled=bool(controller_executor_enabled) and self._virelai_gates_enabled)
         self._gate_reset_steps_observed: set[int] = set()
         self._controller_decision_results: dict[str, dict[str, Any]] = {}
         self._system_prompt = _build_system_prompt(
@@ -2042,74 +2046,50 @@ class ToolAgent:
                 "schema": "virelai-cybernetic-gates-v1",
                 "probe_token": str((decision or {}).get("probe_token") or ""),
                 "executor": executor,
+                "protocol": dict(getattr(gate_machine, "protocol", {}) or {}),
                 **asdict(gate_probe),
             }, sort_keys=True) + "\n")
         probe_before_frame, _ = load_runtime_state(state_path)
         return gate_probe, probe_before_frame, list(self._current_valid_actions)
 
     def _gate_probe_record(
-        self,
-        state_path: Path,
-        gate_machine: Any,
-        gate_probe: Any,
-        normalized_actions: list[dict[str, Any]],
-        raw_payload: dict[str, Any],
-        probe_before_frame: Any,
-        probe_actions_before: list[str],
+        self, state_path: Path, gate_machine: Any, gate_probe: Any, normalized_actions: list[dict[str, Any]],
+        raw_payload: dict[str, Any], probe_before_frame: Any, probe_actions_before: list[str],
     ) -> dict[str, Any]:
         """Compile the lossless outcome of an executed gate action and persist its evidence."""
-        from inference.framework.probe_evidence import (
-            compile_probe_outcome,
-            frame_archive_rows,
+        return record_probe_outcome(
+            state_path, gate_machine, gate_probe, normalized_actions, raw_payload,
+            probe_before_frame, probe_actions_before, list(self._current_valid_actions),
         )
 
-        probe_after_frame, _ = load_runtime_state(state_path)
-        after_actions = raw_payload.get("valid_actions")
-        if not isinstance(after_actions, list):
-            after_actions = list(self._current_valid_actions)
-        transition_id = int(
-            raw_payload.get("transition_id")
-            or raw_payload.get("action_num")
-            or (probe_after_frame.step if probe_after_frame is not None else 0)
-            or gate_machine.observed_through_step + 1
-        )
-        full_outcome = compile_probe_outcome(
-            probe_id=gate_probe.probe_id,
-            transition_id=transition_id,
-            action=normalized_actions[0],
-            before_frame=probe_before_frame,
-            after_frame=probe_after_frame,
-            available_actions_before=probe_actions_before,
-            available_actions_after=[str(item).strip() for item in after_actions],
-            callback_payload=raw_payload,
-        )
-        # Keep the lossless H2 outcome visible to the scoped verifier.
-        # The gate compacts only the copy stored in its prompt-facing event.
-        gate_event = gate_machine.record_outcome(gate_probe, full_outcome)
-        full_outcome["evidence_id"] = gate_event["evidence_id"]
-        event_path = state_path.with_name(
-            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_gate_events.jsonl")
-        )
-        with event_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(gate_event, sort_keys=True) + "\n")
-        outcome_path = state_path.with_name(
-            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_outcomes.jsonl")
-        )
-        with outcome_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(full_outcome, sort_keys=True) + "\n")
-        frame_path = state_path.with_name(
-            state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_frames.jsonl")
-        )
-        with frame_path.open("a", encoding="utf-8") as handle:
-            for frame_row in frame_archive_rows(probe_before_frame, probe_after_frame):
-                handle.write(json.dumps({
-                    **frame_row,
-                    "evidence_id": gate_event["evidence_id"],
-                    "probe_id": gate_probe.probe_id,
-                }, sort_keys=True) + "\n")
-        if isinstance(raw_payload.get("valid_actions"), list):
-            gate_machine.update_action_metadata(raw_payload["valid_actions"])
-        return gate_event
+    def _record_gate_answer(
+        self, state_path: Path, gate_machine: Any, answering_gate_id: str, answer: Any,
+        *, executor: str = "DUCK",
+    ) -> None:
+        """Persist an accepted gate answer; shared by Duck and the controller executor."""
+        record_gate_answer(state_path, gate_machine, answering_gate_id, answer, executor=executor)
+
+    def _apply_step_result(
+        self, raw_payload: dict[str, Any], gate_event: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Fold an executed environment step into the session; shared by Duck and the controller."""
+        compact_payload = self._compact_action_result(raw_payload)
+        if gate_event is not None:
+            compact_payload["virelai_evidence_id"] = gate_event["evidence_id"]
+            compact_payload["virelai_observation"] = gate_event["outcome"]
+        next_valid_actions = raw_payload.get("valid_actions")
+        if isinstance(next_valid_actions, list):
+            self._current_valid_actions = (
+                [str(item).strip().upper() for item in next_valid_actions if str(item).strip()]
+                if self._virelai_gates_enabled
+                else _normalize_valid_actions(next_valid_actions)
+            )
+        self._last_action_result = dict(compact_payload)
+        if compact_payload.get("executed") and self._transition_briefing_level is not None:
+            self._transition_briefing_level = None
+            self._transition_briefing_text = ""
+            self._transition_briefing_acknowledged = False
+        return compact_payload
 
     def _run_python_tool(self, state_path: Path, arguments: dict[str, Any]) -> _ToolDispatchResult:
         self._ensure_session(state_path)
@@ -2271,26 +2251,13 @@ class ToolAgent:
                     state_path, gate_machine, gate_probe, normalized_actions, raw_payload,
                     probe_before_frame, probe_actions_before,
                 )
-            compact_payload = self._compact_action_result(raw_payload)
-            if gate_event is not None:
-                compact_payload["virelai_evidence_id"] = gate_event["evidence_id"]
-                compact_payload["virelai_observation"] = gate_event["outcome"]
+            compact_payload = self._apply_step_result(raw_payload, gate_event)
             if controller_outcome is not None:
                 compact_payload["virelai_controller"] = controller_outcome.get("data")
+                self._last_action_result = dict(compact_payload)
             next_valid_actions = raw_payload.get("valid_actions")
-            if isinstance(next_valid_actions, list):
-                self._current_valid_actions = (
-                    [str(item).strip().upper() for item in next_valid_actions if str(item).strip()]
-                    if self._virelai_gates_enabled
-                    else _normalize_valid_actions(next_valid_actions)
-                )
             if compact_payload.get("executed") and _terminal_action_reason(compact_payload):
                 terminal_action_result = compact_payload
-            self._last_action_result = dict(compact_payload)
-            if compact_payload.get("executed") and self._transition_briefing_level is not None:
-                self._transition_briefing_level = None
-                self._transition_briefing_text = ""
-                self._transition_briefing_acknowledged = False
             result_payload = {
                 "action_result": compact_payload,
                 "state": _serialized_runtime_state(
@@ -2467,34 +2434,7 @@ class ToolAgent:
                             "answer_template": answer_template,
                             "truncated": False,
                         }
-                    answer_path = state_path.with_name(
-                        state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_gate_answers.jsonl")
-                    )
-                    answer_record = {
-                        "schema": "virelai-cybernetic-gates-v1",
-                        "gate_id": answering_gate_id,
-                        **asdict(answer),
-                    }
-                    if answering_gate_id == "G1-EGO":
-                        # Capture the adaptive coverage state and the exact
-                        # prospective claim at declaration time.  These are
-                        # evaluation evidence, not model-authored semantics.
-                        ego_snapshot = gate_machine.ego.snapshot()
-                        answer_record.update({
-                            "gate_status_after_answer": ego_snapshot["status"],
-                            "coverage_certificate": ego_snapshot["coverage_certificate"],
-                            "pending_prediction": ego_snapshot["pending_prediction"],
-                            "ego_law": ego_snapshot["ego_law"],
-                        })
-                    elif answering_gate_id == "G2-COUNTER":
-                        counter_snapshot = gate_machine.counter.snapshot()
-                        answer_record.update({
-                            "gate_status_after_answer": counter_snapshot["status"],
-                            "counter_candidate": counter_snapshot["candidate"],
-                            "pending_prediction": counter_snapshot["pending_prediction"],
-                        })
-                    with answer_path.open("a", encoding="utf-8") as handle:
-                        handle.write(json.dumps(answer_record, sort_keys=True) + "\n")
+                    self._record_gate_answer(state_path, gate_machine, answering_gate_id, answer)
                     self._gate_transitioned_this_turn = True
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
@@ -2736,6 +2676,23 @@ class ToolAgent:
         )
         self._turn_ledger = None
 
+    def _request_model_metadata(self) -> dict[str, Any]:
+        return {
+            "requested_model": self._model.model_id,
+            "api_provider": self._model.provider,
+            "thinking": bool(_LOCAL_ANALYZER_ENABLE_THINKING),
+            "reasoning_effort": _OPENROUTER_REASONING_EFFORT or None,
+            "context_window_tokens": _LOCAL_ANALYZER_CONTEXT_WINDOW,
+            "max_output_tokens": self._max_output_tokens,
+            "temperature": _LOCAL_ANALYZER_TEMPERATURE,
+            "top_p": _LOCAL_ANALYZER_TOP_P,
+            "top_k": _LOCAL_ANALYZER_TOP_K,
+            "seed": _LOCAL_ANALYZER_SEED if _LOCAL_ANALYZER_SEED >= 0 else None,
+            "provider_preferences": (
+                _openrouter_provider_preferences() if self._model.provider == "openrouter" else None
+            ),
+        }
+
     def analyze(
         self,
         state_path: Path,
@@ -2761,6 +2718,9 @@ class ToolAgent:
         )
 
         analyzer_log = transcript_path or (state_path.parent / f"{state_path.stem}_analyzer.txt")
+        controller_result = run_controller_turn(self, state_path, action_num, analysis_step, analyzer_log)
+        if controller_result is not None:
+            return controller_result
         prompt_log = _resolve_prompt_log_path(state_path)
         current_frame, history_entries = load_runtime_state(state_path)
         automatic_virelai_update = self._automatic_virelai_update(
@@ -2771,6 +2731,7 @@ class ToolAgent:
         )
         controller_focus_update = self._controller_focus_update()
         gate_context_update = self._gate_context_update(state_path)
+        controller_handoff = self._controller.take_handoff()
         user_prompt = self._build_user_prompt(
             action_num,
             valid_actions=valid_actions,
@@ -2781,8 +2742,11 @@ class ToolAgent:
         self._turn_ledger = self._begin_turn_ledger(state_path, analysis_step, action_num, {
             "prompt_body": user_prompt, "automatic_update": automatic_virelai_update,
             "controller_focus": controller_focus_update, "gate_card": gate_context_update,
+            "controller_handoff": controller_handoff,
         })
-        for section in (automatic_virelai_update, controller_focus_update, gate_context_update):
+        for section in (
+            automatic_virelai_update, controller_focus_update, controller_handoff, gate_context_update,
+        ):
             if section:
                 user_prompt = f"{user_prompt}\n\n{section}"
         display_action_num = _display_action_number(action_num)
@@ -2848,23 +2812,7 @@ class ToolAgent:
                 latest_request_tools = json.loads(json.dumps(tools))
                 latest_request_tool_choice = tool_choice
                 latest_request_index = turn_count
-                request_model_metadata = {
-                    "requested_model": self._model.model_id,
-                    "api_provider": self._model.provider,
-                    "thinking": bool(_LOCAL_ANALYZER_ENABLE_THINKING),
-                    "reasoning_effort": _OPENROUTER_REASONING_EFFORT or None,
-                    "context_window_tokens": _LOCAL_ANALYZER_CONTEXT_WINDOW,
-                    "max_output_tokens": self._max_output_tokens,
-                    "temperature": _LOCAL_ANALYZER_TEMPERATURE,
-                    "top_p": _LOCAL_ANALYZER_TOP_P,
-                    "top_k": _LOCAL_ANALYZER_TOP_K,
-                    "seed": _LOCAL_ANALYZER_SEED if _LOCAL_ANALYZER_SEED >= 0 else None,
-                    "provider_preferences": (
-                        _openrouter_provider_preferences()
-                        if self._model.provider == "openrouter"
-                        else None
-                    ),
-                }
+                request_model_metadata = self._request_model_metadata()
                 _write_prompt_log_snapshot(
                     prompt_log,
                     model_id=self._model.model_id,
