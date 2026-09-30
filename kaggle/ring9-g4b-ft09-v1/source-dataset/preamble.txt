@@ -1,0 +1,1 @@
+Ring 9 G4-B ft09 v1 exact-model checkpoint: ft09-0d8bbf25 only, one pass, 200 actions and 10800 seconds of behavior time after model setup. Source e1636b1 (R9-R06 to R9-R12). Human review required.

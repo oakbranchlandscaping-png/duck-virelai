@@ -1,0 +1,71 @@
+{
+  "claim": "Evaluates G4-B live on ft09 (R9-R12, on Virelai memory R9-R06 to R9-R11): Duck freezes each prediction about how the levers affect each other, the controller takes its one action, the gate grades it on the counter-masked board, and Duck's plain-language description of the lever set rests only on supported predictions; where the built ladder ends, the controller stops the run cleanly (R9-I02).",
+  "claim_limits": [
+    "Automated grades do not establish semantic correctness.",
+    "G4-B and the clean stop are proven offline only, on the world the live v1 record defines.",
+    "Duck's predictions and description are the object of study; offline, a card-only policy stood in for Duck.",
+    "The gate can require that every lever is pressed and every relation is supported; it cannot require that Duck's tests are interesting.",
+    "G4-C, cross-level work (G9) and scoring are out of scope.",
+    "A receipt-bound human frame review is required for semantic correctness."
+  ],
+  "concurrency": 1,
+  "context_window_tokens": 65536,
+  "controller_executor": true,
+  "infrastructure_criteria": [
+    "I1: G0 assigns CLICK/God Mode from metadata, and the controller executor is on (probe envelopes carry executor CONTROLLER and the protocol stamp g3_inherits_g2_nulls true).",
+    "I2: the downloaded execution receipt is byte-identical to the package receipt.",
+    "I3: the run writes the memory artifacts: turn ledger, gate answers with executor, and annotations if Duck oriented.",
+    "I4: with the counter masked, G4-A runs record nulls and recurrences without counter contamination."
+  ],
+  "live_criteria": [
+    "M5-1 (axiom A6): no binding card exceeds the 16,200-character slot budget at any turn (turn ledger card_chars), and the runtime's 24,000-character guard never fires.",
+    "M5-2 (memory M8, rulings D2 and D3): G0 through G4.1 close with zero model calls, and Duck's first turn is the orientation turn.",
+    "G2-1 to G2-3 and G3-1 (as in ring9-memory-ft09-v1): G2 closes with a counter model and mask after a SUPPORTED frozen prediction, purity and trigger admissibility recomputed from artifacts; G3 closes with at least two levers witnessed, none UNRESOLVED_ATTRIBUTION, re-clicking no G2 total null. Record the lever count.",
+    "A-1 (G4-A): every lever ends CONFIRMED or DIVERGED with an accepted explanation (or recorded as interrupted), and the LeverOrbitSet is COMPLETE or CLOSED_BY_LEVEL_BOUNDARY with nothing pending. Any same-level death re-studies the interrupted lever (D4). A-2 (audit fidelity) and A-3 (scoped explanations) as before.",
+    "B-1 (G4-B protocol): G4-B opens only after G4-A is COMPLETE; every G4-B action is exactly the action of a frozen LEVER_PREDICTION (Duck's gate answer precedes it), taken by the CONTROLLER (probe envelope executor), and graded on a transition after the prediction was frozen. Duck takes no G4-B action itself.",
+    "B-2 (grading fidelity, recomputed from probe outcomes): for every graded prediction, the per-lever outcomes (UNCHANGED, STEPS, CHANGES) and elsewhere, recomputed from the masked frames and the G4.1/G4-A regions, match the recorded observed outcomes, and SUPPORTED/CONTRADICTED follows.",
+    "B-3 (G4-B closure): every lever is the pressed lever of at least one graded prediction; Duck's LEVER_RELATIONS description is accepted; every relation cites only SUPPORTED predictions that pressed or named its levers; open_conditions equals the recorded missing conditions; contradicted predictions remain in the LeverRelationSet.",
+    "E-1 (R9-I02, the controller owns the end): after the last built gate is satisfied, the run ends with solver_note beginning 'planned_stop:', the run state is not crashed, and no model request is made after the gate closed.",
+    "N-1 (axiom A2): no gate idles without a legal move.",
+    "R (reported, not graded): Duck's description of the lever set, verbatim; every prediction (action, expectations, grade, what missed); how many predictions pressed a lever while another lever was away from its start state (tests of relations beyond single-lever runs); Duck turns and requests per gate; minutes to G4-A and to G4-B closure; actions per gate; stop-and-wake reasons; deaths and re-studies; bar remaining; largest card per gate."
+  ],
+  "max_actions_per_world": 200,
+  "max_output_tokens_per_turn": "server_default",
+  "max_runtime_seconds_per_world": 10800,
+  "model": "vrfai/Qwen3.6-27B-FP8",
+  "passes": 1,
+  "precondition": "Gate criteria are graded only when the run reaches that gate; a stall earlier leaves them ungraded, not failed. All measurements come from artifact state (turn ledger, gate events, gate answers, probe envelopes, annotations), not from prose.",
+  "request_preflight": {
+    "card_budget_chars": 16200,
+    "context_window_tokens": 65536,
+    "output_reserve_tokens": 16384,
+    "system_prompt_chars": 20576,
+    "tool_schema_chars": 1354,
+    "worst_case_request_chars": 99474,
+    "worst_case_tokens_at_3_chars": 33158
+  },
+  "required_mounted_directories": [
+    "src/ARC3-Inference",
+    "src/tufa-arc-agi-framework"
+  ],
+  "required_mounted_files": [
+    "source-manifest.json",
+    "checkpoint-preflight.json",
+    "execution_receipt.json",
+    "taaf-kaggle-bundle.json",
+    "benchmark_initial.pkl",
+    "deploy_target.pkl",
+    "setup_commands.json"
+  ],
+  "revisions": "R9-R06 to R9-R12",
+  "schema": "virelai-gated-checkpoint-preflight-v2",
+  "semantic_action_aliases_exposed": false,
+  "source_commit": "e1636b1622b3cd927c33a45fb6a6abbbe00eb3d4",
+  "source_delivery": "Kaggle may mount src/ directly or transport it as src.zip; the notebook verifies extracted files before imports.",
+  "stage": "G4B-FT09-V1",
+  "tool_output_tokens": 1024,
+  "virelai_mode": "gated",
+  "worlds": [
+    "ft09-0d8bbf25"
+  ]
+}
