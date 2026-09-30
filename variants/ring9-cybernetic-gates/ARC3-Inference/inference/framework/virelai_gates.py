@@ -85,11 +85,7 @@ from inference.framework.g4_reactions import (
     compile_effect_anatomy,
     validate_reaction_answer,
 )
-from inference.framework.g4_orbits import (
-    G4OrbitError,
-    LeverOrbitAnswer,
-    validate_orbit_answer,
-)
+from inference.framework.g4_orbits import G4OrbitError, LeverOrbitAnswer, validate_orbit_answer
 from inference.framework.g4_guided import (
     INTERRUPTED,
     LeverRun,
@@ -2677,10 +2673,7 @@ class _LeverTarget:
                 or ""
             )
             result["entity_id"] = entity_id
-            result["detail_query"] = (
-                "virelai('entity', id=%r, offset=0, limit=128)"
-                % entity_id
-            )
+            result["detail_query"] = "virelai('entity', id=%r, offset=0, limit=128)" % entity_id
             return result
 
         return {
@@ -4893,6 +4886,7 @@ class CyberneticGateMachine:
             ORBIT_GATE_ID: _LeverStudyTarget(self),
             **later_adapters(self),
         }
+        self._high_step = 0
         self._capability_secret = secrets.token_bytes(32)
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
         self._consumed_capabilities: set[str] = set()
@@ -4951,7 +4945,8 @@ class CyberneticGateMachine:
 
     @property
     def observed_through_step(self) -> int:
-        return max(self.ego.observed_through_step, self.counter.observed_through_step)
+        """The last transition any gate recorded (R9-R14: G3 onward advance it too, F2)."""
+        return max(self.ego.observed_through_step, self.counter.observed_through_step, self._high_step)
 
     def next_probe(self) -> ProbeEnvelope | None:
         return self._active_adapter().next_probe()
@@ -5088,6 +5083,7 @@ class CyberneticGateMachine:
         self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
     ) -> dict[str, Any]:
         event = self._active_adapter().record_outcome(probe, outcome)
+        self._high_step = max(self._high_step, int(outcome.get("transition_id") or 0))
         from inference.framework.memory_store import transition_index_row
 
         self.transition_index.append(transition_index_row(probe, outcome, event))
@@ -5116,6 +5112,7 @@ class CyberneticGateMachine:
 
     def observe_system_reset(self, outcome: Mapping[str, Any]) -> EntityTransition | None:
         """Deliver a harness-owned reset to the active G3 continuity ledger."""
+        self._high_step = max(self._high_step, int(outcome.get("transition_id") or 0))
         if self.target_journal.active_product(COUNTER_GATE_ID) is None:
             return None
         return self._adapters[LEVER_GATE_ID].observe_reset(outcome)

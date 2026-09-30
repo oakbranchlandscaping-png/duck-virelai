@@ -38,7 +38,15 @@ ORIENTATION_REFUSAL = (
 
 
 def _reply(operation: str, data: Any, error: str | None = None, truncated: bool = False) -> dict[str, Any]:
-    return {"schema": "virelai-query-v1", "operation": operation, "data": data, "error": error, "truncated": truncated}
+    """The error comes first, so the tool-output limit never cuts it off (R9-R14, F1)."""
+    return {"schema": "virelai-query-v1", "operation": operation, "error": error, "data": data, "truncated": truncated}
+
+
+def _refused_state(machine: Any) -> dict[str, Any]:
+    """With a refusal, the state it needs, not the whole card (virelai('gate') returns that)."""
+    view = machine.gate_view()
+    return {"gate_id": machine.gate_id, "status": view.get("status"), "next_operation": view.get("next_operation"),
+            "card": "virelai('gate')"}
 
 
 def gated_memory_query(
@@ -51,7 +59,7 @@ def gated_memory_query(
         try:
             data = VIEWS[operation](machine, parameters)
         except GateContractError as exc:
-            return _reply(operation, agent._binding_gate_payload(machine), str(exc))
+            return _reply(operation, _refused_state(machine), str(exc))
         return _reply(operation, data, truncated=bool(operation == "inventory" and data.get("truncated")))
     if operation == "memory":
         try:
@@ -68,7 +76,7 @@ def gated_memory_query(
         from inference.agent.controller_turn import request_rerun
 
         refusal = request_rerun(agent, machine, parameters)
-        return _reply(operation, agent._binding_gate_payload(machine), refusal)
+        return _reply(operation, _refused_state(machine) if refusal else agent._binding_gate_payload(machine), refusal)
     return None
 
 
@@ -77,7 +85,7 @@ def _submit(agent: Any, state_path: Path, machine: Any, operation: str, raw: Any
     try:
         notes = submit_notes(machine, raw, source=source)
     except AnnotationError as exc:
-        return _reply(operation, agent._binding_gate_payload(machine), str(exc))
+        return _reply(operation, _refused_state(machine), str(exc))
     record_notes(state_path, notes)
     if source == "ORIENTATION":
         agent._gate_transitioned_this_turn = True

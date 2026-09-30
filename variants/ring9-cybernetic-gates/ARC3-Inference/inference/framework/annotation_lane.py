@@ -65,7 +65,7 @@ def orientation_due(machine: Any) -> bool:
 
 
 def known_subjects(machine: Any) -> set[str]:
-    subjects = {WORLD, *(row["gate_id"] for row in machine.completed_gate_rows())}
+    subjects = {WORLD, machine.gate_id, *(row["gate_id"] for row in machine.completed_gate_rows())}
     ledger = getattr(machine._adapters.get("G3-LEVERS"), "entity_ledger", None)
     if ledger is not None:
         subjects.update(ledger.entities)
@@ -88,8 +88,10 @@ def validate_notes(machine: Any, raw: Any, source: str, gate_id: str | None = No
         kind = str(item.get("kind") or "").strip().upper()
         text = " ".join(str(item.get("text") or "").split())
         if subject not in subjects:
+            gates = sorted(item for item in subjects if item.startswith("G"))
             raise AnnotationError(
-                f"note subject {subject!r} is not an entity id, a certified gate id, or {WORLD}."
+                f"note subject {subject!r} is not {WORLD}, an entity id from world_model (E0053 style), "
+                f"or one of these gate ids: {', '.join(gates)}."
             )
         if kind not in NOTE_KINDS:
             raise AnnotationError(f"note kind must be one of {list(NOTE_KINDS)}.")
