@@ -128,6 +128,13 @@ def _answer(card: dict[str, Any], world: StressWorld, clicked: set[tuple[int, in
         }
     if gate == "G4-B-LEVER-RELATIONS":
         return _g4b_answer(card, template)
+    if gate == "G4-C-LEVER-LAW":  # test relation 0 on the board as it is now
+        relation = card["subject"]["relations"][0]
+        rows = {item["entity_id"]: item for item in card["subject"]["levers"]}
+        lever = rows.get(relation["levers"][0]) or card["subject"]["levers"][0]
+        return {**template, "from_relations": [relation["number"]], "action": lever["click"],
+                "expected": {lever["entity_id"]: "STEPS"}, "elsewhere": "NO_CHANGE",
+                "because": f"relation {relation['number']} says {lever['entity_id']} changes only its own tile"}
     return {
         **template,
         "mechanism_explanation": "Consecutive presses toggled this object between two states and back.",

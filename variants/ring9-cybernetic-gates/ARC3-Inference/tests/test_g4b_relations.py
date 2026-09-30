@@ -20,7 +20,7 @@ import pytest
 from ft09_world import V1_RECORD, Ft09World
 from inference.framework.annotation_lane import submit_notes
 from inference.framework.card_builder import CARD_BUDGET, build_card, world_model_digest
-from inference.framework.controller_executor import END, ladder_end, next_owned_step
+from inference.framework.controller_executor import ladder_end, next_owned_step
 from inference.framework.g4_orbits import G4OrbitError, validate_orbit_answer
 from inference.framework.record_replay import load_record, replay
 from inference.framework.virelai_gates import GateContractError
@@ -40,6 +40,11 @@ def _click(entity: str) -> dict:
 
 @pytest.fixture
 def g4b():
+    return start_g4b()
+
+
+def start_g4b():
+    """The live v1 record replayed to G4-A's close, oriented, on the offline world it defines."""
     record = load_record(V1_RECORD)
     result = replay(record, measure=False)
     world = Ft09World(record)
@@ -185,7 +190,7 @@ def test_the_description_needs_every_lever_pressed_and_rests_only_on_supported_p
     assert product["status"] == "COMPLETE" and product["answer"]["answer_id"] == answer.answer_id
     assert [item["status"] for item in product["predictions"]].count("CONTRADICTED") == 1  # kept
     assert any(line.startswith(f"[{RELATIONS}] relations: 8/9 predictions supported") for line in world_model_digest(machine))
-    assert ladder_end(machine) is not None and next_owned_step(machine).owner != END  # END is the turn's check
+    assert machine.gate_id == "G4-C-LEVER-LAW" and ladder_end(machine) is None  # G4-C now tests the description
 
 
 # ---- the M-5 review fixes ------------------------------------------------------------------------
@@ -300,7 +305,7 @@ def test_ft09_offline_follows_the_live_run_then_duck_studies_the_levers_together
         if result is not None and getattr(result, "planned_stop", ""):
             stop = result.planned_stop
             break
-    assert stop == "every built gate is satisfied, through G4-B; the next slice is not built"
+    assert stop == "every built gate is satisfied, through G4-C; the next slice is not built"
     live = [step["action"] for step in load_record(V1_RECORD)["steps"] if step.get("kind") != "RESET"]
     offline = [call["actions"][0] for call in run.env_calls]
     assert offline[: len(live)] == live  # the controller repeats the live run exactly, death included
@@ -308,10 +313,14 @@ def test_ft09_offline_follows_the_live_run_then_duck_studies_the_levers_together
     product = machine.target_journal.active_product(RELATIONS).payload
     assert product["status"] == "COMPLETE" and product["unpressed_levers"] == []
     assert [item["status"] for item in product["predictions"]] == ["SUPPORTED"] * 8
-    assert duck.calls.count("explain") == 8 + 8 + 1  # 8 orbit explanations, 8 predictions, the description
+    assert duck.calls.count("explain") == 8 + 8 + 1 + 1  # 8 orbits, 8 predictions, the description, G4-C's test
+    law = machine.target_journal.active_product("G4-C-LEVER-LAW").payload
+    assert law["status"] == "COMPLETE" and law["law_test"]["status"] == "SUPPORTED"
+    assert law["description"] == product["answer"]["description"] and law["law_test"]["from_relations"] == [0]
     envelopes = run.rows("_probe_envelopes.jsonl")
     g4b_envelopes = [row for row in envelopes if row["gate_id"] == RELATIONS]
     assert len(g4b_envelopes) == 8 and {row["executor"] for row in g4b_envelopes} == {"CONTROLLER"}
+    assert [row["executor"] for row in envelopes if row["gate_id"] == "G4-C-LEVER-LAW"] == ["CONTROLLER"]
     answers = [row for row in run.rows("_gate_answers.jsonl") if row["gate_id"] == RELATIONS]
     assert [row["answer_kind"] for row in answers] == ["LEVER_PREDICTION"] * 8 + ["LEVER_RELATIONS"]
     assert {row["executor"] for row in answers} == {"DUCK"}
@@ -326,6 +335,8 @@ def test_ft09_offline_follows_the_live_run_then_duck_studies_the_levers_together
     replayed = replay(record, measure=False).machine.target_journal.active_product(RELATIONS).payload
     assert replayed["status"] == "COMPLETE" and [item["status"] for item in replayed["predictions"]] == ["SUPPORTED"] * 8
     assert replayed["answer"]["description"] == product["answer"]["description"]
+    replayed_law = replay(record, measure=False).machine.target_journal.active_product("G4-C-LEVER-LAW").payload
+    assert replayed_law["status"] == "COMPLETE"
 
 
 def test_a_wake_waits_while_the_controller_takes_ducks_own_frozen_prediction(g4b):

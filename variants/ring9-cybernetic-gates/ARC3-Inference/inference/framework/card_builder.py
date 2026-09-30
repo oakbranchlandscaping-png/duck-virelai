@@ -72,6 +72,7 @@ INDEX_BY_GATE = {
         "virelai('memory', kind='subject', id=ENTITY_ID)",
     ),
     "G4-B-LEVER-RELATIONS": ("virelai('relations')", "virelai('orbit', id=ENTITY_ID)"),
+    "G4-C-LEVER-LAW": ("virelai('relations')",),
 }
 
 

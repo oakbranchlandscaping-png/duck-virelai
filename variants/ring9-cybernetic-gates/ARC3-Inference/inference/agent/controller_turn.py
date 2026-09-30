@@ -84,10 +84,10 @@ def run_controller_turn(
 
 
 def _takes_duck_choice(machine: Any) -> bool:
-    """G4-B: the next action is Duck's own frozen prediction, so a wake waits until it is taken."""
-    from inference.framework.controller_executor import RELATIONS
+    """G4-B and G4-C: the next action is Duck's own frozen prediction, so a wake waits until it is taken."""
+    from inference.framework.controller_executor import PREDICTION_GATES
 
-    return machine.gate_id == RELATIONS and machine.next_probe_capability() is not None
+    return machine.gate_id in PREDICTION_GATES and machine.next_probe_capability() is not None
 
 
 def _planned_stop(agent: Any, reason: str, analyzer_log: Path) -> Any:

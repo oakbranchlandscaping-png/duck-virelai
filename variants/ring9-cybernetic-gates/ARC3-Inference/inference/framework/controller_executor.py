@@ -43,8 +43,9 @@ from inference.framework.virelai_gates import control_archetype_prior
 
 CONTROLLER, DUCK, END = "CONTROLLER", "DUCK", "END"
 ANSWER, ACTION = "ANSWER", "ACTION"
-ORBITS, RELATIONS = "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS"
-CONTROLLER_GATES = ("G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", ORBITS, RELATIONS)
+ORBITS, RELATIONS, LAW = "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW"
+PREDICTION_GATES = (RELATIONS, LAW)  # Duck freezes each prediction; the controller takes it
+CONTROLLER_GATES = ("G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", ORBITS, *PREDICTION_GATES)
 LEVEL_CLOSED = "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
 OWNED_TRIGGERS = ("EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY")
 STUDY_ORDER = ("RUNNING", "CONFIRMING", "RUN_ENDED_RESTART_NEEDED", "NOT_STARTED")
@@ -85,8 +86,10 @@ def ladder_end(machine: Any) -> str | None:
     Nothing is left for Duck there: before this, the step went to Duck with no move to make.
     """
     if machine.target_router.current() is None:
-        return "every built gate is satisfied, through G4-B; the next slice is not built"
-    if machine.gate_id == ORBITS and machine.gate_view().get("next_operation") == LEVEL_CLOSED:
+        return "every built gate is satisfied, through G4-C; the next slice is not built"
+    relations = machine.target_journal.active_product(RELATIONS)
+    level_closed = relations is not None and relations.payload.get("status") == "CLOSED_BY_LEVEL_BOUNDARY"
+    if level_closed or (machine.gate_id == ORBITS and machine.gate_view().get("next_operation") == LEVEL_CLOSED):
         return "the level changed during G4; cross-level work (G9) is not built"
     return None
 
@@ -106,7 +109,7 @@ def next_owned_step(
     if orientation_due(machine):
         return _duck(machine, "the orientation turn is due")
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
-    if machine.gate_id == RELATIONS:
+    if machine.gate_id in PREDICTION_GATES:
         return _relations_step(machine, capability)
     view = machine.gate_view()
     if machine.gate_id == ORBITS:
@@ -131,15 +134,19 @@ def next_owned_step(
 
 
 def _relations_step(machine: Any, capability: Mapping[str, Any] | None) -> OwnedStep:
-    """G4-B: Duck freezes each prediction and writes the description; the controller takes the action."""
+    """G4-B and G4-C: Duck freezes each prediction and writes the description; the controller takes the action."""
+    gate = machine.gate_id
     if capability is not None:
         target = capability.get("target") or {}
         return OwnedStep(
-            CONTROLLER, RELATIONS, f"G4-B: take {target.get('prediction_id')}, the prediction Duck froze",
+            CONTROLLER, gate, f"{gate}: take {target.get('prediction_id')}, the prediction Duck froze",
             ACTION, action=dict(capability["actions"][0]), probe_token=str(capability["probe_token"]),
         )
-    recent = (machine.gate_view().get("progress") or {}).get("recent") or []
-    graded = f"{recent[-1]['prediction_id']} was graded {recent[-1]['status']}; " if recent else ""
+    view = machine.gate_view()
+    recent = (view.get("progress") or {}).get("recent") or [(view.get("subject") or {}).get("last_test")]
+    graded = f"{recent[-1]['prediction_id']} was graded {recent[-1]['status']}; " if recent[-1] else ""
+    if gate == LAW:
+        return _duck(machine, graded + "testing the description with one new prediction is Duck's")
     return _duck(machine, graded + "the next prediction, or the description of the lever set, is Duck's")
 
 

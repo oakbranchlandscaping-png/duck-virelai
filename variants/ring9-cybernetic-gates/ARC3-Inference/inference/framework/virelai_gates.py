@@ -117,6 +117,8 @@ LEVER_GATE_ID = "G3-LEVERS"
 REACTION_GATE_ID = "G4-REACTIONS"
 ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
 RELATION_GATE_ID = "G4-B-LEVER-RELATIONS"
+LAW_GATE_ID = "G4-C-LEVER-LAW"
+G4_GATE_IDS = (REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID)
 
 
 def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
@@ -2078,10 +2080,11 @@ def _target_registry() -> TargetRegistry:
         memory_product_type="LeverOrbitSet",
     ))
     # G4.3-LEVER-LIMITS is retired (Director ruling 2026-09-27). Persistence and reversal are
-    # Duck-frozen predictions in G4-B (R9-R12, g4b_gate.py), which supersedes its adapter.
-    from inference.framework.g4b_gate import relations_contract
+    # Duck-frozen predictions in G4-B (R9-R12); G4-C tests the description (R9-R13, g4c_gate.py).
+    from inference.framework.g4c_gate import later_contracts
 
-    registry.register(relations_contract())
+    for contract in later_contracts():
+        registry.register(contract)
     return registry
 
 
@@ -4879,7 +4882,7 @@ class CyberneticGateMachine:
         self.target_journal = TargetJournal(self.target_registry)
         self.target_router = TargetRouter(self.target_registry, self.target_journal)
         self._g0 = _ActionSurfaceTarget(self)
-        from inference.framework.g4b_gate import LeverRelationsTarget
+        from inference.framework.g4c_gate import later_adapters
 
         self._adapters = {
             ACTION_METADATA_GATE_ID: self._g0,
@@ -4888,7 +4891,7 @@ class CyberneticGateMachine:
             LEVER_GATE_ID: _LeverTarget(self),
             REACTION_GATE_ID: _ReactionTarget(self),
             ORBIT_GATE_ID: _LeverStudyTarget(self),
-            RELATION_GATE_ID: LeverRelationsTarget(self),
+            **later_adapters(self),
         }
         self._capability_secret = secrets.token_bytes(32)
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
@@ -5212,7 +5215,7 @@ class CyberneticGateMachine:
     def gate_view(self) -> dict[str, Any]:
         contract = self.target_registry.get(self._effective_target_id())
         assessment = self.assessment()
-        if contract.target_id in {REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
+        if contract.target_id in G4_GATE_IDS:
             return self._adapters[contract.target_id].compact_gate_view()
         if contract.target_id == ACTION_METADATA_GATE_ID:
             metadata = [asdict(item) for item in self.ego.affordances]
@@ -5498,34 +5501,27 @@ class CyberneticGateMachine:
         }
 
     def entity_view(self, entity_id: str, *, offset: int = 0, limit: int = 128) -> dict[str, Any]:
-        if self.gate_id not in {LEVER_GATE_ID, REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
+        if self.gate_id not in {LEVER_GATE_ID, *G4_GATE_IDS}:
             raise GateContractError("entity detail queries open at G3 and remain available in G4.")
-        return self._adapters[LEVER_GATE_ID].entity_view(
-            entity_id,
-            offset=offset,
-            limit=limit,
-        )
+        return self._adapters[LEVER_GATE_ID].entity_view(entity_id, offset=offset, limit=limit)
 
     def inventory_view(self, *, offset: int = 0, limit: int = 10) -> dict[str, Any]:
-        if self.gate_id not in {LEVER_GATE_ID, REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
+        if self.gate_id not in {LEVER_GATE_ID, *G4_GATE_IDS}:
             raise GateContractError("inventory detail queries open at G3 and remain available in G4.")
-        return self._adapters[LEVER_GATE_ID].inventory_view(
-            offset=offset,
-            limit=limit,
-        )
+        return self._adapters[LEVER_GATE_ID].inventory_view(offset=offset, limit=limit)
 
     def reaction_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id not in {REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
+        if self.gate_id not in G4_GATE_IDS:
             raise GateContractError("reaction detail queries open at G4.")
         return self._adapters[REACTION_GATE_ID].reaction_view(entity_id)
 
     def orbit_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID}:
+        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID}:
             raise GateContractError("orbit detail queries open at G4.2.")
         return self._adapters[ORBIT_GATE_ID].orbit_view(entity_id)
 
     def relations_view(self) -> dict[str, Any]:
-        if self.gate_id != RELATION_GATE_ID:
+        if self.gate_id not in {RELATION_GATE_ID, LAW_GATE_ID}:
             raise GateContractError("the G4-B prediction ledger opens at G4-B.")
         return self._adapters[RELATION_GATE_ID].relations_view()
 

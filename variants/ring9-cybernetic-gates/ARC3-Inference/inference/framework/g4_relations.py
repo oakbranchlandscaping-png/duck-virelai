@@ -36,7 +36,7 @@ NO_CHANGE = "NO_CHANGE"
 EXPECTATIONS = (UNCHANGED, STEPS, CHANGES)
 ELSEWHERE = (NO_CHANGE, CHANGES)
 PENDING, SUPPORTED, CONTRADICTED = "PENDING", "SUPPORTED", "CONTRADICTED"
-PREDICTION_KIND, RELATIONS_KIND = "LEVER_PREDICTION", "LEVER_RELATIONS"
+PREDICTION_KIND, RELATIONS_KIND, LAW_KIND = "LEVER_PREDICTION", "LEVER_RELATIONS", "LAW_PREDICTION"
 
 
 class G4RelationError(ValueError):
@@ -167,6 +167,7 @@ class Prediction:
     evidence_ref: str | None = None
     transition_id: int | None = None
     answer_kind: str = PREDICTION_KIND
+    from_relations: list[int] = field(default_factory=list)  # G4-C: the description's relations it tests
 
     @property
     def graded(self) -> bool:
@@ -186,11 +187,11 @@ class Prediction:
 
 def validate_prediction(
     raw: Mapping[str, Any], regions: Sequence[LeverRegion], *, prediction_id: str,
-    declared_at_transition: int, action: dict[str, Any],
+    declared_at_transition: int, action: dict[str, Any], kind: str = PREDICTION_KIND,
 ) -> Prediction:
     """Freeze Duck's prediction; ``action`` is already normalized and admitted by the caller."""
-    if str(raw.get("answer_kind") or "").strip().upper() != PREDICTION_KIND:
-        raise G4RelationError(f"answer_kind must be {PREDICTION_KIND}")
+    if str(raw.get("answer_kind") or "").strip().upper() != kind:
+        raise G4RelationError(f"answer_kind must be {kind}")
     known = {region.entity_id: region for region in regions}
     expected_raw = raw.get("expected")
     if not isinstance(expected_raw, Mapping) or not expected_raw:
@@ -212,6 +213,7 @@ def validate_prediction(
         prediction_id=prediction_id, action=dict(action), acted_lever=acted, expected=expected,
         named=sorted(str(key).strip() for key in expected_raw), elsewhere=elsewhere,
         because=_words(raw.get("because"), "because", 5), declared_at_transition=int(declared_at_transition),
+        answer_kind=kind,
     )
 
 
@@ -247,6 +249,11 @@ class OutcomeRecord:
 
     seen: dict[str, dict[str, Any]] = field(default_factory=dict)
     conditions: list[dict[str, Any]] = field(default_factory=list)
+
+    def tested(self, action: Mapping[str, Any], before: str) -> list[str]:
+        """The evidence of every graded prediction that took this action from this masked board."""
+        row = self.seen.get(_canonical([action, before]))
+        return [] if row is None else [ref for refs in row["outcomes"].values() for ref in refs]
 
     def note(self, action: Mapping[str, Any], before: str, after: str, evidence_ref: str) -> dict[str, Any] | None:
         key = _canonical([action, before])
@@ -346,7 +353,7 @@ def validate_relations_answer(
 
 
 __all__ = [
-    "CHANGES", "CONTRADICTED", "G4RelationError", "LeverRegion", "NO_CHANGE", "OutcomeRecord",
+    "CHANGES", "CONTRADICTED", "G4RelationError", "LAW_KIND", "LeverRegion", "NO_CHANGE", "OutcomeRecord",
     "PENDING", "PREDICTION_KIND", "Prediction", "RELATIONS_KIND", "RelationsAnswer", "STEPS",
     "SUPPORTED", "UNCHANGED", "coverage", "grade", "lever_regions", "masked_address",
     "masked_changes", "strings", "validate_prediction", "validate_relations_answer",

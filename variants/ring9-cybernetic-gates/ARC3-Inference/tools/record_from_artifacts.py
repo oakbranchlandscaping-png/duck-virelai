@@ -38,6 +38,7 @@ DUCK_FIELDS = {
         "answer_kind", "action", "expected", "named", "elsewhere", "because", "description", "relations",
         "open_conditions", "competing_models", "falsifier", "limitations",
     ),
+    "G4-C-LEVER-LAW": ("answer_kind", "action", "expected", "named", "elsewhere", "because", "from_relations"),
 }
 PREDICTION_FIELDS = ("action", "predicate", "expected_parameters", "because", "novelty")
 
@@ -65,6 +66,9 @@ def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
         if fields is None:
             continue
         row = {"gate_id": answer["gate_id"], **{key: answer[key] for key in fields if key in answer}}
+        if isinstance(row.get("expected"), dict) and "named" in row:  # only what Duck wrote (G4-B, G4-C)
+            named = row.pop("named")
+            row["expected"] = {key: row["expected"][key] for key in named if key in row["expected"]}
         if isinstance(row.get("novel_prediction"), dict):
             row["novel_prediction"] = {
                 key: row["novel_prediction"][key] for key in PREDICTION_FIELDS if key in row["novel_prediction"]

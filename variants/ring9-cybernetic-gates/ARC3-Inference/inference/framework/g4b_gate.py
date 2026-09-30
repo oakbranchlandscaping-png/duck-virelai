@@ -105,6 +105,7 @@ class LeverRelationsTarget:
         self._answer: RelationsAnswer | None = None
         self._events: list[dict[str, Any]] = []
         self._level_closed: dict[str, Any] | None = None
+        self._reopened: list[str] = []  # G4-C predictions that contradicted an accepted description
 
     # ---- state -------------------------------------------------------------------------------
 
@@ -178,35 +179,50 @@ class LeverRelationsTarget:
         pending = self._pending
         if probe.gate_id != RELATION_GATE_ID or pending is None:
             raise GateContractError("Outcome does not belong to a frozen G4-B prediction.")
+        event = self.take(pending, probe, outcome)
+        self._pending = None
+        self.revision += 1
+        self._events.append(event)
+        if event["level_boundary"] is not None and self._level_closed is None:
+            self._level_closed = event["level_boundary"]
+            self._emit_product()
+        return event
+
+    def take(self, prediction: Prediction, probe: ProbeEnvelope, outcome: Mapping[str, Any]) -> dict[str, Any]:
+        """Grade a taken prediction on its masked transition and note it for split outcomes (G4-B, G4-C)."""
         grids = grids_from_probe_outcome(outcome)
         if grids is None:
-            raise GateContractError("G4-B requires lossless full-grid site transitions.")
+            raise GateContractError(f"{probe.gate_id} requires lossless full-grid site transitions.")
         evidence_id = "E-" + hashlib.sha256(_canonical({"probe_id": probe.probe_id, "outcome": outcome}).encode()).hexdigest()[:16]
         counter_baseline = self.machine.apply_counter_baseline({**dict(outcome), "evidence_id": evidence_id})
         law = self.machine.counter.mask_law
         before, after = grids
         try:
-            grade(pending, self._regions, masked_changes(before, after, law),
+            grade(prediction, self._regions, masked_changes(before, after, law),
                   evidence_ref=evidence_id, transition_id=int(outcome.get("transition_id") or 0))
         except G4RelationError as exc:
-            raise GateContractError(f"G4-B grading refused: {exc}") from exc
-        condition = self._record.note(pending.action, masked_address(before, law), masked_address(after, law), evidence_id)
-        self._pending = None
-        self.revision += 1
+            raise GateContractError(f"{probe.gate_id} grading refused: {exc}") from exc
+        condition = self._record.note(prediction.action, masked_address(before, law), masked_address(after, law), evidence_id)
         boundary = outcome.get("boundary_event")
         state = dict(boundary) if isinstance(boundary, Mapping) else None
-        event = {
-            "schema": SCHEMA_VERSION, "evidence_id": evidence_id, "gate_id": RELATION_GATE_ID,
-            "probe_id": probe.probe_id, "action": dict(pending.action),
-            "prediction": asdict(pending), "missing_condition": condition,
+        closed = is_terminal(state) and level_changed(state)
+        return {
+            "schema": SCHEMA_VERSION, "evidence_id": evidence_id, "gate_id": probe.gate_id,
+            "probe_id": probe.probe_id, "action": dict(prediction.action),
+            "prediction": asdict(prediction), "missing_condition": condition,
             "outcome": compact_probe_outcome(outcome), "counter_baseline": counter_baseline,
+            "level_boundary": None if not closed else {
+                "evidence_ref": evidence_id, "level_before": state.get("level_before"),
+                "level_after": state.get("level_after"),
+            },
         }
-        self._events.append(event)
-        if is_terminal(state) and level_changed(state) and self._level_closed is None:
-            self._level_closed = {"evidence_ref": evidence_id, "level_before": state.get("level_before"),
-                                  "level_after": state.get("level_after")}
-            self._emit_product()
-        return event
+
+    def reopen(self, contradiction: Prediction) -> None:
+        """G4-C contradicted a prediction drawn from the accepted description: G4-B continues (ruling 2026-09-30)."""
+        self._predictions.append(contradiction)
+        self._reopened.append(contradiction.prediction_id)
+        self._answer = None
+        self.revision += 1
 
     def submit_answer(self, raw: Mapping[str, Any]) -> Prediction | RelationsAnswer:
         if self._closed():
@@ -357,6 +373,11 @@ class LeverRelationsTarget:
             view["answer_template_note"] = (
                 "Every lever has been pressed. Submit the LEVER_RELATIONS description, or freeze "
                 f"another prediction (answer_kind {PREDICTION_KIND}) to support a relation first."
+            )
+        if self._reopened and not closed:
+            view["answer_template_note"] = (
+                f"G4-C's test {self._reopened[-1]} of your last description was CONTRADICTED (see "
+                "progress.recent). Test what it shows, then submit a revised description."
             )
         return view
 

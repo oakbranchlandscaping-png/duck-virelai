@@ -28,7 +28,9 @@ from inference.framework.virelai_gates import GateContractError
 
 V2_RECORD = Path(__file__).parent / "fixtures" / "ft09_kaggle_v2_record.json.gz"
 FLATNESS = 1_000  # characters: the most any gate's card may grow from 2 levers to 20
-LADDER_GATES = ["G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS"]
+LADDER_GATES = [
+    "G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW",
+]
 
 
 @pytest.fixture(scope="module")
@@ -50,7 +52,7 @@ def test_a_duck_that_reads_only_the_card_completes_the_ladder(ladders):
     """M5: the card carries everything each step needs, from the counter to every lever's orbit."""
     for levers, run in ladders.items():
         assert run.gates == LADDER_GATES, levers
-        assert run.machine.gate_id == "G4-B-LEVER-RELATIONS"  # the ladder's last built gate (R9-R12)
+        assert run.machine.gate_id == "G4-C-LEVER-LAW"  # the ladder's last built gate (R9-R13)
         assert run.machine.status == "SATISFIED", (levers, run.stopped)
         orbits = run.machine.target_journal.active_product("G4.2-LEVER-ORBITS").payload
         assert len(orbits["lever_entities"]) == levers
