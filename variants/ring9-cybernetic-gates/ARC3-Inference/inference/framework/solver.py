@@ -164,6 +164,18 @@ def _write_transcript_html(transcript_path: Path, html_path: Path, title: str) -
     html_path.write_text(body, encoding="utf-8")
 
 
+def _turn_ends_game(result: Any, run: Any) -> bool:
+    """Raise on a failed analyzer turn; True when the turn planned the end of the game (R9-I02)."""
+    if result is None:
+        raise RuntimeError("Analyzer did not return a result.")
+    if result.fatal_failure:
+        raise RuntimeError(f"Analyzer request failed permanently: {result.fatal_failure}")
+    if getattr(result, "planned_stop", ""):
+        run.solver_note = f"planned_stop: {result.planned_stop}"
+        return True
+    return False
+
+
 @dataclass
 class _HarnessGameSession:
     solver: "HarnessSolver"
@@ -496,10 +508,8 @@ class _HarnessGameSession:
                             analysis_step, transcript_delta
                         )
                         self.write_viewer_payload()
-                if result is None:
-                    raise RuntimeError("Analyzer did not return a result.")
-                if result.fatal_failure:
-                    raise RuntimeError(f"Analyzer request failed permanently: {result.fatal_failure}")
+                if _turn_ends_game(result, run):
+                    break
                 if result.retryable_failure:
                     retry_analysis_step = analysis_step
                     if self.should_stop():

@@ -179,7 +179,7 @@ def test_recall_is_keyed_on_the_subject_and_says_when_nothing_is_known():
 
 def test_recall_is_bounded_and_ends_with_a_pull_handle():
     machine = run_ladder(8).machine
-    lever = next(item for item in machine.gate_view()["levers"])
+    lever = next(item for item in machine._adapters["G4.2-LEVER-ORBITS"].compact_gate_view()["levers"])
     key = {"gate": machine.gate_id, "entity": lever["entity_id"], "site": [lever["click"]["row"], lever["click"]["col"]]}
     full = recall_slot(machine, key)
     assert len(json.dumps(full)) <= SLOT_BUDGETS["recall"]

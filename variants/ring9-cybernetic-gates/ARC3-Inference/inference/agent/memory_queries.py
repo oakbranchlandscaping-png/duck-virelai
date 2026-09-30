@@ -4,7 +4,7 @@ Author: Claude (Alpha build seat), 2026-09-29. R9-R09 (DESIGN_VIRELAI_MEMORY_v2 
 
 ``virelai('memory', kind=…, id=…, offset=…, limit=…)`` is the one pull interface over
 ``MemoryStore``. The older read views (``gate_audit``, ``inventory``, ``entity``, ``reaction``,
-``orbit``, ``limit``, ``evidence``) are kept as aliases and moved here unchanged from
+``orbit``, ``evidence``, and G4-B's ``relations`` since R9-R12) are kept as aliases and moved here unchanged from
 ``tool_agent.py``. ``virelai('orient', notes=[…])`` and ``virelai('annotate', notes=[…])`` write
 Duck's notes to the UNCERTIFIED lane, persisted as ``{stem}_annotations.jsonl``.
 ``virelai('rerun', id=ENTITY, presses=N)`` asks the controller for an extra G4-A run (D3, R9-R10).
@@ -28,7 +28,7 @@ VIEWS = {
     ),
     "reaction": lambda m, p: m.reaction_view(str(p.get("id") or "")),
     "orbit": lambda m, p: m.orbit_view(str(p.get("id") or "")),
-    "limit": lambda m, p: m.limit_view(str(p.get("id") or "")),
+    "relations": lambda m, p: m.relations_view(),
     "evidence": lambda m, p: m.evidence_view(p.get("id", "")),
 }
 ORIENTATION_REFUSAL = (

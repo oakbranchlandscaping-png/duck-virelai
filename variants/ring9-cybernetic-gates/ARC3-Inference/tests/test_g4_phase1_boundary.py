@@ -174,7 +174,7 @@ def test_same_level_death_returns_the_lever_to_the_study_next_life():
     payload = _orbit_product(machine)
     assert payload["lever_entities"] == ["E-A", "E-B"]
     assert payload["phase1_status"] == "COMPLETE"
-    assert machine.status == "SATISFIED"
+    assert machine._adapters["G4.2-LEVER-ORBITS"].assess().disposition == "SATISFIED"  # the ladder then opens G4-B
 
 
 def test_a_lever_that_keeps_dying_is_released_after_the_life_cap_and_the_rest_drains():
@@ -196,7 +196,7 @@ def test_a_lever_that_keeps_dying_is_released_after_the_life_cap_and_the_rest_dr
     assert payload["lever_entities"] == ["E-B"]
     assert payload["pending_lever_entities"] == []
     assert payload["phase1_status"] == "COMPLETE"
-    assert machine.status == "SATISFIED"
+    assert machine._adapters["G4.2-LEVER-ORBITS"].assess().disposition == "SATISFIED"  # the ladder then opens G4-B
 
 
 def _load_fixture():

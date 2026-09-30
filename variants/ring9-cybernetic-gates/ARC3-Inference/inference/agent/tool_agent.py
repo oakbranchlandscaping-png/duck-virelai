@@ -514,6 +514,7 @@ class AnalyzerTurnResult:
     fatal_failure: str = ""
     reasoning: str = ""
     yielded_control: bool = False
+    planned_stop: str = ""  # the built ladder is finished; the harness ends the game cleanly
 
 
 @dataclass(frozen=True)
@@ -2290,6 +2291,8 @@ class ToolAgent:
                 self._turn_ledger.query(operation)
             if self._virelai_gates_enabled:
                 assert gate_machine is not None
+                from inference.framework.virelai_gates import GateContractError
+
                 memory_reply = gated_memory_query(self, state_path, gate_machine, operation, parameters)
                 if memory_reply is not None:
                     return memory_reply
@@ -2311,8 +2314,6 @@ class ToolAgent:
                         "truncated": False,
                     }
                 if operation == "gate_answer":
-                    from inference.framework.virelai_gates import GateContractError
-
                     answering_gate_id = gate_machine.gate_id
                     submitted, notes = split_annotations(parameters.get("answer"))
                     try:
@@ -2356,8 +2357,6 @@ class ToolAgent:
                         "error": None, "truncated": False,
                     }
                 if operation == "gate_reuse":
-                    from inference.framework.virelai_gates import GateContractError
-
                     try:
                         event = gate_machine.record_reuse(parameters)
                     except GateContractError as exc:

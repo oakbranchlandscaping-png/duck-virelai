@@ -97,12 +97,6 @@ from inference.framework.g4_guided import (
     level_changed,
     restudy_next_life,
 )
-from inference.framework.g4_limits import (
-    G4LimitError,
-    LeverLimitAnswer,
-    LeverLimitStudy,
-    validate_limit_answer,
-)
 
 
 SCHEMA_VERSION = "virelai-cybernetic-gates-v1"
@@ -122,13 +116,13 @@ COUNTER_BOUNDARY_BATCH_MAX = max(
 LEVER_GATE_ID = "G3-LEVERS"
 REACTION_GATE_ID = "G4-REACTIONS"
 ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
-LIMIT_GATE_ID = "G4.3-LEVER-LIMITS"
+RELATION_GATE_ID = "G4-B-LEVER-RELATIONS"
 
 
 def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
-    """Why Phase 2 (G4.3 onward) may not open yet, or None when it may.
+    """Why Phase 2 (G4-B onward) may not open yet, or None when it may.
 
-    Shared by the S1 return edge and the G4.3 guard so the two can never disagree.
+    Held in ``_effective_target_id``: no gate after G4-A opens while this returns a reason.
     Cross-level work is a separate gate (G9): a level transition closes the level's G4 study.
     """
     if payload.get("pending_lever_entities"):
@@ -2083,10 +2077,11 @@ def _target_registry() -> TargetRegistry:
         ),
         memory_product_type="LeverOrbitSet",
     ))
-    # G4.3-LEVER-LIMITS is retired from the ladder (Director ruling 2026-09-27: G4 becomes
-    # stated targets). Endpoint and recurrence confirmation moved into G4-A; persistence and
-    # reversal return as Duck-proposed, prediction-first tests in G4-B. The G4.3 study code in
-    # g4_limits.py is kept for that port. See BUILD_PLAN_G4_CLICK_COMPLETION_v2_2026-09-27.md.
+    # G4.3-LEVER-LIMITS is retired (Director ruling 2026-09-27). Persistence and reversal are
+    # Duck-frozen predictions in G4-B (R9-R12, g4b_gate.py), which supersedes its adapter.
+    from inference.framework.g4b_gate import relations_contract
+
+    registry.register(relations_contract())
     return registry
 
 
@@ -4855,382 +4850,6 @@ class _LeverStudyTarget:
         return view
 
 
-class _LeverLimitTarget:
-    """G4.3: confirm observed endpoints and test scoped persistence/reversal."""
-
-    def __init__(self, machine: "CyberneticGateMachine") -> None:
-        self.machine = machine
-        self.revision = 1
-        self._ordered_entities: tuple[str, ...] = ()
-        self._studies: dict[str, LeverLimitStudy] = {}
-        self._answers: dict[str, LeverLimitAnswer] = {}
-        self._events: list[dict[str, Any]] = []
-
-    def _orbit_product(self) -> MemoryProduct:
-        product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
-        if product is None:
-            raise GateContractError("G4.3 cannot open before G4.2 emits LeverOrbitSet.")
-        reason = _phase1_hold_reason(product.payload)
-        if reason is not None:
-            raise GateContractError(
-                "G4.3 (Phase 2) cannot open until every lever is orbited and classified; "
-                + reason
-            )
-        return product
-
-    def _control_intervention(self) -> dict[str, Any] | None:
-        product = self.machine.target_journal.active_product(LEVER_GATE_ID)
-        if product is None:
-            return None
-        clean = tuple(str(item) for item in product.payload.get("clean_null_entities") or ())
-        if not clean:
-            return None
-        ledger = self.machine._adapters[LEVER_GATE_ID]._ensure_entity_ledger()
-        for entity_id in clean:
-            entity = ledger.entities.get(entity_id)
-            if entity is None or entity.current is None or not entity.current.cells:
-                continue
-            row, col = sorted(entity.current.cells)[0]
-            return {"action": "ACTION6", "row": row, "col": col}
-        return None
-
-    def _seed(self) -> None:
-        if self._ordered_entities:
-            return
-        product = self._orbit_product()
-        rows = tuple(product.payload.get("orbits") or ())
-        eligible = [
-            row for row in rows
-            if isinstance(row, Mapping)
-            and str(row.get("status") or "") in {
-                "NULL_AT_OBSERVED_STATE", "OBSERVED_STATE_RECURRENCE"
-            }
-        ]
-        if not eligible:
-            raise GateContractError(
-                "G4.3 requires a G4.2 CLICK orbit ending in a masked null or recurrence."
-            )
-        reaction = self.machine.target_journal.active_product(REACTION_GATE_ID)
-        anatomy_rows = () if reaction is None else tuple(reaction.payload.get("anatomies") or ())
-        all_interventions = {
-            str(row.get("entity_id") or ""): dict(row.get("intervention") or {})
-            for row in anatomy_rows if isinstance(row, Mapping)
-        }
-        order: list[str] = []
-        control = self._control_intervention()
-        for row in eligible:
-            entity_id = str(row.get("entity_id") or "").strip()
-            intervention = row.get("intervention")
-            states = row.get("state_sequence") or ()
-            stop_disposition = str(row.get("status") or "")
-            steps = tuple(row.get("steps") or ())
-            last_step = steps[-1] if steps and isinstance(steps[-1], Mapping) else {}
-            rec_index = last_step.get("recurrence_to_state_index")
-            rec_period = last_step.get("observed_period")
-            if stop_disposition == "OBSERVED_STATE_RECURRENCE" and (
-                rec_index is None or rec_period is None
-            ):
-                seq = tuple(str(item) for item in states)
-                if len(seq) >= 2 and seq[-1] in seq[:-1]:
-                    rec_index = seq.index(seq[-1])
-                    rec_period = len(seq) - 1 - rec_index
-            if not entity_id or not isinstance(intervention, Mapping):
-                raise GateContractError("G4.3 requires entity-bound G4.2 orbit rows.")
-            if _action_number(str(intervention.get("action") or "")) != 6:
-                continue
-            candidates = tuple(
-                (candidate, candidate_intervention)
-                for candidate, candidate_intervention in all_interventions.items()
-                if candidate and candidate != entity_id and candidate_intervention
-                and _action_number(str(candidate_intervention.get("action") or "")) == 6
-            )
-            try:
-                self._studies[entity_id] = LeverLimitStudy(
-                    entity_id=entity_id,
-                    intervention=intervention,
-                    orbit_state_sequence=states,
-                    orbit_stop_disposition=stop_disposition,
-                    mask_law=self.machine.counter.mask_law,
-                    recurrence_to_state_index=rec_index,
-                    observed_period=rec_period,
-                    control_intervention=control,
-                    inverse_candidates=candidates,
-                )
-            except G4LimitError as exc:
-                raise GateContractError(f"G4.3 seed rejected for {entity_id}: {exc}") from exc
-            order.append(entity_id)
-        if not order:
-            raise GateContractError("G4.3 v1 has no eligible CLICK lever.")
-        self._ordered_entities = tuple(order)
-
-    def _current_entity(self) -> str | None:
-        self._seed()
-        return next((item for item in self._ordered_entities if item not in self._answers), None)
-
-    def _current_study(self) -> LeverLimitStudy | None:
-        entity_id = self._current_entity()
-        return None if entity_id is None else self._studies[entity_id]
-
-    def assess(self) -> GateAssessment:
-        self._seed()
-        product = self.machine.target_journal.active_product(LIMIT_GATE_ID)
-        entity_id = self._current_entity()
-        study = self._current_study()
-        if product is not None:
-            disposition = "SATISFIED"
-            unmet: tuple[str, ...] = ()
-        elif entity_id is None:
-            disposition = "ANSWER_REQUIRED"
-            unmet = ("emit the G4.3 limit-study product",)
-        elif study is not None and study.interrupted:
-            disposition = "UNRESOLVED"
-            unmet = ("a level or run boundary interrupted the current G4.3 observation",)
-        elif study is not None and study.ready_for_answer:
-            disposition = "ANSWER_REQUIRED"
-            unmet = (f"explain the observed endpoint and reversal evidence for {entity_id}",)
-        else:
-            disposition = "PROBE_REQUIRED"
-            unmet = (f"execute the next scoped G4.3 test for {entity_id}",)
-        return GateAssessment(
-            target_id=LIMIT_GATE_ID,
-            revision=self.revision,
-            disposition=disposition,
-            evidence_refs=tuple(
-                observation.evidence_ref
-                for item in self._ordered_entities
-                for observation in self._studies[item].observations
-            ),
-            unmet_requirements=unmet,
-            explanation=(
-                "G4.3 reconfirms one observed recurrence period or keeps endpoint, persistence, "
-                "and reversal as separate observed claims. "
-                "It never treats a level boundary as a cross-level transfer rule."
-            ),
-        )
-
-    def next_probe(self) -> ProbeEnvelope | None:
-        entity_id = self._current_entity()
-        study = self._current_study()
-        if entity_id is None or study is None:
-            return None
-        spec = study.next_probe()
-        if spec is None:
-            return None
-        ordinal = len(study.observations) + 1
-        questions = {
-            "RECONFIRM_RECURRENCE": (
-                "Does this activation match the next predicted state in one full observed period?"
-            ),
-            "CONFIRM_ENDPOINT": "Does the original lever remain null at the exact observed endpoint?",
-            "TEST_PERSISTENCE": "Does the endpoint persist through this bounded control click?",
-            "TEST_INVERSE": "Does this confirmed lever restore an earlier state of the active orbit?",
-            "REAPPLY_ORIGINAL": "After the candidate change, is the original lever effective again?",
-        }
-        return ProbeEnvelope(
-            probe_id=f"{LIMIT_GATE_ID}:{entity_id}:{ordinal}:{spec.operation_kind}",
-            gate_id=LIMIT_GATE_ID,
-            purpose=spec.operation_kind,
-            question=questions[spec.operation_kind],
-            actions=(dict(spec.intervention),),
-            live_alternatives=(
-                "masked null", "novel masked state", "exact earlier orbit state", "boundary interruption"
-            ),
-            outcome_partition=("null", "changed", "restored", "boundary"),
-            declared_at_transition=(
-                study.observations[-1].transition_id
-                if study.observations else self.machine.observed_through_step
-            ),
-            target={
-                "entity_id": entity_id,
-                "operation_kind": spec.operation_kind,
-                "candidate_entity_id": spec.candidate_entity_id,
-                "intervention": dict(spec.intervention),
-            },
-        )
-
-    def validate_probe(
-        self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]
-    ) -> ProbeEnvelope:
-        expected = self.next_probe()
-        if expected is None:
-            raise GateContractError("G4.3 has no admissible probe in its current state.")
-        supplied = tuple(_normalize_action_payload(item) for item in actions)
-        if _canonical(supplied) != _canonical(expected.actions):
-            raise GateContractError(
-                f"G4.3 admits only its current bound intervention: {list(expected.actions)!r}."
-            )
-        return expected
-
-    def record_outcome(self, probe: ProbeEnvelope, outcome: Mapping[str, Any]) -> dict[str, Any]:
-        expected = self.next_probe()
-        if expected is None or expected.probe_id != probe.probe_id:
-            raise GateContractError("Outcome does not belong to the current G4.3 probe.")
-        grids = grids_from_probe_outcome(outcome)
-        if grids is None:
-            raise GateContractError("G4.3 requires lossless full-grid site transitions.")
-        study = self._current_study()
-        if study is None:
-            raise GateContractError("G4.3 has no active study.")
-        evidence_id = "E-" + hashlib.sha256(
-            _canonical({"probe_id": probe.probe_id, "outcome": outcome}).encode()
-        ).hexdigest()[:16]
-        lossless = dict(outcome)
-        lossless["evidence_id"] = evidence_id
-        counter_baseline = self.machine.apply_counter_baseline(lossless)
-        boundary = outcome.get("boundary_event")
-        try:
-            observation = study.record(
-                evidence_ref=evidence_id,
-                transition_id=int(outcome.get("transition_id") or 0),
-                before=grids[0],
-                after=grids[1],
-                boundary_state=boundary if isinstance(boundary, Mapping) else None,
-            )
-        except G4LimitError as exc:
-            raise GateContractError(f"G4.3 observation rejected: {exc}") from exc
-        self.revision += 1
-        event = {
-            "schema": SCHEMA_VERSION,
-            "evidence_id": evidence_id,
-            "gate_id": LIMIT_GATE_ID,
-            "probe_id": probe.probe_id,
-            "entity_id": study.entity_id,
-            "outcome": compact_probe_outcome(outcome),
-            "limit_observation": asdict(observation),
-            "counter_baseline": counter_baseline,
-        }
-        self._events.append(event)
-        return event
-
-    def submit_answer(self, raw: Mapping[str, Any]) -> LeverLimitAnswer:
-        entity_id = self._current_entity()
-        study = self._current_study()
-        if entity_id is None or study is None:
-            raise GateContractError("G4.3 answers are already complete.")
-        try:
-            answer = validate_limit_answer(raw, study)
-        except G4LimitError as exc:
-            raise GateContractError(f"G4.3 answer rejected: {exc}") from exc
-        self._answers[entity_id] = answer
-        self.revision += 1
-        if len(self._answers) == len(self._ordered_entities):
-            product_id = "G4-LIMITS-" + hashlib.sha256(_canonical({
-                "entities": self._ordered_entities,
-                "answers": [self._answers[item].answer_id for item in self._ordered_entities],
-            }).encode()).hexdigest()[:16]
-            self.machine.target_journal.put(MemoryProduct(
-                product_id=product_id,
-                product_type="LeverLimitStudySet",
-                target_id=LIMIT_GATE_ID,
-                revision=self.revision,
-                payload={
-                    "scope": "G4.3_LIMITS_PERSISTENCE_AND_REVERSAL",
-                    "lever_entities": list(self._ordered_entities),
-                    "studies": [self._studies[item].snapshot() for item in self._ordered_entities],
-                    "answers": [asdict(self._answers[item]) for item in self._ordered_entities],
-                    "epistemic_limit": (
-                        "Endpoint and reversal claims are scoped to executed level-local states."
-                    ),
-                },
-                dependencies=(ORBIT_GATE_ID,),
-            ))
-        return answer
-
-    def limit_view(self, entity_id: str) -> dict[str, Any]:
-        self._seed()
-        requested = str(entity_id or "").strip()
-        if requested not in self._studies:
-            raise GateContractError(f"Unknown G4.3 lever entity_id {requested!r}.")
-        return {
-            "schema": "virelai-g4-limit-detail-v1",
-            "gate_id": LIMIT_GATE_ID,
-            "study": self._studies[requested].snapshot(),
-            "accepted_answer": (
-                None if requested not in self._answers else asdict(self._answers[requested])
-            ),
-        }
-
-    def snapshot(self) -> dict[str, Any]:
-        self._seed()
-        return {
-            "schema": "virelai-g4-limit-gate-v1",
-            "gate_id": LIMIT_GATE_ID,
-            "revision": self.revision,
-            "status": self.assess().disposition,
-            "lever_entities": list(self._ordered_entities),
-            "studies": [self._studies[item].snapshot() for item in self._ordered_entities],
-            "answers": [
-                asdict(self._answers[item]) for item in self._ordered_entities if item in self._answers
-            ],
-            "events": list(self._events),
-            "unmet_requirements": list(self.assess().unmet_requirements),
-        }
-
-    def compact_gate_view(self) -> dict[str, Any]:
-        assessment = self.assess()
-        entity_id = self._current_entity()
-        study = self._current_study()
-        next_probe = self.next_probe()
-        view: dict[str, Any] = {
-            "schema": "virelai-g4-limit-card-v1",
-            "gate_id": LIMIT_GATE_ID,
-            "revision": self.revision,
-            "status": assessment.disposition,
-            "goal_card": self.machine.target_registry.get(LIMIT_GATE_ID).goal_card(
-                status=assessment.disposition
-            ),
-            "progress": {
-                "accepted_count": len(self._answers),
-                "total_count": len(self._ordered_entities),
-                "current_entity_id": entity_id,
-                "current_phase": None if study is None else study.phase,
-            },
-            "unmet_requirements": list(assessment.unmet_requirements),
-            "next_operation": (
-                "WAIT_FOR_NEXT_G4_SLICE" if entity_id is None
-                else "SUBMIT_GATE_ANSWER" if study is not None and study.ready_for_answer
-                else "BOUNDARY_INTERRUPTED" if study is not None and study.interrupted
-                else "QUERY_NEXT_PROBE"
-            ),
-            "rule": (
-                "A recurrence is reconfirmed only when every state in one additional observed period "
-                "matches. A repeated null supports a scoped endpoint. Exact reversal additionally "
-                "requires restoring an earlier orbit state and re-enabling the original lever."
-            ),
-            "answer_template": None,
-        }
-        if study is not None:
-            view["current_study"] = study.snapshot(include_cells=False)
-            view["expand"] = [{
-                "label": "full G4.3 limit record",
-                "query": f"virelai('limit', id={study.entity_id!r})",
-            }]
-        if next_probe is not None:
-            view["probe_available"] = True
-        if study is not None and study.ready_for_answer:
-            view["answer_template"] = {
-                "answer_kind": "LEVER_LIMIT_OBSERVATION",
-                "entity_id": study.entity_id,
-                "endpoint_disposition": study.endpoint_disposition,
-                "persistence_disposition": study.persistence_disposition,
-                "reversal_disposition": study.reversal_disposition,
-                "inverse_entity_id": study.inverse_entity_id,
-                "restored_orbit_state_index": study.restored_orbit_state_index,
-                "original_reenabled": study.original_reenabled,
-                "mechanism_explanation": (
-                    "Explain the observed recurrence confirmation or endpoint, persistence, and "
-                    "reversal evidence without making a universal claim."
-                ),
-                "evidence_refs": [item.evidence_ref for item in study.observations],
-                "competing_models": ["State one condition still compatible with this finite study."],
-                "falsifier": "State a later scoped observation that would contradict this account.",
-                "limitations": [
-                    "This study does not decide cross-level transfer or universal mechanism conditions."
-                ],
-            }
-        return view
-
-
 class CyberneticGateMachine:
     """Stable bridge facade over registry-selected target adapters."""
 
@@ -5260,6 +4879,8 @@ class CyberneticGateMachine:
         self.target_journal = TargetJournal(self.target_registry)
         self.target_router = TargetRouter(self.target_registry, self.target_journal)
         self._g0 = _ActionSurfaceTarget(self)
+        from inference.framework.g4b_gate import LeverRelationsTarget
+
         self._adapters = {
             ACTION_METADATA_GATE_ID: self._g0,
             GATE_ID: _EgoTarget(self),
@@ -5267,7 +4888,7 @@ class CyberneticGateMachine:
             LEVER_GATE_ID: _LeverTarget(self),
             REACTION_GATE_ID: _ReactionTarget(self),
             ORBIT_GATE_ID: _LeverStudyTarget(self),
-            LIMIT_GATE_ID: _LeverLimitTarget(self),
+            RELATION_GATE_ID: LeverRelationsTarget(self),
         }
         self._capability_secret = secrets.token_bytes(32)
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
@@ -5591,12 +5212,8 @@ class CyberneticGateMachine:
     def gate_view(self) -> dict[str, Any]:
         contract = self.target_registry.get(self._effective_target_id())
         assessment = self.assessment()
-        if contract.target_id == REACTION_GATE_ID:
-            return self._adapters[REACTION_GATE_ID].compact_gate_view()
-        if contract.target_id == ORBIT_GATE_ID:
-            return self._adapters[ORBIT_GATE_ID].compact_gate_view()
-        if contract.target_id == LIMIT_GATE_ID:
-            return self._adapters[LIMIT_GATE_ID].compact_gate_view()
+        if contract.target_id in {REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
+            return self._adapters[contract.target_id].compact_gate_view()
         if contract.target_id == ACTION_METADATA_GATE_ID:
             metadata = [asdict(item) for item in self.ego.affordances]
             return {
@@ -5881,7 +5498,7 @@ class CyberneticGateMachine:
         }
 
     def entity_view(self, entity_id: str, *, offset: int = 0, limit: int = 128) -> dict[str, Any]:
-        if self.gate_id not in {LEVER_GATE_ID, REACTION_GATE_ID, ORBIT_GATE_ID, LIMIT_GATE_ID}:
+        if self.gate_id not in {LEVER_GATE_ID, REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
             raise GateContractError("entity detail queries open at G3 and remain available in G4.")
         return self._adapters[LEVER_GATE_ID].entity_view(
             entity_id,
@@ -5890,7 +5507,7 @@ class CyberneticGateMachine:
         )
 
     def inventory_view(self, *, offset: int = 0, limit: int = 10) -> dict[str, Any]:
-        if self.gate_id not in {LEVER_GATE_ID, REACTION_GATE_ID, ORBIT_GATE_ID, LIMIT_GATE_ID}:
+        if self.gate_id not in {LEVER_GATE_ID, REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
             raise GateContractError("inventory detail queries open at G3 and remain available in G4.")
         return self._adapters[LEVER_GATE_ID].inventory_view(
             offset=offset,
@@ -5898,19 +5515,19 @@ class CyberneticGateMachine:
         )
 
     def reaction_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id not in {REACTION_GATE_ID, ORBIT_GATE_ID, LIMIT_GATE_ID}:
+        if self.gate_id not in {REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID}:
             raise GateContractError("reaction detail queries open at G4.")
         return self._adapters[REACTION_GATE_ID].reaction_view(entity_id)
 
     def orbit_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id not in {ORBIT_GATE_ID, LIMIT_GATE_ID}:
+        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID}:
             raise GateContractError("orbit detail queries open at G4.2.")
         return self._adapters[ORBIT_GATE_ID].orbit_view(entity_id)
 
-    def limit_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id != LIMIT_GATE_ID:
-            raise GateContractError("limit detail queries open at G4.3.")
-        return self._adapters[LIMIT_GATE_ID].limit_view(entity_id)
+    def relations_view(self) -> dict[str, Any]:
+        if self.gate_id != RELATION_GATE_ID:
+            raise GateContractError("the G4-B prediction ledger opens at G4-B.")
+        return self._adapters[RELATION_GATE_ID].relations_view()
 
     def evidence_view(self, evidence_id: str) -> dict[str, Any]:
         requested = str(evidence_id or "").strip()

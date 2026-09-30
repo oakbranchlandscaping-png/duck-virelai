@@ -25,6 +25,18 @@ class G4OrbitError(ValueError):
     """A repeated-activation record or explanation violates its evidence."""
 
 
+def string_list(raw: Any, name: str, *, required: bool, error: type[ValueError] = G4OrbitError) -> tuple[str, ...]:
+    """A list of strings, strictly: a bare string is refused, never split into characters (R9-R12)."""
+    if raw is None and not required:
+        return ()
+    if not isinstance(raw, (list, tuple)) or not all(isinstance(item, str) for item in raw):
+        raise error(f"{name} must be a list of strings")
+    values = tuple(item.strip() for item in raw if item.strip())
+    if required and not values:
+        raise error(f"{name} must not be empty")
+    return values
+
+
 def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
 
@@ -219,13 +231,11 @@ def validate_orbit_answer(raw: Mapping[str, Any], orbit: LeverOrbit) -> LeverOrb
     required_refs = tuple(item.evidence_ref for item in orbit.steps)
     if refs != required_refs:
         raise G4OrbitError("evidence_refs must list every orbit transition in observation order")
-    competing = tuple(str(item).strip() for item in raw.get("competing_models") or () if str(item).strip())
-    if not competing:
-        raise G4OrbitError("at least one competing model is required")
+    competing = string_list(raw.get("competing_models"), "competing_models", required=True)
     falsifier = str(raw.get("falsifier") or "").strip()
     if len(falsifier.split()) < 5:
         raise G4OrbitError("falsifier must name a concrete later contradiction")
-    limitations = tuple(str(item).strip() for item in raw.get("limitations") or () if str(item).strip())
+    limitations = string_list(raw.get("limitations"), "limitations", required=False)
     seed = {
         "entity": orbit.entity_id,
         "states": orbit.state_sequence,

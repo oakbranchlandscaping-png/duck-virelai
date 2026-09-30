@@ -85,7 +85,7 @@ def test_mixed_absorbing_and_toggle_levers_both_complete_in_either_order():
         payload = _payload(machine)
         assert payload["phase1_status"] == "COMPLETE", order
         assert payload["lever_classes"] == {"E-A": "ABSORBING", "E-B": "TOGGLE"}, order
-        assert machine.status == "SATISFIED"
+        assert machine._adapters["G4.2-LEVER-ORBITS"].assess().disposition == "SATISFIED"  # the ladder then opens G4-B
 
 
 def test_toggle_needs_one_full_extra_period_to_confirm():
@@ -185,4 +185,4 @@ def test_answers_can_be_given_in_any_order_and_gate_waits_for_them():
     _explain(machine, "E-B")
     _explain(machine, "E-A")
     assert _payload(machine)["lever_entities"] == ["E-A", "E-B"]
-    assert machine.status == "SATISFIED"
+    assert machine._adapters["G4.2-LEVER-ORBITS"].assess().disposition == "SATISFIED"  # the ladder then opens G4-B

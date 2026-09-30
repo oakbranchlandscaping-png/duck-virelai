@@ -83,6 +83,8 @@ def _run_ladder():
     worst = {}
     gates_seen = []
     for _step in range(ACTION_BUDGET * 2):
+        if machine.gate_id == "G4-B-LEVER-RELATIONS":
+            break  # G4-A is complete and the ladder moved on (R9-R12); G4-B is tested elsewhere
         capability = machine.next_probe_capability()
         view = machine.gate_view()
         key = (machine.gate_id, view.get("schema"))
@@ -109,8 +111,7 @@ def _run_ladder():
 def test_ft09_ladder_reaches_a_satisfied_g4a_with_both_controls_studied():
     machine, last_transition, _worst, gates_seen = _run_ladder()
     assert gates_seen[:3] == ["G3-LEVERS", "G4-REACTIONS", "G4.2-LEVER-ORBITS"]
-    assert machine.gate_id == "G4.2-LEVER-ORBITS"
-    assert machine.status == "SATISFIED"
+    assert machine.gate_id == "G4-B-LEVER-RELATIONS"  # G4-A satisfied, so the ladder moved on
     orbits = machine.target_journal.active_product("G4.2-LEVER-ORBITS").payload
     assert orbits["phase1_status"] == "COMPLETE"
     assert len(orbits["lever_entities"]) == 2

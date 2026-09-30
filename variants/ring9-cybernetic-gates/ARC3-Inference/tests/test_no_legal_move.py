@@ -51,7 +51,8 @@ def test_every_state_of_a_guided_g4a_study_has_a_legal_move():
     _assert_legal(machine)
     _explain(machine, "E-B")
     _assert_legal(machine)
-    assert machine.legal_move_status()["move"] == "DECLARED_STATE"
+    assert machine.gate_id == "G4-B-LEVER-RELATIONS"  # G4-A done; G4-B asks for a prediction (R9-R12)
+    assert machine.legal_move_status()["move"] == "ANSWER"
 
 
 def test_level_closed_g4_state_is_a_declared_end_not_a_deadlock():

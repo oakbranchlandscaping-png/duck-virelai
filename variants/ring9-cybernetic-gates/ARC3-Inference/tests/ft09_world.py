@@ -7,6 +7,10 @@ click on any 6x6 tile the record saw respond toggles it between its two recorded
 such click ticks the bottom bar two cells (12->11, from the right). Every other click changes
 nothing, which is what the record shows for the 54 objects G2 clicked. That continuation is a
 hypothesis about ft09, not a fact: tiles the live run never reached are assumed inert.
+
+Since R9-R12 the world can be built from the live memory-v1 record (``V1_RECORD``), which reached
+all eight tiles, and it carries the law that run observed (L-1): the click that spends the bar's
+last cells ends the life (``bar_empty``); the harness then resets the board.
 """
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ from typing import Any
 from inference.framework.record_replay import decode_grid, load_record, lossless_outcome
 
 V2_RECORD = Path(__file__).parent / "fixtures" / "ft09_kaggle_v2_record.json.gz"
+V1_RECORD = Path(__file__).parent / "fixtures" / "ft09_kaggle_memory_v1_record.json.gz"
 BAR_ROW, BAR, BAR_SPENT = 63, 12, 11
 
 
@@ -26,11 +31,16 @@ class Ft09World:
         self.valid_actions = list(record.get("valid_actions") or ["ACTION6"])
         self.tiles: dict[tuple[int, int, int, int], tuple[int, int]] = {}
         for step in record["steps"]:
+            if step.get("kind") == "RESET":
+                continue
             cells = [(r, c, b, a) for r, c, b, a in step["changed"] if r != BAR_ROW]
             if cells:
                 rows, cols = [r for r, *_ in cells], [c for _, c, *_ in cells]
                 self.tiles[(min(rows), min(cols), max(rows), max(cols))] = tuple(sorted({cells[0][2], cells[0][3]}))
         self.transition_id = 0
+
+    def bar_empty(self) -> bool:
+        return all(value != BAR for value in self.grid[BAR_ROW])
 
     def _tile_at(self, row: int, col: int) -> tuple[int, int, int, int] | None:
         return next((box for box in self.tiles if box[0] <= row <= box[2] and box[1] <= col <= box[3]), None)
@@ -53,4 +63,4 @@ class Ft09World:
         return outcome
 
 
-__all__ = ["Ft09World", "V2_RECORD"]
+__all__ = ["Ft09World", "V1_RECORD", "V2_RECORD"]

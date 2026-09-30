@@ -87,9 +87,15 @@ class LivesRun(Run):
         for _ in range(limit):
             self.turn()
             machine = self.agent._gate_machine
-            if machine is not None and machine.gate_id == ORBITS and machine.status == "SATISFIED":
+            if machine is not None and g4a_complete(machine):
                 return
         raise AssertionError(f"not satisfied: {machine.gate_id} {machine.status}")
+
+
+def g4a_complete(machine) -> bool:
+    """G4-A satisfied: every lever explained (since R9-R12 the ladder then moves on to G4-B)."""
+    product = machine.target_journal.active_product(ORBITS)
+    return product is not None and product.payload["phase1_status"] == "COMPLETE"
 
 
 def _run(tmp_path, monkeypatch, **options):
@@ -179,4 +185,4 @@ def test_the_whole_g0_to_g4a_run_replays_offline(tmp_path, monkeypatch):
     record_tool.write_record(record_tool.build_record(run.state_path.parent, "ft09", "ft09-offline"), out)
     result = replay(load_record(out), measure=False)
     assert (result.steps_replayed, result.answers_used, result.stopped) == (92, 17, None)
-    assert (result.machine.gate_id, result.machine.status) == (ORBITS, "SATISFIED")
+    assert g4a_complete(result.machine) and result.machine.gate_id == "G4-B-LEVER-RELATIONS"

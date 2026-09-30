@@ -71,6 +71,7 @@ INDEX_BY_GATE = {
         "virelai('orbit', id=ENTITY_ID)", "virelai('rerun', id=ENTITY_ID, presses=N)",
         "virelai('memory', kind='subject', id=ENTITY_ID)",
     ),
+    "G4-B-LEVER-RELATIONS": ("virelai('relations')", "virelai('orbit', id=ENTITY_ID)"),
 }
 
 
@@ -224,6 +225,8 @@ def _subject_slot(gate_id: str, view: Mapping[str, Any]) -> dict[str, Any]:
             }
         ]
         candidates.append(("active_lever", active[0] if active else None))
+    elif isinstance(view.get("subject"), Mapping):  # a gate that states its own subject (G4-B)
+        candidates.extend(view["subject"].items())
     candidates.append(("epistemic_limits", view.get("epistemic_limits")))
     return _fill_to_budget(candidates, SLOT_BUDGETS["subject"])
 
@@ -252,7 +255,9 @@ def _template_slot(gate_id: str, view: Mapping[str, Any], capability: Any) -> di
     return slot
 
 
-LEVER_STATUS_ORDER = {"RUNNING": 0, "CONFIRMING": 1, "CONFIRMED_AWAITING_EXPLANATION": 2, "NOT_STARTED": 3}
+LEVER_STATUS_ORDER = {  # the controller's study order: a re-study after a death before a new lever (R9-R12)
+    "RUNNING": 0, "CONFIRMING": 1, "CONFIRMED_AWAITING_EXPLANATION": 2, "RUN_ENDED_RESTART_NEEDED": 3, "NOT_STARTED": 4,
+}
 
 
 def _current_work_first(capability: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -441,7 +446,7 @@ def _render_product(machine: Any, gate: str, payload: Mapping[str, Any]) -> list
             f"pending {len(payload.get('pending_lever_entities') or ())} · "
             f"interrupted {len(payload.get('interrupted_lever_entities') or ())}"
         ]
-    return []
+    return list(payload.get("digest_lines") or ())  # a gate that renders its own lines (G4-B)
 
 
 def _ids(ids: Sequence[str], limit: int = 4) -> str:

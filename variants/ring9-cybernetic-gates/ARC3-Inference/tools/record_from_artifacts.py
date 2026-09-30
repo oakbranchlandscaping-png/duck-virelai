@@ -34,6 +34,10 @@ DUCK_FIELDS = {
     "G4.2-LEVER-ORBITS": (
         "answer_kind", "entity_id", "mechanism_explanation", "competing_models", "falsifier", "limitations",
     ),
+    "G4-B-LEVER-RELATIONS": (
+        "answer_kind", "action", "expected", "named", "elsewhere", "because", "description", "relations",
+        "open_conditions", "competing_models", "falsifier", "limitations",
+    ),
 }
 PREDICTION_FIELDS = ("action", "predicate", "expected_parameters", "because", "novelty")
 
@@ -75,17 +79,38 @@ def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
         },
         "valid_actions": sorted({str(o["action"]["action"]) for o in outcomes}),
         "initial_grid": ["".join(HEX[value] for value in row) for row in grid],
-        "steps": [
-            {
-                "transition_id": o["transition_id"],
-                "action": o["action"],
-                "changed": [[c["row"], c["col"], c["before"], c["after"]] for c in o["changed_cells"]],
-                **({"boundary": o["boundary_event"]} if (o.get("boundary_event") or {}).get("state") not in {None, "NOT_FINISHED"} else {}),
-            }
-            for o in outcomes
-        ],
+        "steps": _steps(outcomes, grid),
         "answers": recorded,
     }
+
+
+def _steps(outcomes: list[dict], grid: list[list[int]]) -> list[dict]:
+    """Each probe transition, with the harness RESET a probe record leaves out restored (R9-R12).
+
+    A reset is not a probe, so it is not in ``probe_outcomes``. It shows as a gap: the next probe's
+    board differs from the last probe's. The gap is recorded as a ``RESET`` step with its changes.
+    """
+    grid = [row[:] for row in grid]
+    steps: list[dict] = []
+    for o in outcomes:
+        before = [row[:] for row in grid]
+        for site in o["site_transitions"]:
+            before[site["row"]][site["col"]] = site["before"]
+        jump = [[r, c, grid[r][c], before[r][c]] for r in range(len(grid)) for c in range(len(grid[0])) if grid[r][c] != before[r][c]]
+        if jump:
+            steps.append({"transition_id": int(o["transition_id"]) - 1, "kind": "RESET",
+                          "action": {"action": "RESET"}, "changed": jump})
+        changed = [[c["row"], c["col"], c["before"], c["after"]] for c in o["changed_cells"]]
+        steps.append({
+            "transition_id": o["transition_id"],
+            "action": o["action"],
+            "changed": changed,
+            **({"boundary": o["boundary_event"]} if (o.get("boundary_event") or {}).get("state") not in {None, "NOT_FINISHED"} else {}),
+        })
+        grid = before
+        for r, c, _b, a in changed:
+            grid[r][c] = a
+    return steps
 
 
 def write_record(record: dict, out: Path) -> None:

@@ -41,10 +41,11 @@ from inference.framework.card_builder import world_budgets
 from inference.framework.memory_store import cell_bbox as _bbox
 from inference.framework.virelai_gates import control_archetype_prior
 
-CONTROLLER, DUCK = "CONTROLLER", "DUCK"
+CONTROLLER, DUCK, END = "CONTROLLER", "DUCK", "END"
 ANSWER, ACTION = "ANSWER", "ACTION"
-ORBITS = "G4.2-LEVER-ORBITS"
-CONTROLLER_GATES = ("G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", ORBITS)
+ORBITS, RELATIONS = "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS"
+CONTROLLER_GATES = ("G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS", "G4-REACTIONS", ORBITS, RELATIONS)
+LEVEL_CLOSED = "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
 OWNED_TRIGGERS = ("EVERY_TRANSITION", "EFFECTIVE_TRANSITIONS_ONLY")
 STUDY_ORDER = ("RUNNING", "CONFIRMING", "RUN_ENDED_RESTART_NEEDED", "NOT_STARTED")
 MAX_RERUN_PRESSES = 8
@@ -60,7 +61,7 @@ BOUNDARY_KEYS = ("done", "level_completed", "game_over", "run_complete")
 
 @dataclass(frozen=True)
 class OwnedStep:
-    owner: str  # CONTROLLER | DUCK
+    owner: str  # CONTROLLER | DUCK | END
     gate_id: str
     reason: str
     kind: str | None = None  # ANSWER | ACTION, for the controller
@@ -78,6 +79,18 @@ def _answer_due(view: Mapping[str, Any]) -> bool:
     return view.get("status") == "ANSWER_REQUIRED" or view.get("next_operation") == "SUBMIT_GATE_ANSWER"
 
 
+def ladder_end(machine: Any) -> str | None:
+    """Where the built ladder ends, the run ends cleanly (Director, 2026-09-29; R9-I02).
+
+    Nothing is left for Duck there: before this, the step went to Duck with no move to make.
+    """
+    if machine.target_router.current() is None:
+        return "every built gate is satisfied, through G4-B; the next slice is not built"
+    if machine.gate_id == ORBITS and machine.gate_view().get("next_operation") == LEVEL_CLOSED:
+        return "the level changed during G4; cross-level work (G9) is not built"
+    return None
+
+
 def next_owned_step(
     machine: Any, *, refused: frozenset | set = frozenset(), rerun: Mapping[str, Any] | None = None,
 ) -> OwnedStep:
@@ -93,6 +106,8 @@ def next_owned_step(
     if orientation_due(machine):
         return _duck(machine, "the orientation turn is due")
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
+    if machine.gate_id == RELATIONS:
+        return _relations_step(machine, capability)
     view = machine.gate_view()
     if machine.gate_id == ORBITS:
         return _orbit_step(machine, capability, view, rerun)
@@ -113,6 +128,19 @@ def next_owned_step(
         CONTROLLER, machine.gate_id, reason, ACTION, action=action,
         probe_token=str(capability["probe_token"]),
     )
+
+
+def _relations_step(machine: Any, capability: Mapping[str, Any] | None) -> OwnedStep:
+    """G4-B: Duck freezes each prediction and writes the description; the controller takes the action."""
+    if capability is not None:
+        target = capability.get("target") or {}
+        return OwnedStep(
+            CONTROLLER, RELATIONS, f"G4-B: take {target.get('prediction_id')}, the prediction Duck froze",
+            ACTION, action=dict(capability["actions"][0]), probe_token=str(capability["probe_token"]),
+        )
+    recent = (machine.gate_view().get("progress") or {}).get("recent") or []
+    graded = f"{recent[-1]['prediction_id']} was graded {recent[-1]['status']}; " if recent else ""
+    return _duck(machine, graded + "the next prediction, or the description of the lever set, is Duck's")
 
 
 def _orbit_step(

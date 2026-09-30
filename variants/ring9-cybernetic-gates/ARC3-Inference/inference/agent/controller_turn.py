@@ -56,13 +56,16 @@ def run_controller_turn(
     session: ControllerSession = agent._controller
     if not session.enabled or agent._step_env_callback is None:
         return None
-    if session.wake is not None:
+    from inference.framework.controller_executor import ANSWER, DUCK, ladder_end, next_owned_step
+
+    machine = agent._ensure_gate_machine(state_path)
+    end = ladder_end(machine)
+    if end is not None:
+        return _planned_stop(agent, end, analyzer_log)
+    if session.wake is not None and not _takes_duck_choice(machine):
         session.hand_to_duck(session.wake)
         session.wake = None
         return None
-    from inference.framework.controller_executor import ANSWER, DUCK, next_owned_step
-
-    machine = agent._ensure_gate_machine(state_path)
     for _ in range(MAX_ANSWERS_PER_TURN):
         step = next_owned_step(machine, refused=session.refused, rerun=session.rerun)
         if step.owner == DUCK:
@@ -78,6 +81,23 @@ def run_controller_turn(
             agent._virelai_query_callback = None
             agent._current_valid_actions = []
     return None
+
+
+def _takes_duck_choice(machine: Any) -> bool:
+    """G4-B: the next action is Duck's own frozen prediction, so a wake waits until it is taken."""
+    from inference.framework.controller_executor import RELATIONS
+
+    return machine.gate_id == RELATIONS and machine.next_probe_capability() is not None
+
+
+def _planned_stop(agent: Any, reason: str, analyzer_log: Path) -> Any:
+    """The controller owns the end (R9-I02): stop the game cleanly, with no model call."""
+    from inference.agent.tool_agent import AnalyzerTurnResult
+
+    _log(analyzer_log, f"planned stop: {reason}")
+    agent._step_env_callback = None
+    agent._virelai_query_callback = None
+    return AnalyzerTurnResult(step_executed=False, planned_stop=reason)
 
 
 def _log(analyzer_log: Path, text: str) -> None:

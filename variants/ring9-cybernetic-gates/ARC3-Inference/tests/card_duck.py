@@ -126,11 +126,34 @@ def _answer(card: dict[str, Any], world: StressWorld, clicked: set[tuple[int, in
             "competing_models": ["a hidden event coincided with the click"],
             "falsifier": "the same intervention produces a different exact residue",
         }
+    if gate == "G4-B-LEVER-RELATIONS":
+        return _g4b_answer(card, template)
     return {
         **template,
         "mechanism_explanation": "Consecutive presses toggled this object between two states and back.",
         "competing_models": ["the lever may respond differently from another world state"],
         "falsifier": "a repeat from this exact masked state later behaves differently",
+    }
+
+
+def _g4b_answer(card: dict[str, Any], template: dict[str, Any]) -> dict[str, Any]:
+    """G4-B from the card alone: press each unpressed lever predicting it steps alone, then describe."""
+    if template["answer_kind"] == "LEVER_PREDICTION":
+        lever = next(item for item in card["subject"]["levers"] if not item["pressed"])
+        return {**template, "action": lever["click"], "expected": {lever["entity_id"]: "STEPS"},
+                "elsewhere": "NO_CHANGE",
+                "because": f"if the levers are independent, pressing {lever['entity_id']} steps only its own tile"}
+    recent = [item for item in card["progress"]["progress"]["recent"] if item["status"] == "SUPPORTED"]
+    return {
+        **template,
+        "description": (
+            "Each lever is a tile that its own click steps between its recorded states; pressing one "
+            "lever left every other lever and the rest of the board unchanged in every graded test."
+        ),
+        "relations": [{"levers": [item["acted_lever"]], "prediction_refs": [item["prediction_id"]],
+                       "claim": f"pressing {item['acted_lever']} changed only its own tile"} for item in recent],
+        "competing_models": ["a lever may depend on another lever's state on boards not tested"],
+        "falsifier": "a later press of one lever changes another lever's tile",
     }
 
 
@@ -148,8 +171,13 @@ def _choose(card: dict[str, Any]) -> dict[str, Any]:
         return probe["actions"][0]
     target = probe.get("target") or {}
     levers = target.get("levers")
-    if levers:
-        unfinished = [item for item in levers if item.get("status") in {"RUNNING", "CONFIRMING", "NOT_STARTED"}]
+    if levers:  # the controller's own study order (a re-study after a death comes before a new lever)
+        from inference.framework.controller_executor import STUDY_ORDER
+
+        unfinished = sorted(
+            (item for item in levers if item.get("status") in STUDY_ORDER),
+            key=lambda item: STUDY_ORDER.index(item["status"]),
+        )
         return (unfinished or levers)[0]["click"]
     anchors = probe.get("untried_object_anchors") or target.get("untried_object_anchors") or []
     first = anchors[0]
@@ -190,11 +218,14 @@ def run_ladder(levers: int, *, max_steps: int = 2_000, wide_last: bool = False) 
         if "answer_template" in card:
             machine.submit_answer(json.loads(json.dumps(_answer(card, world, clicked))))
             continue
-        if "current_probe" not in card:
+        capability = card.get("current_probe")
+        if card["next_operation"] == "CONTROLLER_TAKES_PREDICTION":  # G4-B: the controller's action
+            capability = machine.next_probe_capability()
+        if capability is None:
             run.stopped = f"{machine.gate_id} {card.get('status')} {card.get('next_operation')}"
             return run
-        action = _choose(card)
-        probe = machine.validate_probe({"probe_token": card["current_probe"]["probe_token"]}, [action])
+        action = _choose({**card, "current_probe": capability})
+        probe = machine.validate_probe({"probe_token": capability["probe_token"]}, [action])
         transition_id += 1
         changes = world.changes(action)
         world.grid, outcome = lossless_outcome(world.grid, transition_id, action, changes)

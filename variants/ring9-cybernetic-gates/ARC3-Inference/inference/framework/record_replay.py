@@ -12,7 +12,8 @@ outcome, answers when the gate demands one) and renders the binding card with th
 renderer after every step. No model is called.
 
 Fixture format (``virelai-recorded-world-v1``, gzip JSON): ``initial_grid`` (hex rows),
-``valid_actions``, ``steps`` [{transition_id, action, changed: [[r, c, before, after], ...]}],
+``valid_actions``, ``steps`` [{transition_id, action, changed: [[r, c, before, after], ...]}] (a step
+with ``kind: RESET`` is a harness reset between probes, since R9-R12),
 ``answers`` [{gate_id, ...Duck-written fields}] in acceptance order, and ``protocol``: the gate
 machine's recording protocol (``{"g3_inherits_g2_nulls": bool}``). A record without ``protocol``
 predates R9-R08 and was made with G3 re-clicking G2's nulls, so it replays that way.
@@ -200,6 +201,9 @@ def replay(
     last = 0
     steps = record["steps"][: max_steps if max_steps is not None else None]
     for step in steps:
+        if step.get("kind") == "RESET":  # the harness reset, between probes (R9-R12)
+            _replay_reset(result, step)
+            continue
         if not _submit_due_answers(result, pending, answer_source, last):
             result.stopped = f"no recorded answer for {machine.gate_id} before transition {step['transition_id']}"
             _sample(result, last, "final")
@@ -223,6 +227,13 @@ def replay(
         _submit_due_answers(result, pending, answer_source, last)  # answers after the last action
     _sample(result, last, "final")
     return result
+
+
+def _replay_reset(result: ReplayResult, step: Mapping[str, Any]) -> None:
+    """Deliver a recorded harness RESET the way the live agent does (``observe_system_reset``)."""
+    boundary = {"state": "NOT_FINISHED", "actor": "SYSTEM_RESET", "reset": True}
+    result.grid, outcome = lossless_outcome(result.grid, step["transition_id"], step["action"], step["changed"], boundary)
+    result.machine.observe_system_reset(outcome)
 
 
 def _submit_due_answers(

@@ -288,10 +288,10 @@ def test_g4_routes_from_clean_g3_inventory_and_emits_anatomy_product():
         "competing_models": ["The lever may respond from another world state."],
         "falsifier": "The same repeat changes this exact masked state later.",
     })
-    # G4.3 is retired; with every lever explained, G4-A is satisfied and nothing scripted opens.
-    assert machine.gate_id == "G4.2-LEVER-ORBITS"
-    assert machine.status == "SATISFIED"
-    assert machine.gate_view()["next_operation"] == "WAIT_FOR_NEXT_G4_SLICE"
+    # With every lever explained, G4-A is satisfied and the ladder opens G4-B (R9-R12).
+    assert machine._adapters["G4.2-LEVER-ORBITS"].assess().disposition == "SATISFIED"
+    assert machine.gate_id == "G4-B-LEVER-RELATIONS"
+    assert machine.gate_view()["next_operation"] == "SUBMIT_GATE_ANSWER"
     orbit_product = machine.target_journal.active_product("G4.2-LEVER-ORBITS")
     assert orbit_product is not None
     assert orbit_product.payload["orbits"][0]["status"] == "NULL_AT_OBSERVED_STATE"
