@@ -1,0 +1,1 @@
+Ring 9 G4 CLICK exit v1 exact-model checkpoint: ft09-0d8bbf25, vc33-5430563c, one pass each, 200 actions and 10800 seconds of behavior time per world after model setup. Source d2bf323 (R9-R06 to R9-R14). Human review required.
