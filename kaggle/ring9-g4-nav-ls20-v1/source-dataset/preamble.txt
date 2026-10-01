@@ -1,0 +1,1 @@
+Ring 9 G4 NAV ls20 v1 exact-model checkpoint: ls20-9607627b, one pass, 200 actions and 10800 seconds of behavior time per world after model setup. Source 72adbe3 (R9-R06 to R9-R19). Human review required.

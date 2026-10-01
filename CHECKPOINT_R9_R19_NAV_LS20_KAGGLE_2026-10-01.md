@@ -1,11 +1,12 @@
 # R9-R19 ls20 NAV checkpoint
 
 **Builder:** Sol (Alpha build seat), signed
-**Source:** `72adbe3` plus this checkpoint configuration commit
+**Source:** `72adbe3`
 **World:** `ls20-9607627b`
-**Path:** online ARC environment through OpenRouter
-**Model:** `qwen/qwen3.6-35b-a3b`, AtlasCloud fp8, medium reasoning
-**Scope:** one world, one pass, one concurrent job, 80-action ceiling
+**Path:** private Kaggle notebook with offline local vLLM
+**Model:** `vrfai/Qwen3.6-27B-FP8`
+**Package:** `kaggle/ring9-g4-nav-ls20-v1/`
+**Scope:** one world, one pass, one concurrent job, 200-action ceiling
 
 ## Question
 
@@ -35,3 +36,13 @@ criteria are not failures if an earlier genuine friction stops the run; that fri
 next build target. A level win is outside this checkpoint's success definition.
 
 — **Sol**
+
+## Launch record
+
+- The paid-model attempt reached the online harness but OpenRouter rejected its first request with
+  `402 weight_exceeds_budget`. It executed zero actions and consumed zero tokens.
+- The user chose Kaggle rather than the free OpenRouter fallback because recent Kaggle starts have
+  been faster. The Kaggle checkpoint uses the exact Qwen model family and packaging path already
+  exercised by recent milestones. The OpenRouter attempt remains infrastructure evidence only.
+- The frozen package was built from source commit `72adbe3`, passed all eight independent package
+  checks, matched the committed source export byte for byte, and contained no detected secret.

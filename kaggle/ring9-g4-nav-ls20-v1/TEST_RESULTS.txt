@@ -1,0 +1,3 @@
+Source commit 72adbe3fc644da536950b2d8af1341ecb8e9f0e4 (R9-R06 to R9-R19: memory stack through G4-C, life and level continuity, carry, and the NAV lever branch).
+Focused NAV plus CLICK regression set: 48 passed. Broad suite: 480 passed; seven modules could not collect and one harness test could not run where the external taaf package was absent. Dedicated NAV foundation and gate tests: 11 passed. Python compilation and diff checks passed.
+No live ls20 result is claimed. This checkpoint exists to obtain that evidence.
