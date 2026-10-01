@@ -56,12 +56,19 @@ def test_every_state_of_a_guided_g4a_study_has_a_legal_move():
 
 
 def test_level_closed_g4_state_is_a_declared_end_not_a_deadlock():
+    """Without the next level's board the study closes as a declared state; with it (R9-R17) the
+    ladder starts again on the next level. Neither is a deadlock."""
+    held = _g4_machine(_grid(1, 1), SYNTHETIC_LEVERS)
+    held._advance_level = lambda _outcome: None  # the guard path: no lossless after-board
+    _g4_act(held, B, _grid(1, 1), _grid(1, 2), 1)
+    _g4_act(held, B, _grid(1, 2), _grid(1, 7), 2, LEVEL_UP)
+    status = held.legal_move_status()
+    assert status["legal"] and status["move"] == "DECLARED_STATE"
+    assert status["next_operation"] == "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
     machine = _g4_machine(_grid(1, 1), SYNTHETIC_LEVERS)
     _g4_act(machine, B, _grid(1, 1), _grid(1, 2), 1)
     _g4_act(machine, B, _grid(1, 2), _grid(1, 7), 2, LEVEL_UP)
-    status = machine.legal_move_status()
-    assert status["legal"] and status["move"] == "DECLARED_STATE"
-    assert status["next_operation"] == "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9"
+    assert machine.gate_id == "G0-ACTION-METADATA" and machine.legal_move_status()["legal"]
 
 
 def test_the_ft09_deadlock_signature_is_detected(monkeypatch):

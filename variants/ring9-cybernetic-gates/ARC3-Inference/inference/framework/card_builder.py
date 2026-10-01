@@ -395,7 +395,9 @@ def _index_slot(gate_id: str, view: Mapping[str, Any]) -> list[str]:
 # ---- the certified world model digest ---------------------------------------------------------
 
 def _digest_lines(machine: Any) -> list[tuple[str, str]]:
-    lines: list[tuple[str, str]] = []
+    from inference.framework.level_model import level_line
+
+    lines = [(f"LEVEL-{model.get('level')}", f"[prior] {level_line(model)}") for model in getattr(machine, "levels", ())]
     for row in machine.completed_gate_rows():
         gate = row["gate_id"]
         payload = row["answer"]

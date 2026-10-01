@@ -11,8 +11,8 @@ Ported from two precedents, never from either's world content:
   each field is declared in a persistence tier, so what a death forgets is a written decision.
 
 A death forgets nothing here: the gate machine lives for the whole game, and a reset only adds a
-row and opens the next life. Which state a level change freezes is declared in ``PERSISTENCE``;
-the level freeze itself is R9-R17's.
+row and opens the next life. A level change freezes the LEVEL tier into the level's model and
+rebuilds it for the next level (R9-R17, ``CyberneticGateMachine._build_level``).
 """
 from __future__ import annotations
 
@@ -28,9 +28,9 @@ GAME, LEVEL, TRANSIENT = "GAME", "LEVEL", "TRANSIENT"
 # 2026-10-01). TRANSIENT: an in-flight probe or answer, resolved by its own outcome or boundary.
 PERSISTENCE: dict[str, dict[str, str]] = {
     "CyberneticGateMachine": {
-        "_adapters": GAME, "_capability_secret": GAME, "_consumed_capabilities": GAME,
-        "_issued_capabilities": GAME, "protocol": GAME, "target_registry": GAME,
-        "transition_index": GAME, "lives": GAME, "target_router": LEVEL, "target_journal": LEVEL,
+        "_capability_secret": GAME, "_consumed_capabilities": GAME, "protocol": GAME,
+        "transition_index": GAME, "lives": GAME, "levels": GAME, "_adapters": LEVEL, "_issued_capabilities": LEVEL,
+        "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL,
         "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
     },
@@ -71,17 +71,17 @@ class LifeRecord:
 
     def __init__(self) -> None:
         self.life = 1
-        self.level: int | None = None
+        self.level: int | None = 1  # a game starts on level 1; a boundary's level_before overrides it
         self.high_step = 0
         self._resets: set[int] = set()
-        self.lives: list[dict[str, Any]] = [_life(1, None)]
+        self.lives: list[dict[str, Any]] = [_life(1, 1)]
 
     def tag(self, row: dict[str, Any], outcome: Mapping[str, Any]) -> dict[str, Any]:
         """Stamp a recorded transition with its life and level; note a death or a level change."""
         transition_id = int(outcome.get("transition_id") or 0)
         self.high_step = max(self.high_step, transition_id)
         boundary = outcome.get("boundary_event") if isinstance(outcome.get("boundary_event"), Mapping) else {}
-        if self.level is None and boundary.get("level_before") is not None:
+        if boundary.get("level_before") is not None and boundary["level_before"] != self.level:
             self.level = self.lives[-1]["level"] = int(boundary["level_before"])
         current = self.lives[-1]
         current["first_transition"] = current["first_transition"] or transition_id

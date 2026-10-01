@@ -209,6 +209,7 @@ def replay(
             result.stopped = f"no recorded answer for {machine.gate_id} before transition {step['transition_id']}"
             _sample(result, last, "final")
             return result
+        _submit_ready_answers(result, pending)
         capability = machine.next_probe_capability()
         while capability is None and _answer_due(machine) and _submit_due_answers(result, pending, answer_source, last):
             capability = machine.next_probe_capability()  # probing closed a roster; its answers came due
@@ -254,6 +255,23 @@ def _submit_due_answers(
         machine.submit_answer(merge_recorded_answer(template, queue.pop(_answer_index(queue, template))))
         result.answers_used += 1
     return True
+
+
+def _submit_ready_answers(result: ReplayResult, pending: dict[str, list]) -> None:
+    """Answer a lever's study as soon as the gate offers its template, as Duck does live (R9-R17).
+
+    Live, Duck explains a finished lever while the gate still has probes to run. Replay used to hold
+    every such answer until the gate demanded one, so a level that ended first froze unexplained.
+    """
+    machine = result.machine
+    while True:
+        template = machine.gate_view().get("answer_template") or {}
+        queue = pending.get(machine.gate_id) or []
+        index = _answer_index(queue, template) if template.get("entity_id") else None
+        if index is None or queue[index].get("entity_id") != template.get("entity_id"):
+            return
+        machine.submit_answer(merge_recorded_answer(template, queue.pop(index)))
+        result.answers_used += 1
 
 
 def _answer_index(queue: Sequence[Mapping[str, Any]], template: Mapping[str, Any]) -> int:

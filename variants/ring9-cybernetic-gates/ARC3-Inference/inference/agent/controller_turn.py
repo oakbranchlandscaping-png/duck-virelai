@@ -28,7 +28,7 @@ MAX_ANSWERS_PER_TURN = 16
 @dataclass
 class ControllerSession:
     enabled: bool = False
-    refused: set[tuple[str, int]] = field(default_factory=set)
+    refused: set[tuple[str, int, int | None]] = field(default_factory=set)
     wake: str | None = None
     handoff: str = ""
     actions: int = 0

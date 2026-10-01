@@ -47,14 +47,15 @@ def test_f_r1_a_completed_level_keeps_its_boundary_in_the_record():
     assert "boundary" not in record_tool._steps([_outcome(1, ordinary)], [[0]])[-1]
 
 
-def test_f_r1_vc33_exit_replays_to_the_live_level_boundary_stop():
+def test_f_r1_vc33_exit_replays_to_the_live_level_boundary():
+    """Live (at d2bf323) the run stopped here; since R9-R17 the level is frozen and the ladder restarts."""
     result = replay(load_record(VC33_EXIT))
     machine = result.machine
     assert result.stopped is None and result.steps_replayed == 26
-    assert ladder_end(machine) == "the level changed during G4; cross-level work (G9) is not built"
-    orbits = machine._adapters["G4.2-LEVER-ORBITS"]
-    assert set(orbits._interruptions) == {"E0005"}  # interrupted by the win, as live
-    assert orbits._level_closed["level_before"] == 1 and orbits._level_closed["level_after"] == 2
+    (frozen,) = machine.levels
+    orbits = frozen["products"]["G4.2-LEVER-ORBITS"]
+    assert orbits["interrupted_lever_entities"] == ["E0005"]  # interrupted by the win, as live
+    assert orbits["level_boundary"]["level_before"] == 1 and orbits["level_boundary"]["level_after"] == 2
 
 
 def test_f_r2_ft09_exit_replays_through_g4c_with_the_live_grades():

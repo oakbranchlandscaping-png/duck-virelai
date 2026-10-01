@@ -711,9 +711,7 @@ class EgoGateMachine:
             self.answer = answer
             self.pending_prediction = None
             self.last_comparison = None
-            self.ego_law = ego_law_from_interface(
-                asdict(answer), prerequisite_ref=ACTION_METADATA_GATE_ID
-            )
+            self.ego_law = ego_law_from_interface(asdict(answer), prerequisite_ref=ACTION_METADATA_GATE_ID)
             self.status = "CLOSED"
             self.revision += 1
             return answer
@@ -960,9 +958,7 @@ class CounterGateMachine:
         self._lossless_outcomes: list[dict[str, Any]] = []
         self._world_type = control_archetype_prior(self.affordances)["world_type"]
         self._visual_roster = AdaptiveCoordinateCoverage(self.initial_grid)
-        self._excluded_ego_cells = frozenset(
-            (int(row), int(col)) for row, col in excluded_ego_cells
-        )
+        self._excluded_ego_cells = frozenset((int(row), int(col)) for row, col in excluded_ego_cells)
         self._ego_binding_source = str(ego_binding_source)
         self._ranked_visual_targets = tuple(
             item
@@ -1062,9 +1058,7 @@ class CounterGateMachine:
         if self.candidate is None:
             return None
         default_action = self._counter_only_action or self._latest_witness_action()
-        prediction = prediction_for(
-            self.candidate, declared_at_transition=self.observed_through_step
-        )
+        prediction = prediction_for(self.candidate, declared_at_transition=self.observed_through_step)
         return {
             "answer_id": "G2-COUNTER-EXPLANATION-1",
             "candidate_id": self.candidate.candidate_id,
@@ -1202,9 +1196,7 @@ class CounterGateMachine:
         return count
 
     def _click_coverage_complete(self) -> bool:
-        return all(
-            set(item.cells) & self._clicked_cells for item in self._ranked_visual_targets
-        )
+        return all(set(item.cells) & self._clicked_cells for item in self._ranked_visual_targets)
 
     def _select_counter_only_action(self, candidate: CounterCandidate) -> dict[str, Any] | None:
         footprint = set(candidate.full_bar_footprint)
@@ -1555,9 +1547,7 @@ class CounterGateMachine:
                     self._clicked_cells.add((int(item["row"]), int(item["col"])))
             self._probe_index = self._rank_prefix_observed()
         elif probe.purpose == "PILOT_TO_CONTACT":
-            navigation_result = self._record_navigation_step(
-                probe, outcome, evidence_id=evidence_id
-            )
+            navigation_result = self._record_navigation_step(probe, outcome, evidence_id=evidence_id)
             if navigation_result is not None:
                 event["navigation_target_result"] = navigation_result
 
@@ -4855,17 +4845,20 @@ class CyberneticGateMachine:
         # The recording protocol, stamped on every probe envelope so a record replays under the
         # protocol it was made with (ruling D5 changed G3's sweep in R9-R08).
         self.protocol = {"g3_inherits_g2_nulls": bool(g3_inherits_g2_nulls)}
+        self._build_level(valid_actions, initial_grid, observed_through_step)
+        self.lives = LifeRecord()  # lives, levels and the high-water transition (R9-R16)
+        self.levels: list[dict[str, Any]] = []  # each finished level's frozen model (R9-R17)
+        self._capability_secret = secrets.token_bytes(32)
+        self._consumed_capabilities: set[str] = set()
+        # The record tier's in-memory index (DESIGN_VIRELAI_MEMORY_v1 §5.1): one sparse, lossless
+        # row per recorded transition, whatever gate recorded it. Read by MemoryStore only.
+        self.transition_index: list[dict[str, Any]] = []
+
+    def _build_level(self, valid_actions: Iterable[Any], grid: Sequence[Sequence[int]], step: int) -> None:
+        """Every LEVEL-tier field, fresh: at the game's start, and on each new level (R9-R17)."""
         self.annotations = AnnotationLane()  # Duck's UNCERTIFIED notes (D6); never read by a gate
-        self.ego = EgoGateMachine(
-            valid_actions=valid_actions,
-            initial_grid=initial_grid,
-            observed_through_step=observed_through_step,
-        )
-        self.counter = CounterGateMachine(
-            affordances=self.ego.affordances,
-            initial_grid=initial_grid,
-            observed_through_step=observed_through_step,
-        )
+        self.ego = EgoGateMachine(valid_actions=valid_actions, initial_grid=grid, observed_through_step=step)
+        self.counter = CounterGateMachine(affordances=self.ego.affordances, initial_grid=grid, observed_through_step=step)
         self.target_registry = _target_registry()
         self.target_journal = TargetJournal(self.target_registry)
         self.target_router = TargetRouter(self.target_registry, self.target_journal)
@@ -4873,22 +4866,26 @@ class CyberneticGateMachine:
         from inference.framework.g4c_gate import later_adapters
 
         self._adapters = {
-            ACTION_METADATA_GATE_ID: self._g0,
-            GATE_ID: _EgoTarget(self),
-            COUNTER_GATE_ID: _CounterTarget(self),
-            LEVER_GATE_ID: _LeverTarget(self),
-            REACTION_GATE_ID: _ReactionTarget(self),
-            ORBIT_GATE_ID: _LeverStudyTarget(self),
-            **later_adapters(self),
+            ACTION_METADATA_GATE_ID: self._g0, GATE_ID: _EgoTarget(self), COUNTER_GATE_ID: _CounterTarget(self),
+            LEVER_GATE_ID: _LeverTarget(self), REACTION_GATE_ID: _ReactionTarget(self),
+            ORBIT_GATE_ID: _LeverStudyTarget(self), **later_adapters(self),
         }
-        self.lives = LifeRecord()  # lives, levels and the high-water transition (R9-R16)
-        self._capability_secret = secrets.token_bytes(32)
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
-        self._consumed_capabilities: set[str] = set()
         self._counter_prepared_from_ego = False
-        # The record tier's in-memory index (DESIGN_VIRELAI_MEMORY_v1 §5.1): one sparse, lossless
-        # row per recorded transition, whatever gate recorded it. Read by MemoryStore only.
-        self.transition_index: list[dict[str, Any]] = []
+
+    def _advance_level(self, outcome: Mapping[str, Any]) -> None:
+        """The level ended: freeze its model, then start the ladder on the next level's board (R9-R17).
+
+        Without a lossless after-board the ladder cannot restart, and ``ladder_end`` stops the run as before.
+        """
+        grids = grids_from_probe_outcome(outcome)
+        if grids is None:
+            return
+        from inference.framework.level_model import freeze_level
+
+        self.levels.append(freeze_level(self, outcome))
+        actions = outcome.get("available_actions_after") or [item.action for item in self.ego.affordances]
+        self._build_level(actions, grids[1], int(outcome.get("transition_id") or 0))
 
     def _prepare_counter_from_ego(self) -> None:
         """Start G2 from Duck's demonstrated post-G1 world and ego binding."""
@@ -5081,6 +5078,8 @@ class CyberneticGateMachine:
         from inference.framework.memory_store import transition_index_row
 
         self.transition_index.append(self.lives.tag(transition_index_row(probe, outcome, event), outcome))
+        if level_changed(outcome.get("boundary_event") if isinstance(outcome.get("boundary_event"), Mapping) else None):
+            self._advance_level(outcome)
         return event
 
     def apply_counter_baseline(self, outcome: Mapping[str, Any]) -> dict[str, Any] | None:

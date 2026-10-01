@@ -137,7 +137,7 @@ def test_level_transition_interrupts_the_lever_and_closes_the_level_study():
     _act(machine, B, _g(2), _g(3), 3)
     _act(machine, B, _g(3), _g(7), 4, LEVEL_UP)
 
-    payload = _orbit_product(machine)
+    payload = machine.levels[-1]["products"][ORBITS]  # level 1's study, frozen (R9-R17)
     assert payload["lever_entities"] == ["E-A"]
     assert payload["pending_lever_entities"] == []
     assert payload["interrupted_lever_entities"] == ["E-B"]
@@ -146,12 +146,9 @@ def test_level_transition_interrupts_the_lever_and_closes_the_level_study():
     assert payload["lever_classes"] == {"E-A": "ABSORBING"}
     assert [row["entity_id"] for row in payload["orbits"]] == ["E-A"]
 
-    # No deadlock: a coherent closed state with no capability and nothing to answer.
-    view = machine.gate_view()
-    assert view["next_operation"] == LEVEL_CLOSED
-    assert view["status"] == "SATISFIED"
-    assert view["answer_template"] is None
-    assert machine.next_probe_capability() is None
+    # No deadlock: the ladder starts again on level 2 (R9-R17; before, a closed state asking nothing).
+    assert machine.gate_id == "G0-ACTION-METADATA" and machine.lives.level == 2
+    assert machine.legal_move_status()["legal"]
 
 
 def test_same_level_death_returns_the_lever_to_the_study_next_life():
@@ -230,8 +227,9 @@ def test_vc33_kaggle_v1_segment_replayed_as_duck_actions_matches_the_record_and_
             _decode(step["after"]), step["transition_id"], step["boundary_event"],
         )
         assert event["lever_entity_id"] == step["entity_id"]
-    detail_4 = machine.orbit_view("E0004")["runs"][0]
-    detail_5 = machine.orbit_view("E0005")["runs"][0]
+    frozen = machine.levels[-1]  # the level changed on the last press: level 1 is frozen (R9-R17)
+    detail_4 = frozen["orbit_views"]["E0004"]["runs"][0]
+    detail_5 = frozen["orbit_views"]["E0005"]["runs"][0]
     replayed = detail_4["orbit"]["steps"] + detail_5["orbit"]["steps"]
     assert len(replayed) == len(steps)
     for recorded, step in zip(steps, replayed):
@@ -242,10 +240,9 @@ def test_vc33_kaggle_v1_segment_replayed_as_duck_actions_matches_the_record_and_
     assert detail_4["status"] == "BROKEN"
     assert detail_5["status"] == "INTERRUPTED"
 
-    payload = _orbit_product(machine)
+    payload = frozen["products"][ORBITS]
     assert payload["lever_classes"] == {}
     assert payload["interrupted_lever_entities"] == ["E0005"]
     assert payload["unstudied_lever_entities"] == ["E0004"]
     assert payload["phase1_status"] == "CLOSED_BY_LEVEL_BOUNDARY"
-    assert machine.gate_view()["next_operation"] == LEVEL_CLOSED
-    assert machine.next_probe_capability() is None
+    assert machine.gate_id == "G0-ACTION-METADATA"  # the ladder starts again on level 2

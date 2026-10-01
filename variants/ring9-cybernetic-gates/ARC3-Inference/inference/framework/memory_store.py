@@ -176,14 +176,22 @@ class MemoryStore:
         rows = record.summary() if record is not None else []
         return {"schema": SCHEMA, "kind": "lives", "current_life": len(rows), **_page(rows, offset, limit)}
 
+    def levels(self, level: Any = None) -> dict[str, Any]:
+        """Each finished level's frozen model, compact; with ``id``, that level's (R9-R17)."""
+        from inference.framework.level_model import compact
+
+        rows = [compact(item) for item in getattr(self._machine, "levels", ()) if level in (None, item.get("level"))]
+        return {"schema": SCHEMA, "kind": "levels", "carry_status": "UNCONFIRMED on this level", "rows": rows}
+
+    def _this_level(self) -> list[dict[str, Any]]:
+        """The record of the current level: an object on another level is not this one (R9-R17)."""
+        level = getattr(getattr(self._machine, "lives", None), "level", None)
+        return [item for item in self._machine.transition_index if level is None or item.get("level") in (None, level)]
+
     def site(self, row: int, col: int, offset: int = 0, limit: int = 20) -> dict[str, Any]:
-        """Every recorded transition whose action was aimed at this cell, most recent first."""
+        """Every transition on this level aimed at this cell, most recent first."""
         target = {"row": int(row), "col": int(col)}
-        rows = [
-            _compact_transition(item)
-            for item in reversed(self._machine.transition_index)
-            if item.get("acted_site") == target
-        ]
+        rows = [_compact_transition(item) for item in reversed(self._this_level()) if item.get("acted_site") == target]
         return {"schema": SCHEMA, "kind": "site", "site": target, **_page(rows, offset, limit)}
 
     def evidence(self, evidence_id: str) -> dict[str, Any]:
@@ -221,7 +229,7 @@ class MemoryStore:
         cells = {tuple(cell) for cell in ledger.cells_for(requested)}
         aimed = [
             _compact_transition(item)
-            for item in reversed(self._machine.transition_index)
+            for item in reversed(self._this_level())
             if item.get("acted_site")
             and (item["acted_site"]["row"], item["acted_site"]["col"]) in cells
         ]
@@ -279,6 +287,8 @@ class MemoryStore:
             return self.transition(int(ident or 0), **paging)
         if kind == "lives":
             return self.lives(**paging)
+        if kind == "levels":
+            return self.levels(None if ident is None else int(ident))
         if kind == "site":
             return self.site(int(params.get("row", -1)), int(params.get("col", -1)), **paging)
         if kind == "evidence":
@@ -288,7 +298,9 @@ class MemoryStore:
         return self.notes(params.get("subject") or ident, **paging)
 
 
-QUERY_KINDS = ("products", "product", "transitions", "transition", "lives", "site", "evidence", "subject", "notes")
+QUERY_KINDS = (
+    "products", "product", "transitions", "transition", "lives", "levels", "site", "evidence", "subject", "notes",
+)
 
 
 def _fit(result: dict[str, Any] | None, pull: Any) -> dict[str, Any] | None:

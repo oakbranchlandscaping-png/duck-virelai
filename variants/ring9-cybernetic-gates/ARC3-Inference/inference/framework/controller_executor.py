@@ -69,7 +69,7 @@ class OwnedStep:
     answer: dict[str, Any] | None = None
     action: dict[str, Any] | None = None
     probe_token: str | None = None
-    refusal_key: tuple[str, int] | None = field(default=None)
+    refusal_key: tuple[str, int, int | None] | None = field(default=None)
 
 
 def _duck(machine: Any, reason: str) -> OwnedStep:
@@ -114,7 +114,7 @@ def next_owned_step(
     view = machine.gate_view()
     if machine.gate_id == ORBITS:
         return _orbit_step(machine, capability, view, rerun)
-    key = (machine.gate_id, int(view.get("revision") or 0))
+    key = (machine.gate_id, int(view.get("revision") or 0), machine.lives.level)  # per level since R9-R17
     if key in refused:
         return _duck(machine, f"{machine.gate_id} refused the controller's answer at this revision")
     if _answer_due(view):
