@@ -1,0 +1,15 @@
+{
+ "id": "stephenkaskin/virelai-mirror-virelai-qwen3-6-27b-fp8",
+ "title": "virelai-mirror-virelai-qwen3-6-27b-fp8",
+ "code_file": "mirror_model_kernel.py",
+ "language": "python",
+ "kernel_type": "script",
+ "is_private": true,
+ "enable_gpu": false,
+ "enable_tpu": false,
+ "enable_internet": true,
+ "dataset_sources": [],
+ "competition_sources": [],
+ "kernel_sources": [],
+ "model_sources": []
+}
