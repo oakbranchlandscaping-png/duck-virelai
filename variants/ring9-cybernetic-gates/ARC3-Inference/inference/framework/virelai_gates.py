@@ -72,6 +72,7 @@ from inference.framework.g3_inheritance import G2NullInheritance, inherited_tota
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
 from inference.framework.life_record import LifeRecord
+from inference.framework.carry import CarryLedger
 from inference.framework.lever_dossier import (
     LeverDossierAnswer,
     LeverDossierError,
@@ -621,9 +622,7 @@ class EgoGateMachine:
                 "effect": effect,
                 "local": outcome.get("target_local_changed_cell_count"),
                 "remote": outcome.get("remote_changed_cell_count"),
-                "actions_after": sorted(
-                    str(value) for value in outcome.get("available_actions_after", ())
-                ),
+                "actions_after": sorted(str(value) for value in outcome.get("available_actions_after", ())),
             }
             self._coverage_signatures[item.coverage_id] = _canonical(signature_payload)
             self._coverage_effects[item.coverage_id] = effect
@@ -800,9 +799,7 @@ class EgoGateMachine:
             "pending_prediction": (
                 asdict(self.pending_prediction) if self.pending_prediction is not None else None
             ),
-            "last_comparison": (
-                asdict(self.last_comparison) if self.last_comparison is not None else None
-            ),
+            "last_comparison": (asdict(self.last_comparison) if self.last_comparison is not None else None),
             "ego_law": asdict(self.ego_law) if self.ego_law is not None else None,
             "next_probe": asdict(probe) if probe is not None else None,
             "next_gate_id": "G2-COUNTER" if self.status == "CLOSED" else None,
@@ -830,9 +827,7 @@ class EgoGateMachine:
                 "action": action,
                 "required_presses": 2,
                 "observed_presses": sum(item.observed for item in items),
-                "effect_observed": any(
-                    self._coverage_effects.get(item.coverage_id, False) for item in items
-                ),
+                "effect_observed": any(self._coverage_effects.get(item.coverage_id, False) for item in items),
                 "outcomes_consistent": len(signatures) <= 1,
             })
         coordinate = (
@@ -848,9 +843,7 @@ class EgoGateMachine:
             }
             if self._control_archetype["world_type"] == "CLICK_GOD_MODE"
             else
-            self.coordinate_coverage.certificate(
-                include_unknown_members=include_unknown_members
-            )
+            self.coordinate_coverage.certificate(include_unknown_members=include_unknown_members)
             if self._coordinate_enabled
             else {
                 "schema": "virelai-g1-coordinate-coverage-v1",
@@ -4854,8 +4847,9 @@ class CyberneticGateMachine:
         # row per recorded transition, whatever gate recorded it. Read by MemoryStore only.
         self.transition_index: list[dict[str, Any]] = []
 
-    def _build_level(self, valid_actions: Iterable[Any], grid: Sequence[Sequence[int]], step: int) -> None:
-        """Every LEVEL-tier field, fresh: at the game's start, and on each new level (R9-R17)."""
+    def _build_level(self, valid_actions: Iterable[Any], grid: Sequence[Sequence[int]], step: int, prior: Any = None) -> None:
+        """Every LEVEL-tier field, fresh (R9-R17); ``prior``'s levers become this level's carry predictions (R9-R18)."""
+        self.carry = CarryLedger(prior, grid, step)
         self.annotations = AnnotationLane()  # Duck's UNCERTIFIED notes (D6); never read by a gate
         self.ego = EgoGateMachine(valid_actions=valid_actions, initial_grid=grid, observed_through_step=step)
         self.counter = CounterGateMachine(affordances=self.ego.affordances, initial_grid=grid, observed_through_step=step)
@@ -4885,7 +4879,7 @@ class CyberneticGateMachine:
 
         self.levels.append(freeze_level(self, outcome))
         actions = outcome.get("available_actions_after") or [item.action for item in self.ego.affordances]
-        self._build_level(actions, grids[1], int(outcome.get("transition_id") or 0))
+        self._build_level(actions, grids[1], int(outcome.get("transition_id") or 0), self.levels[-1])
 
     def _prepare_counter_from_ego(self) -> None:
         """Start G2 from Duck's demonstrated post-G1 world and ego binding."""
@@ -5078,6 +5072,8 @@ class CyberneticGateMachine:
         from inference.framework.memory_store import transition_index_row
 
         self.transition_index.append(self.lives.tag(transition_index_row(probe, outcome, event), outcome))
+        mask = self.counter.mask_law if self.target_journal.active_product(COUNTER_GATE_ID) is not None else None
+        self.carry.observe(outcome, None if mask is None else mask.cells)
         if level_changed(outcome.get("boundary_event") if isinstance(outcome.get("boundary_event"), Mapping) else None):
             self._advance_level(outcome)
         return event

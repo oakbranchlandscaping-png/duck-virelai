@@ -40,6 +40,7 @@ def _levers(products: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
             "click": anatomy.get("intervention"),
             "channels": [f"{ch.get('locality')} {ch.get('transform')} {ch.get('changed_cell_count')}"
                          for ch in anatomy.get("channels") or ()],
+            "locality": sorted({ch.get("locality") for ch in anatomy.get("channels") or () if ch.get("locality")}),
             "orbit_class": (orbits.get("lever_classes") or {}).get(entity),
             "study": "EXPLAINED" if entity in explained else "INTERRUPTED" if entity in interrupted else "NOT_STUDIED",
         })
@@ -78,8 +79,10 @@ def freeze_level(machine: Any, outcome: Mapping[str, Any]) -> dict[str, Any]:
     """``LevelModel(L)`` at the transition that ended level L (call before the next level is built)."""
     boundary = outcome.get("boundary_event") if isinstance(outcome.get("boundary_event"), Mapping) else {}
     level = boundary.get("level_before")
+    from inference.framework.carry import lever_signatures
+
     products = {row["gate_id"]: row["answer"] for row in machine.completed_gate_rows()}
-    levers = _levers(products)
+    levers = [{**item, "signatures": lever_signatures(machine, item["entity_id"])} for item in _levers(products)]
     return {
         "schema": SCHEMA, "level": level, "level_after": boundary.get("level_after"),
         "frozen_at_transition": int(outcome.get("transition_id") or 0), "gate_at_freeze": machine.gate_id,

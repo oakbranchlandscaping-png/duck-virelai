@@ -287,6 +287,9 @@ class MemoryStore:
             return self.transition(int(ident or 0), **paging)
         if kind == "lives":
             return self.lives(**paging)
+        if kind == "carry":
+            carry = getattr(self._machine, "carry", None)
+            return {"schema": SCHEMA, "kind": "carry", **(carry.view() if carry is not None else {})}
         if kind == "levels":
             return self.levels(None if ident is None else int(ident))
         if kind == "site":
@@ -299,7 +302,8 @@ class MemoryStore:
 
 
 QUERY_KINDS = (
-    "products", "product", "transitions", "transition", "lives", "levels", "site", "evidence", "subject", "notes",
+    "products", "product", "transitions", "transition", "lives", "levels", "carry", "site", "evidence", "subject",
+    "notes",
 )
 
 

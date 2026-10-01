@@ -398,6 +398,9 @@ def _digest_lines(machine: Any) -> list[tuple[str, str]]:
     from inference.framework.level_model import level_line
 
     lines = [(f"LEVEL-{model.get('level')}", f"[prior] {level_line(model)}") for model in getattr(machine, "levels", ())]
+    carry = getattr(machine, "carry", None)
+    if carry is not None and carry.line():
+        lines.append(("G9-CARRY", f"[carry] {carry.line()}"))
     for row in machine.completed_gate_rows():
         gate = row["gate_id"]
         payload = row["answer"]

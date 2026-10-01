@@ -30,7 +30,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
     "CyberneticGateMachine": {
         "_capability_secret": GAME, "_consumed_capabilities": GAME, "protocol": GAME,
         "transition_index": GAME, "lives": GAME, "levels": GAME, "_adapters": LEVEL, "_issued_capabilities": LEVEL,
-        "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL,
+        "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL, "carry": LEVEL,
         "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
     },
