@@ -109,12 +109,18 @@ def _steps(outcomes: list[dict], grid: list[list[int]]) -> list[dict]:
             "transition_id": o["transition_id"],
             "action": o["action"],
             "changed": changed,
-            **({"boundary": o["boundary_event"]} if (o.get("boundary_event") or {}).get("state") not in {None, "NOT_FINISHED"} else {}),
+            **({"boundary": o["boundary_event"]} if _boundary_kept(o.get("boundary_event") or {}) else {}),
         })
         grid = before
         for r, c, _b, a in changed:
             grid[r][c] = a
     return steps
+
+
+def _boundary_kept(event: dict) -> bool:
+    """A finished state, or a level change: a completed level reports NOT_FINISHED (R9-R15, F-R1)."""
+    level_changed = event.get("level_before") is not None and event.get("level_before") != event.get("level_after")
+    return event.get("state") not in {None, "NOT_FINISHED"} or bool(event.get("level_completed")) or level_changed
 
 
 def write_record(record: dict, out: Path) -> None:

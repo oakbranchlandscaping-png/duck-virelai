@@ -14,7 +14,8 @@ renderer after every step. No model is called.
 Fixture format (``virelai-recorded-world-v1``, gzip JSON): ``initial_grid`` (hex rows),
 ``valid_actions``, ``steps`` [{transition_id, action, changed: [[r, c, before, after], ...]}] (a step
 with ``kind: RESET`` is a harness reset between probes, since R9-R12),
-``answers`` [{gate_id, ...Duck-written fields}] in acceptance order, and ``protocol``: the gate
+``answers`` [{gate_id, ...Duck-written fields}] in acceptance order (an entity's answer is matched to
+the entity the gate asks about, since R9-R15), and ``protocol``: the gate
 machine's recording protocol (``{"g3_inherits_g2_nulls": bool}``). A record without ``protocol``
 predates R9-R08 and was made with G3 re-clicking G2's nulls, so it replays that way.
 """
@@ -250,6 +251,17 @@ def _submit_due_answers(
             build_card(machine).payload.get("answer_template")
             if answer_source == "card" else machine.gate_view().get("answer_template")
         ) or {}
-        machine.submit_answer(merge_recorded_answer(template, queue.pop(0)))
+        machine.submit_answer(merge_recorded_answer(template, queue.pop(_answer_index(queue, template))))
         result.answers_used += 1
     return True
+
+
+def _answer_index(queue: Sequence[Mapping[str, Any]], template: Mapping[str, Any]) -> int:
+    """The recorded answer for the entity the gate asks about, else the oldest (R9-R15, F-R2).
+
+    Live, Duck may answer a lever's study before another's the machine would ask for first (a Duck
+    press on its own turn reorders the study); the record keeps acceptance order, the gate the
+    machine's. Matching by entity replays both orders.
+    """
+    wanted = template.get("entity_id")
+    return next((i for i, answer in enumerate(queue) if wanted and answer.get("entity_id") == wanted), 0)

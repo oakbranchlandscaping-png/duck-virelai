@@ -816,10 +816,8 @@ class _HarnessGameSession:
 
             try:
                 payload = self._execute_action(
-                    action,
-                    batch_index=batch_index,
-                    batch_size=batch_size,
-                    flush_viewer_payload=False,
+                    action, batch_index=batch_index, batch_size=batch_size, flush_viewer_payload=False,
+                    actor="CONTROLLER" if arguments.get("actor") == "CONTROLLER" else "DUCK",
                 )
             except Exception as exc:
                 if executed_payloads:

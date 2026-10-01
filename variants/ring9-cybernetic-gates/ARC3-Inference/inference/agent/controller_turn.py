@@ -145,7 +145,7 @@ def _controller_action(
         session.wake = f"the gate refused the controller's action: {exc}"
         ledger.finish(gate_after=machine.gate_id, step_executed=False, outcome="controller_refused")
         return AnalyzerTurnResult(step_executed=False)
-    raw = agent._step_env_callback({"actions": [step.action], "decision": asdict(probe)})
+    raw = agent._step_env_callback({"actions": [step.action], "decision": asdict(probe), "actor": CONTROLLER})
     raw = raw if isinstance(raw, dict) else {}
     event = None
     if raw.get("executed"):
