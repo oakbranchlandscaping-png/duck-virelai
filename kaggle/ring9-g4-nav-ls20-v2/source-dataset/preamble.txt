@@ -1,0 +1,1 @@
+R9-R19 ls20 NAV checkpoint v2: source 72adbe3, exact mirrored vLLM wheel set, pinned Qwen3.8-27B-FP8. Human review required.

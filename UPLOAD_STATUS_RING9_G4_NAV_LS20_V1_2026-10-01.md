@@ -7,20 +7,25 @@
 
 ## Current state
 
-The private Kaggle upload was attempted on 2026-10-01 but did not execute. The escalated upload
-was rejected by the environment's automatic approval layer because the session had reached its
-tool-usage limit. A normal sandbox retry reached the Kaggle client but could not resolve
-`api.kaggle.com`. No dataset version, notebook version, or gameplay run was created by these
-attempts.
+The private dataset was created and became ready. Notebook version 1 ran and failed during setup:
+Kaggle no longer permitted either `driessmit1` runtime dataset to be attached. The source manifest
+verified and the requested RTX PRO 6000 was allocated, but the wheelhouse and Qwen3.6 paths were
+absent. No model request or game action occurred. See
+`REVIEW_RING9_G4_NAV_LS20_KAGGLE_V1_2026-10-01.md`.
+
+Version 2 is frozen at `kaggle/ring9-g4-nav-ls20-v2/`. It preserves source commit `72adbe3` and the
+behavioral rubric, while using an accessible, checksum-identical wheelhouse mirror and a pinned
+Qwen3.8 Kaggle model source. The model difference is explicit in the receipt.
 
 ## Resume commands
 
-From `duck-virelai/`, after Kaggle network access is available:
+The old resume commands below are historical; do not rerun v1. Upload and run the verified v2
+package instead.
 
 ```text
-kaggle datasets create -p kaggle/ring9-g4-nav-ls20-v1/source-dataset -r skip
-kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-g4-nav-ls20-v1
-kaggle kernels push -p kaggle/ring9-g4-nav-ls20-v1/kernel --accelerator NvidiaRtxPro6000
+kaggle datasets create -p kaggle/ring9-g4-nav-ls20-v2/source-dataset -r skip
+kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-g4-nav-ls20-v2
+kaggle kernels push -p kaggle/ring9-g4-nav-ls20-v2/kernel --accelerator NvidiaRtxPro6000
 ```
 
 Wait for the dataset status to be `ready` before pushing the notebook. Review the downloaded
