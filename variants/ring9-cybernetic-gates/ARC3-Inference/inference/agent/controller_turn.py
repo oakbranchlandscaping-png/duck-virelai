@@ -139,7 +139,8 @@ def _controller_action(
     rerun_press = bool(session.rerun) and step.gate_id == "G4.2-LEVER-ORBITS"
     try:
         probe, before_frame, actions_before = agent._gate_probe_begin(
-            state_path, machine, {"probe_token": step.probe_token}, [step.action], executor=CONTROLLER,
+            state_path, machine, {"probe_token": step.probe_token, **(step.decision or {})},
+            [step.action], executor=CONTROLLER,
         )
     except Exception as exc:  # a refused probe is a stop condition, never a crash
         session.wake = f"the gate refused the controller's action: {exc}"

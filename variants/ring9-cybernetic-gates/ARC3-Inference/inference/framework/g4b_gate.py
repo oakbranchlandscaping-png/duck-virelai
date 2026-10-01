@@ -77,9 +77,9 @@ def relations_contract() -> GoalContract:
 class LeverRelationsTarget:
     TARGET = (
         "Find out how the levers affect each other. For each test, freeze a prediction: the one "
-        "action to take, and what it will do to every lever's region (UNCHANGED, STEPS as the lever's "
+        "target-bound intervention to execute, and what it will do to every lever's region (UNCHANGED, STEPS as the lever's "
         "own press does, or CHANGES) and to the rest of the board. The controller takes the action and "
-        "grades your prediction on the counter-masked board. Press every lever in at least one "
+        "grades your prediction on the counter-masked contact transition. Activate every lever in at least one "
         "prediction, then describe the lever set in plain language."
     )
     DONE_WHEN = (
@@ -158,16 +158,23 @@ class LeverRelationsTarget:
     def next_probe(self) -> ProbeEnvelope | None:
         if self._pending is None or self._closed():
             return None
+        nav = str(self._pending.action.get("kind") or "").upper() == "NAV"
         return ProbeEnvelope(
             probe_id=f"{RELATION_GATE_ID}:{self._pending.prediction_id}",
             gate_id=RELATION_GATE_ID,
-            purpose="PREDICTION_TEST",
+            purpose="NAV_PREDICTION_TEST" if nav else "PREDICTION_TEST",
             question=self._pending.because,
-            actions=(dict(self._pending.action),),
+            actions=() if nav else (dict(self._pending.action),),
             live_alternatives=("SUPPORTED", "CONTRADICTED"),
             outcome_partition=("graded",),
             declared_at_transition=self._pending.declared_at_transition,
-            target={"prediction_id": self._pending.prediction_id},
+            admissible_actions=(tuple(sorted(
+                item.action for item in self.machine.ego.affordances
+                if item.action in self.machine.ego._currently_available and item.action != "ACTION6"
+            )) if nav else ()),
+            target={"prediction_id": self._pending.prediction_id,
+                    "entity_id": self._pending.acted_lever,
+                    "intervention": dict(self._pending.action)},
         )
 
     def validate_probe(self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]) -> ProbeEnvelope:
@@ -180,6 +187,11 @@ class LeverRelationsTarget:
         pending = self._pending
         if probe.gate_id != RELATION_GATE_ID or pending is None:
             raise GateContractError("Outcome does not belong to a frozen G4-B prediction.")
+        if probe.intent and probe.intent.startswith("NAV:APPROACH:"):
+            event = self._record_nav_approach(probe, outcome)
+            self.revision += 1
+            self._events.append(event)
+            return event
         event = self.take(pending, probe, outcome)
         self._pending = None
         self.revision += 1
@@ -188,6 +200,23 @@ class LeverRelationsTarget:
             self._level_closed = event["level_boundary"]
             self._emit_product()
         return event
+
+    def _record_nav_approach(self, probe: ProbeEnvelope, outcome: Mapping[str, Any]) -> dict[str, Any]:
+        evidence_id = "E-" + hashlib.sha256(_canonical({"probe_id": probe.probe_id, "outcome": outcome}).encode()).hexdigest()[:16]
+        baseline = self.machine.apply_counter_baseline({**dict(outcome), "evidence_id": evidence_id})
+        boundary = outcome.get("boundary_event")
+        state = dict(boundary) if isinstance(boundary, Mapping) else None
+        closed = bool(level_changed(state))
+        if closed and self._level_closed is None:
+            self._level_closed = {"evidence_ref": evidence_id, "level_before": state.get("level_before"),
+                                  "level_after": state.get("level_after")}
+            self._emit_product()
+        return {"schema": SCHEMA_VERSION, "evidence_id": evidence_id, "gate_id": probe.gate_id,
+                "probe_id": probe.probe_id, "action": dict(outcome.get("action") or {}),
+                "prediction": {"prediction_id": self._pending.prediction_id, "status": "ROUTING"},
+                "nav_phase": "APPROACH", "graded": False,
+                "outcome": compact_probe_outcome(outcome), "counter_baseline": baseline,
+                "level_boundary": None if not closed else dict(self._level_closed)}
 
     def take(self, prediction: Prediction, probe: ProbeEnvelope, outcome: Mapping[str, Any]) -> dict[str, Any]:
         """Grade a taken prediction on its masked transition and note it for split outcomes (G4-B, G4-C)."""
@@ -244,15 +273,24 @@ class LeverRelationsTarget:
         raise GateContractError(f"G4-B answer_kind must be {PREDICTION_KIND} or {RELATIONS_KIND}.")
 
     def _freeze(self, raw: Mapping[str, Any]) -> Prediction:
+        self._seed()
         if self._pending is not None:
             raise G4RelationError(f"{self._pending.prediction_id} is frozen and not yet taken; the controller takes it next")
-        try:
-            action = _normalize_action_payload(raw.get("action"))
-        except GateContractError as exc:
-            raise G4RelationError(f"action: {exc}") from exc
-        available = {item.action for item in self.machine.ego.affordances if item.action in self.machine.ego._currently_available}
-        if action.get("action") not in available:
-            raise G4RelationError(f"action must be one of the available actions {sorted(available)}")
+        raw_action = raw.get("action")
+        if isinstance(raw_action, Mapping) and str(raw_action.get("kind") or "").upper() == "NAV":
+            action = dict(raw_action)
+            known = {region.entity_id: region for region in self._regions}
+            entity = str(action.get("entity_id") or "")
+            if entity not in known or _canonical(known[entity].click) != _canonical(action):
+                raise G4RelationError("NAV action must exactly match a listed target-bound intervention")
+        else:
+            try:
+                action = _normalize_action_payload(raw_action)
+            except GateContractError as exc:
+                raise G4RelationError(f"action: {exc}") from exc
+            available = {item.action for item in self.machine.ego.affordances if item.action in self.machine.ego._currently_available}
+            if action.get("action") not in available:
+                raise G4RelationError(f"action must be one of the available actions {sorted(available)}")
         self._pending = validate_prediction(
             raw, self._regions, prediction_id=f"P{len(self._predictions) + 1}",
             declared_at_transition=self.machine.observed_through_step, action=action,

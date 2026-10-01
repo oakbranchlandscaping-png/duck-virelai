@@ -70,6 +70,7 @@ class OwnedStep:
     action: dict[str, Any] | None = None
     probe_token: str | None = None
     refusal_key: tuple[str, int, int | None] | None = field(default=None)
+    decision: dict[str, Any] | None = None
 
 
 def _duck(machine: Any, reason: str) -> OwnedStep:
@@ -102,8 +103,10 @@ def next_owned_step(
     ``rerun`` is an extra run Duck asked for (D3): ``{"entity_id", "click", "left"}``.
     """
     world = control_archetype_prior(machine.ego.affordances)["world_type"]
+    if world in {"NAVIGATION", "HYBRID"}:
+        return _nav_step(machine)
     if world != "CLICK_GOD_MODE":
-        return _duck(machine, f"the controller executes CLICK worlds only; this is {world}")
+        return _duck(machine, f"unsupported controller world type {world}")
     if machine.gate_id not in CONTROLLER_GATES:
         return _duck(machine, f"{machine.gate_id} needs judgment")
     if orientation_due(machine):
@@ -130,6 +133,63 @@ def next_owned_step(
     return OwnedStep(
         CONTROLLER, machine.gate_id, reason, ACTION, action=action,
         probe_token=str(capability["probe_token"]),
+    )
+
+
+def _nav_step(machine: Any) -> OwnedStep:
+    """Controller-owned deterministic movement; Duck still owns explanations."""
+    if machine.gate_id == ORBITS:
+        capability = machine.next_probe_capability()
+        view = machine.gate_view()
+        awaiting = [item for item in view.get("answer_templates") or () if isinstance(item, Mapping)]
+        if awaiting:
+            return _duck(machine, f"the NAV run of {awaiting[0].get('entity_id')} is confirmed: explaining it is Duck's")
+        if capability is None:
+            return _duck(machine, "G4-A NAV has no active lever procedure")
+        levers = [item for item in (capability.get("target") or {}).get("levers") or () if isinstance(item, Mapping)]
+        for status in STUDY_ORDER:
+            lever = next((item for item in levers if item.get("status") == status), None)
+            if lever is None:
+                continue
+            planned = machine._adapters[ORBITS].planned_nav_step(str(lever.get("entity_id")))
+            if planned is None:
+                return _duck(machine, f"no evidence-bounded route to {lever.get('entity_id')}")
+            return OwnedStep(
+                CONTROLLER, ORBITS, f"G4-A NAV {planned.intent.lower()} for {lever.get('entity_id')}",
+                ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+                decision={"intent": f"NAV:{planned.intent}:{lever.get('entity_id')}"},
+            )
+        return _duck(machine, "G4-A NAV has no lever the controller can route to")
+    if machine.gate_id in PREDICTION_GATES:
+        capability = machine.next_probe_capability()
+        if capability is None:
+            return _duck(machine, f"{machine.gate_id} needs Duck to freeze or explain a prediction")
+        entity = str((capability.get("target") or {}).get("entity_id") or "")
+        planned = machine._adapters[ORBITS].planned_nav_step(entity)
+        if planned is None:
+            return _duck(machine, f"no evidence-bounded route to prediction target {entity}")
+        return OwnedStep(
+            CONTROLLER, machine.gate_id, f"{machine.gate_id} NAV {planned.intent.lower()} for {entity}",
+            ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+            decision={"intent": f"NAV:{planned.intent}:{entity}"},
+        )
+    if machine.gate_id != "G3-LEVERS":
+        return _duck(machine, f"the NAV branch for {machine.gate_id} has no computable step yet")
+    capability = machine.next_probe_capability()
+    if capability is None:
+        return _duck(machine, "G3 NAV needs an answer or has no active target")
+    if capability.get("purpose") not in {"PILOT_TO_LEVER_CONTACT", "CONFIRM_LEVER_WITNESS"}:
+        return _duck(machine, f"G3 NAV cannot compute {capability.get('purpose')}")
+    target = capability.get("target") or {}
+    adapter = machine._adapters["G3-LEVERS"]
+    planned = adapter.planned_nav_step(target)
+    if planned is None:
+        return _duck(machine, "G1 evidence does not yet support a deterministic route step")
+    return OwnedStep(
+        CONTROLLER, machine.gate_id,
+        f"G3 NAV {planned.intent.lower()}: {planned.reason}", ACTION,
+        action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+        decision={"pilot_intent": planned.intent},
     )
 
 

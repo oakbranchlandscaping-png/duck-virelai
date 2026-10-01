@@ -69,9 +69,10 @@ def later_adapters(machine: Any) -> dict[str, Any]:
 class LeverLawTarget:
     TARGET = (
         "Test your description of the lever set. Freeze one new prediction drawn from it: an action "
-        "no graded prediction has taken from the current board, what it will do to every lever's region "
-        "and to the rest of the board, and the numbers of the relations it relies on. The controller "
-        "takes it. Supported: the lever law set is certified. Contradicted: G4-B reopens, and you test "
+        "or target-bound contact procedure no graded prediction has tested from the current board, "
+        "what it will do to every lever's region and to the rest of the board, and the relation "
+        "numbers it relies on. The controller executes it and grades only its activation transition. "
+        "Supported: the lever law set is certified. Contradicted: G4-B reopens, and you test "
         "more and revise the description."
     )
     DONE_WHEN = (
@@ -124,16 +125,23 @@ class LeverLawTarget:
     def next_probe(self) -> ProbeEnvelope | None:
         if self._pending is None or self._closed():
             return None
+        nav = str(self._pending.action.get("kind") or "").upper() == "NAV"
         return ProbeEnvelope(
             probe_id=f"{LAW_GATE_ID}:{self._pending.prediction_id}",
             gate_id=LAW_GATE_ID,
-            purpose="PREDICTION_TEST",
+            purpose="NAV_PREDICTION_TEST" if nav else "PREDICTION_TEST",
             question=self._pending.because,
-            actions=(dict(self._pending.action),),
+            actions=() if nav else (dict(self._pending.action),),
             live_alternatives=("SUPPORTED", "CONTRADICTED"),
             outcome_partition=("graded",),
             declared_at_transition=self._pending.declared_at_transition,
-            target={"prediction_id": self._pending.prediction_id},
+            admissible_actions=(tuple(sorted(
+                item.action for item in self.machine.ego.affordances
+                if item.action in self.machine.ego._currently_available and item.action != "ACTION6"
+            )) if nav else ()),
+            target={"prediction_id": self._pending.prediction_id,
+                    "entity_id": self._pending.acted_lever,
+                    "intervention": dict(self._pending.action)},
         )
 
     def validate_probe(self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]) -> ProbeEnvelope:
@@ -162,10 +170,18 @@ class LeverLawTarget:
             raise G4RelationError("from_relations must be a non-empty list of relation numbers")
         if any(item < 0 or item >= len(relations) for item in drawn):
             raise G4RelationError(f"from_relations must be numbers from 0 to {len(relations) - 1}")
-        try:
-            action = _normalize_action_payload(raw.get("action"))
-        except GateContractError as exc:
-            raise G4RelationError(f"action: {exc}") from exc
+        raw_action = raw.get("action")
+        if isinstance(raw_action, Mapping) and str(raw_action.get("kind") or "").upper() == "NAV":
+            action = dict(raw_action)
+            region = next((item for item in self._relations._regions
+                           if item.entity_id == str(action.get("entity_id") or "")), None)
+            if region is None or _canonical(region.click) != _canonical(action):
+                raise G4RelationError("NAV action must exactly match a listed target-bound intervention")
+        else:
+            try:
+                action = _normalize_action_payload(raw_action)
+            except GateContractError as exc:
+                raise G4RelationError(f"action: {exc}") from exc
         grid = self._relations._grid()
         if grid is not None:
             tested = self._relations._record.tested(action, masked_address(grid, self.machine.counter.mask_law))
@@ -185,6 +201,29 @@ class LeverLawTarget:
         pending = self._pending
         if probe.gate_id != LAW_GATE_ID or pending is None:
             raise GateContractError("Outcome does not belong to a frozen G4-C prediction.")
+        if probe.intent and probe.intent.startswith("NAV:APPROACH:"):
+            import hashlib
+            from inference.framework.probe_evidence import compact_probe_outcome
+            evidence_id = "E-" + hashlib.sha256(_canonical({"probe_id": probe.probe_id, "outcome": outcome}).encode()).hexdigest()[:16]
+            baseline = self.machine.apply_counter_baseline({**dict(outcome), "evidence_id": evidence_id})
+            boundary = outcome.get("boundary_event")
+            state = dict(boundary) if isinstance(boundary, Mapping) else None
+            from inference.framework.g4_guided import level_changed
+            closed = bool(level_changed(state))
+            if closed and self._level_closed is None:
+                self._level_closed = {"evidence_ref": evidence_id, "level_before": state.get("level_before"),
+                                      "level_after": state.get("level_after")}
+                self._emit_product()
+            event = {"schema": "virelai-cybernetic-gate-v1", "evidence_id": evidence_id,
+                     "gate_id": probe.gate_id, "probe_id": probe.probe_id,
+                     "action": dict(outcome.get("action") or {}),
+                     "prediction": {"prediction_id": pending.prediction_id, "status": "ROUTING"},
+                     "nav_phase": "APPROACH", "graded": False,
+                     "outcome": compact_probe_outcome(outcome), "counter_baseline": baseline,
+                     "level_boundary": None if not closed else dict(self._level_closed)}
+            self.revision += 1
+            self._events.append(event)
+            return event
         event = self._relations.take(pending, probe, outcome)
         self._pending = None
         self.revision += 1

@@ -10,7 +10,7 @@ second router.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 import base64
 import hashlib
 import hmac
@@ -213,6 +213,10 @@ class GateAnswer:
     falsifier: str
     novel_prediction: Mapping[str, Any]
     limitations: tuple[str, ...]
+    # Lossless machine-readable action-law fields.  The prose law remains the
+    # explanatory contract; this record lets the NAV controller consume only
+    # displacements Duck actually declared and G1 subsequently demonstrated.
+    action_law_specs: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -2413,6 +2417,9 @@ class _LeverTarget:
         self._target_index = 0
         self._navigation_steps = 0
         self._navigation_limit = 24
+        self._nav_refused: set[tuple[tuple[int, int], str]] = set()
+        self._nav_route_evidence: list[str] = []
+        self._last_nav_plan: Any | None = None
         self._phase = "CLICK" if self._world_type in {"CLICK_GOD_MODE", "HYBRID"} else "NAV"
         self._complete_reason: str | None = None
         self._eligible_frontier: tuple[dict[str, Any], ...] | None = None
@@ -2885,6 +2892,42 @@ class _LeverTarget:
             target=target,
         )
 
+    def planned_nav_step(self, target: Mapping[str, Any]) -> Any | None:
+        """Return the controller's next evidence-bounded route/contact step."""
+        if self._phase != "NAV":
+            return None
+        from inference.framework.nav_control import compile_nav_control_map
+        from inference.framework.nav_route import NavLattice, plan_contact
+
+        control = compile_nav_control_map(self.machine.ego)
+        bearings = control.bearing_map()
+        if not bearings:
+            return None
+        ledger = self._ensure_entity_ledger()
+        ego_ids = ledger.role_entities("EGO")
+        sightings = [ledger.entities[item].current for item in ego_ids if item in ledger.entities]
+        sightings = [item for item in sightings if item is not None and item.cells]
+        if not sightings:
+            return None
+        cells = tuple(sorted({cell for sighting in sightings for cell in sighting.cells}))
+        anchor = min(cells)
+        shape = frozenset((r-anchor[0], c-anchor[1]) for r, c in cells)
+        stands = set()
+        for entity_id in ego_ids:
+            for sighting in ledger.entities[entity_id].sightings:
+                if sighting.cells:
+                    stands.add(min(sighting.cells))
+        grid = ledger._grid
+        lattice = NavLattice(anchor, shape, bearings, frozenset(stands),
+                             frozenset(self._nav_refused), (len(grid), len(grid[0])))
+        target_entity = str(target.get("entity_id") or "")
+        target_cells = target.get("cells") or ()
+        hypothesis = ledger.entities.get(target_entity)
+        if hypothesis is not None and hypothesis.current is not None:
+            target_cells = hypothesis.current.cells
+        self._last_nav_plan = plan_contact(lattice, target_entity, target_cells)
+        return self._last_nav_plan
+
     def validate_probe(
         self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]
     ) -> ProbeEnvelope:
@@ -2909,6 +2952,7 @@ class _LeverTarget:
     def record_outcome(
         self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
     ) -> dict[str, Any]:
+        target_index_before = self._target_index
         expected = self.next_probe()
         if expected is None or probe.probe_id != expected.probe_id:
             raise GateContractError("Outcome does not belong to the current G3 probe.")
@@ -2961,6 +3005,22 @@ class _LeverTarget:
             target_member_id=target_member_id,
             target_entity_id=entity_id,
         )
+        if (
+            self._phase == "NAV" and probe.pilot_intent == "CONTACT_ATTEMPT"
+            and not target_changed and not scope.ego_expected_cells
+            and not scope.ground_exchange_cells
+        ):
+            # This is the production refused-contact observation: the predicted
+            # contact press yielded no target, ego, or ground residue after the
+            # counter was partitioned away.
+            lossless["refused_contact"] = True
+            if isinstance(action, Mapping):
+                action_name = str(action.get("action") or "")
+                ego_ids = ledger.role_entities("EGO")
+                anchors = [ledger.entities[item].current.anchor for item in ego_ids
+                           if ledger.entities[item].current is not None]
+                if anchors and action_name:
+                    self._nav_refused.add((min(anchors), action_name))
         pending = self._pending_confirmation
         if is_confirmation and pending is not None:
             frozen_cells = tuple(
@@ -2993,7 +3053,7 @@ class _LeverTarget:
                     target_member_id
                     if scope.pre_action_owner_entity_id == entity_id else None
                 ),
-                refused_contact=bool(outcome.get("refused_contact")),
+                refused_contact=bool(lossless.get("refused_contact")),
                 target_is_counter=(
                     bool(scope.target_cells)
                     and self.machine.counter.mask_law is not None
@@ -3006,6 +3066,37 @@ class _LeverTarget:
         record = self.evidence.record(attribution)
         event["attribution"] = asdict(attribution)
         event["dossier"] = asdict(record)
+        if self._phase == "NAV" and probe.pilot_intent == "CONTACT_ATTEMPT" and entity_id:
+            from inference.framework.nav_intervention import ContactEpoch, ContactProcedure
+            procedure = ContactProcedure.create(
+                target_entity_id=entity_id, ego_entity_ids=ledger.role_entities("EGO"),
+                target_cells=scope.target_cells,
+                allowed_actions=tuple(sorted(
+                    item.action for item in self.machine.ego.affordances
+                    if _action_number(item.action) in {1, 2, 3, 4}
+                )), level=self.machine.lives.level, life=self.machine.lives.life,
+            )
+            plan = self._last_nav_plan
+            stand = getattr(plan, "stand", None)
+            ego_after = {
+                cell for ego_id in ledger.role_entities("EGO")
+                if ego_id in ledger.entities and ledger.entities[ego_id].current is not None
+                for cell in ledger.entities[ego_id].current.cells
+            }
+            contact_outcome = (
+                "BOUNDARY" if attribution.boundary_state else
+                "REFUSED" if lossless.get("refused_contact") else
+                "ENTERED" if ego_after & set(scope.target_cells) else
+                "DISPLACED" if plan is not None and ego_after and min(ego_after) != plan.stand else
+                "TRANSFORMED" if attribution.positive else "UNRESOLVED"
+            )
+            epoch = ContactEpoch.create(
+                procedure=procedure, route_evidence_refs=tuple(self._nav_route_evidence),
+                contact_evidence_ref=evidence_id,
+                final_action=str((action or {}).get("action") if isinstance(action, Mapping) else action),
+                stand=stand, outcome=contact_outcome,
+            )
+            event["contact_epoch"] = epoch.snapshot()
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         event["counter_baseline"] = counter_baseline
         ambiguity_bounded = False
@@ -3058,12 +3149,33 @@ class _LeverTarget:
                         for item in self.evidence._attributions.get(target_member_id, ())
                         if item.evidence_ref == pending["witness_evidence_ref"]
                     )
+                    intervention: dict[str, Any]
+                    if pending["phase"] == "NAV":
+                        from inference.framework.nav_intervention import ContactProcedure
+                        procedure = ContactProcedure.create(
+                            target_entity_id=entity_id,
+                            ego_entity_ids=ledger.role_entities("EGO"),
+                            target_cells=pending["target"].get("cells", ()),
+                            allowed_actions=tuple(sorted(
+                                item.action for item in self.machine.ego.affordances
+                                if _action_number(item.action) in {1, 2, 3, 4}
+                            )),
+                            level=self.machine.lives.level,
+                            life=self.machine.lives.life,
+                        )
+                        intervention = {
+                            **procedure.intervention.payload(),
+                            "final_action": dict(pending["action"] or {}),
+                            "target_cells": [list(cell) for cell in procedure.target_cells],
+                        }
+                    else:
+                        intervention = dict(pending["action"] or {})
                     self._pending_dossier = {
                         "target_member_id": target_member_id,
                         "entity_id": entity_id,
                         "witness_evidence_ref": pending["witness_evidence_ref"],
                         "confirmation_evidence_ref": evidence_id,
-                        "intervention": dict(pending["action"] or {}),
+                        "intervention": intervention,
                         "effect_summary": lever_effect_summary(
                             witness_attribution,
                             witness_evidence_ref=pending["witness_evidence_ref"],
@@ -3153,8 +3265,9 @@ class _LeverTarget:
                     )
                     ambiguity_bounded = True
         boundary_interrupted = bool(attribution.boundary_state)
-        if not is_confirmation and entity_id and probe.pilot_intent == "CONTACT_ATTEMPT":
+        if not is_confirmation and entity_id and self._phase == "NAV":
             self._navigation_steps += 1
+            self._nav_route_evidence.append(evidence_id)
             if boundary_interrupted:
                 self._navigation_steps = 0
             elif target_changed and self._pending_confirmation is None:
@@ -3173,7 +3286,17 @@ class _LeverTarget:
                     )
                 self._target_index += 1
                 self._navigation_steps = 0
-            elif (terminal or self._navigation_steps >= self._navigation_limit) and self._pending_confirmation is None:
+            elif (
+                probe.pilot_intent == "CONTACT_ATTEMPT"
+                and attribution.disposition in {"SCOPED_NULL_RESPONSE", COUNTER_ONLY_DISPOSITION}
+                and self._pending_confirmation is None
+            ):
+                # A completed footprint contact with no world residue is the
+                # target's scoped null result.  It closes this G3 attempt; the
+                # route length is irrelevant to the epistemic verdict.
+                self._target_index += 1
+                self._navigation_steps = 0
+            elif terminal and self._pending_confirmation is None:
                 if attribution.disposition in {
                     "AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"
                 }:
@@ -3182,8 +3305,8 @@ class _LeverTarget:
                         entity_id=entity_id,
                         evidence_ref=evidence_id,
                         disposition=attribution.disposition,
-                        terminal_state="BUDGET_STOPPED",
-                        reason="The bounded embodied contact pursuit exhausted its declared step limit.",
+                        terminal_state="AMBIGUOUS",
+                        reason="The embodied contact pursuit was interrupted by a terminal boundary.",
                     )
                 self._target_index += 1
                 self._navigation_steps = 0
@@ -3204,7 +3327,11 @@ class _LeverTarget:
             "navigation_steps": self._navigation_steps,
             "entity_id": entity_id,
             "target_changed": target_changed,
+            "route_evidence_refs": list(self._nav_route_evidence),
         }
+        if self._target_index != target_index_before:
+            self._nav_route_evidence.clear()
+            self._last_nav_plan = None
         self.revision += 1
         return event
 
@@ -3252,6 +3379,8 @@ class _LeverTarget:
         self._pending_dossier = None
         self._target_index += 1
         self._navigation_steps = 0
+        self._nav_route_evidence.clear()
+        self._last_nav_plan = None
         self.revision += 1
         return answer
 
@@ -4294,8 +4423,9 @@ class _LeverStudyTarget:
     """
 
     TARGET = (
-        "For every lever listed below, find out what pressing it repeatedly does. Press the "
-        "lever's click again and again, with no other action in between, until the "
+        "For every lever listed below, find out what activating it repeatedly does. Press the "
+        "listed CLICK intervention, or repeat the listed NAV body-contact procedure, with no "
+        "other lever activation in between, until the "
         "counter-masked board stops changing or returns to an earlier state. Then confirm that "
         "endpoint: one more press that also changes nothing, or one more full cycle that retraces "
         "the recorded states. Explain each lever once its run is confirmed."
@@ -4307,7 +4437,7 @@ class _LeverStudyTarget:
     )
     RULES = (
         "Any action may be taken, in any order. With the controller executor (D3), it presses each lever to its endpoint and you explain each confirmed run; ask for an extra run with virelai('rerun', id=ENTITY_ID, presses=N).",
-        "A press counts only if it is the lever's exact listed click (action and coordinates).",
+        "An activation counts only if it is the exact listed click or the terminal contact of the listed NAV procedure; NAV approach actions do not count.",
         "Any other action, a reset, or a boundary ends an unconfirmed run; start it again when "
         "you are ready. Ended runs stay on the record as evidence.",
         "The counter is masked: only non-counter changes count as the board changing.",
@@ -4352,7 +4482,12 @@ class _LeverStudyTarget:
             if not entity_id or not isinstance(intervention, Mapping) or not intervention:
                 raise GateContractError("Each G4-A lever needs an entity and bound intervention.")
             order.append(entity_id)
-            interventions[entity_id] = _normalize_action_payload(intervention)
+            if str(intervention.get("kind") or "").upper() == "NAV":
+                if str(intervention.get("entity_id") or "") != entity_id or not intervention.get("procedure_id"):
+                    raise GateContractError("A NAV intervention must bind its lever entity and procedure id.")
+                interventions[entity_id] = dict(intervention)
+            else:
+                interventions[entity_id] = _normalize_action_payload(intervention)
         if not order:
             raise GateContractError("G4-A requires at least one confirmed lever.")
         self._ordered_entities = tuple(order)
@@ -4381,6 +4516,19 @@ class _LeverStudyTarget:
             if _canonical(self._interventions[entity_id]) == normalized:
                 return entity_id
         return None
+
+    def planned_nav_step(self, entity_id: str) -> Any | None:
+        self._seed()
+        intervention = self._interventions.get(str(entity_id), {})
+        if str(intervention.get("kind") or "").upper() != "NAV":
+            return None
+        g3 = self.machine._adapters[LEVER_GATE_ID]
+        ledger = g3._ensure_entity_ledger()
+        entity = ledger.entities.get(str(entity_id))
+        cells = tuple(intervention.get("target_cells") or ())
+        if entity is not None and entity.current is not None:
+            cells = entity.current.cells
+        return g3.planned_nav_step({"entity_id": entity_id, "cells": cells})
 
     def _lever_status(self, entity_id: str) -> str:
         if entity_id in self._answers:
@@ -4491,7 +4639,27 @@ class _LeverStudyTarget:
         transition_id = int(outcome.get("transition_id") or 0)
         self._action_count += 1
 
-        lever = self._lever_for_action(action)
+        nav_entity = None
+        if probe.intent and probe.intent.startswith("NAV:"):
+            parts = probe.intent.split(":", 2)
+            nav_entity = parts[2] if len(parts) == 3 else None
+            if len(parts) >= 2 and parts[1] == "APPROACH":
+                self.revision += 1
+                event = {
+                    "schema": SCHEMA_VERSION, "evidence_id": evidence_id,
+                    "gate_id": ORBIT_GATE_ID, "probe_id": probe.probe_id,
+                    "action": action, "lever_entity_id": nav_entity,
+                    "decision_intent": probe.intent, "outcome": compact_probe_outcome(outcome),
+                    "run": {"kind": "NAV_APPROACH", "orbit_advanced": False},
+                    "counter_baseline": counter_baseline,
+                    "new_visual_entity_ids": sorted(entities_after - entities_before),
+                }
+                self._events.append(event)
+                if is_terminal(boundary_state):
+                    self._record_boundary(evidence_id, boundary_state)
+                return event
+
+        lever = nav_entity or self._lever_for_action(action)
         run_event = self._route_action(
             lever, action, evidence_id, transition_id, grids, boundary_state
         )
@@ -4999,7 +5167,7 @@ class CyberneticGateMachine:
             raise GateContractError(
                 "Query virelai('next_probe'), then call action(actions, decision={'probe_token': token})."
             )
-        guided = probe.purpose == "GUIDED_ACTION" and bool(probe.admissible_actions)
+        guided = probe.purpose in {"GUIDED_ACTION", "NAV_PREDICTION_TEST"} and bool(probe.admissible_actions)
         allowed_decision_fields = {"probe_token"}
         if guided:
             allowed_decision_fields.add("intent")
@@ -5649,6 +5817,23 @@ def _normalize_action_laws(raw: Any) -> dict[str, str]:
     return laws
 
 
+def _normalize_action_law_specs(raw: Any) -> dict[str, dict[str, Any]]:
+    """Retain structured law fields without trying to infer motion from prose."""
+    if not isinstance(raw, (list, tuple)):
+        return {}
+    specs: dict[str, dict[str, Any]] = {}
+    for item in raw:
+        if not isinstance(item, Mapping) or not item.get("action"):
+            continue
+        action = _opaque_action_name(item["action"])
+        spec = {str(key): value for key, value in item.items() if key != "action"}
+        displacement = spec.get("displacement")
+        if isinstance(displacement, Mapping) and {"row", "col"} <= set(displacement):
+            spec["displacement"] = [int(displacement["row"]), int(displacement["col"])]
+        specs[action] = spec
+    return specs
+
+
 def _normalize_novel_prediction(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, Mapping):
         raise GateContractError("novel_prediction must describe a new testable transition.")
@@ -5687,6 +5872,7 @@ def _answer_from_mapping(
     if len(text["mechanism"].split()) < 4:
         raise GateContractError("mechanism must explain what the ego is and how control changes it; a label is insufficient.")
     laws = _normalize_action_laws(raw.get("action_laws"))
+    law_specs = _normalize_action_law_specs(raw.get("action_laws"))
     prediction = raw.get("novel_prediction", {})
     if not interface_pointer:
         prediction = _normalize_novel_prediction(prediction)
@@ -5709,6 +5895,7 @@ def _answer_from_mapping(
         falsifier=text["falsifier"],
         novel_prediction=dict(prediction),
         limitations=_strings(raw.get("limitations", []), "limitations", required=False),
+        action_law_specs=law_specs,
     )
 
 

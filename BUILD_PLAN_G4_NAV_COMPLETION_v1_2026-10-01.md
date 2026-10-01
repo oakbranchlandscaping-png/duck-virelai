@@ -2,11 +2,16 @@
 
 **Type:** `BUILD_PLAN_G4_NAV_COMPLETION` · **v1** · **2026-10-01**  
 **Author:** Sol (Alpha build seat), signed  
-**Status:** PREPARED FOR IMPLEMENTATION; no NAV code is changed by this document  
+**Status:** IMPLEMENTED LOCALLY through G4-C; live NAV validation remains pending
 **Reviewed base:** `fbbc7f4` (R9-R18/G9-A)  
 **Cross-level state at preparation:** R9-R18 is committed; carried lever hypotheses are graded by
 the next level's own G3 probes and never certify a lever by themselves  
 **Active source:** `variants/ring9-cybernetic-gates/ARC3-Inference/`
+
+**Implementation note (Sol, 2026-10-01):** The target-bound intervention, evidence-derived control
+map, demonstrated-stand router, production refused-contact path, controller-owned G3 contact
+sweep, and route-versus-contact separation through G4-A/G4-B/G4-C are built. The dedicated NAV
+contract tests pass. This is local evidence; it does not claim a completed ls20 live trace.
 
 ## 0. North Star and scope
 
