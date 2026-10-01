@@ -27,6 +27,11 @@ Qwen3.8 Kaggle model source. The model difference is explicit in the receipt.
 - Behavioral evidence remains pending until the notebook completes and its receipt-bound output is
   downloaded and reviewed.
 
+Version 2 then failed before model startup because Kaggle normalized the attached model's mount
+directory while the notebook constructed the case-preserving `PyTorch` path. The source and exact
+wheelhouse mounted successfully. Version 3 is frozen at `kaggle/ring9-g4-nav-ls20-v3/`; it changes
+only model mount discovery and passes all seven package checks.
+
 ## Resume commands
 
 The old resume commands below are historical; do not rerun v1. Upload and run the verified v2
