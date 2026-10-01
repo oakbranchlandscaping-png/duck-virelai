@@ -375,6 +375,7 @@ def world_budgets(machine: Any) -> dict[str, Any] | None:
         "counter_ticks_remaining": remaining // max(1, per_tick),
         "counter_trigger": (product.payload.get("counter_model") or {}).get("trigger"),
         "derived_period_actions": product.payload.get("derived_period_actions"),
+        "life": getattr(getattr(machine, "lives", None), "life", 1),  # R9-R16
     }
 
 

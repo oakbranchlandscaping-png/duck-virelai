@@ -21,7 +21,9 @@ from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
 from inference.framework.cybernetic_targeting import GateAssessment, GoalContract, MemoryProduct
-from inference.framework.g4_relations import LAW_KIND, SUPPORTED, G4RelationError, Prediction, masked_address, validate_prediction
+from inference.framework.g4_relations import (
+    CONTRADICTED, LAW_KIND, SUPPORTED, G4RelationError, Prediction, masked_address, validate_prediction,
+)
 from inference.framework.g4b_gate import LEVERS_ON_CARD, LeverRelationsTarget, relations_contract
 from inference.framework.virelai_gates import (
     LAW_GATE_ID,
@@ -193,7 +195,7 @@ class LeverLawTarget:
             self._certified = pending
         if self._closed():
             self._emit_product()
-        else:  # contradicted on the same level: the description is withdrawn and G4-B continues
+        elif pending.status == CONTRADICTED:  # on the same level: the description is withdrawn, G4-B continues
             self._relations.reopen(pending)
             self.machine.target_journal.invalidate(RELATION_GATE_ID, include_self=True)
         return event

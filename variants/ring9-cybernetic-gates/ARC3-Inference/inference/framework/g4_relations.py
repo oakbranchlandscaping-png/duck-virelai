@@ -19,6 +19,10 @@ A prediction of ``CHANGES`` is met by ``STEPS`` or ``CHANGES``. Cells outside ev
 graded ``NO_CHANGE`` or ``CHANGES``. A prediction is SUPPORTED when every expectation is met, and
 CONTRADICTED otherwise. Contradicted predictions stay on the record. Two different masked outcomes
 of the same action from the same masked board are recorded as a missing condition.
+
+A prediction taken on a transition that ends a life or a level is INDETERMINATE (R9-R16): not
+evidence either way, and not recorded, as G1 already treats a terminal transition. A death is not
+evidence about a lever (Groundhog Day precedent), and a level change shows the next level's board.
 """
 from __future__ import annotations
 
@@ -35,7 +39,7 @@ UNCHANGED, STEPS, CHANGES = "UNCHANGED", "STEPS", "CHANGES"
 NO_CHANGE = "NO_CHANGE"
 EXPECTATIONS = (UNCHANGED, STEPS, CHANGES)
 ELSEWHERE = (NO_CHANGE, CHANGES)
-PENDING, SUPPORTED, CONTRADICTED = "PENDING", "SUPPORTED", "CONTRADICTED"
+PENDING, SUPPORTED, CONTRADICTED, INDETERMINATE = "PENDING", "SUPPORTED", "CONTRADICTED", "INDETERMINATE"
 PREDICTION_KIND, RELATIONS_KIND, LAW_KIND = "LEVER_PREDICTION", "LEVER_RELATIONS", "LAW_PREDICTION"
 
 
@@ -243,6 +247,12 @@ def grade(
     return prediction
 
 
+def void(prediction: Prediction, *, evidence_ref: str, transition_id: int) -> Prediction:
+    """The prediction's transition ended a life or a level: no grade, and Duck may predict again."""
+    prediction.status, prediction.evidence_ref, prediction.transition_id = INDETERMINATE, evidence_ref, int(transition_id)
+    return prediction
+
+
 @dataclass
 class OutcomeRecord:
     """Every graded transition by (action, masked board before); a split is a missing condition."""
@@ -353,8 +363,8 @@ def validate_relations_answer(
 
 
 __all__ = [
-    "CHANGES", "CONTRADICTED", "G4RelationError", "LAW_KIND", "LeverRegion", "NO_CHANGE", "OutcomeRecord",
+    "CHANGES", "CONTRADICTED", "G4RelationError", "INDETERMINATE", "LAW_KIND", "LeverRegion", "NO_CHANGE", "OutcomeRecord",
     "PENDING", "PREDICTION_KIND", "Prediction", "RELATIONS_KIND", "RelationsAnswer", "STEPS",
     "SUPPORTED", "UNCHANGED", "coverage", "grade", "lever_regions", "masked_address",
-    "masked_changes", "strings", "validate_prediction", "validate_relations_answer",
+    "masked_changes", "strings", "validate_prediction", "validate_relations_answer", "void",
 ]

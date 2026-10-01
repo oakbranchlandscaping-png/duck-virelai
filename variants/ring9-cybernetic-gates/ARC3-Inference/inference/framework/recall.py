@@ -87,7 +87,7 @@ def _scoped_null(subject: Mapping[str, Any]) -> bool:
     }
 
 
-def _outcome_line(row: Mapping[str, Any]) -> dict[str, Any]:
+def _outcome_line(row: Mapping[str, Any], current_life: int = 1) -> dict[str, Any]:
     """A recalled transition, compact: the full row is one pull away (``kind='transition'``)."""
     line = {
         "transition_id": row.get("transition_id"), "gate_id": row.get("gate_id"),
@@ -97,6 +97,8 @@ def _outcome_line(row: Mapping[str, Any]) -> dict[str, Any]:
         line["disposition"] = row["disposition"]
     if row.get("boundary_state") not in (None, "NOT_FINISHED"):
         line["boundary_state"] = row["boundary_state"]
+    if current_life > 1:  # after a death, each recalled fact says which life it is from (R9-R16)
+        line["life"] = row.get("life")
     return line
 
 
@@ -105,6 +107,7 @@ def _facts(machine: Any, key: Mapping[str, Any]) -> list[tuple[str, Any]]:
     entity, site = key.get("entity"), key.get("site")
     subject = store.subject(entity) if entity else None
     facts: list[tuple[str, Any]] = []
+    life = getattr(getattr(machine, "lives", None), "life", 1)
     if subject is not None:
         state = subject.get("lifecycle_state")
         contradicted = [c for c in subject.get("confirmations") or () if c.get("status") == "CONTRADICTED"]
@@ -116,11 +119,11 @@ def _facts(machine: Any, key: Mapping[str, Any]) -> list[tuple[str, Any]]:
     if subject is not None:
         for row in subject["aimed_transitions"]["rows"]:
             seen.add(row.get("transition_id"))
-            facts.append(("outcome", _outcome_line(row)))
+            facts.append(("outcome", _outcome_line(row, life)))
     if site is not None:
         for row in store.site(site[0], site[1], limit=20)["rows"]:
             if row.get("transition_id") not in seen:
-                facts.append(("site_outcome", _outcome_line(row)))
+                facts.append(("site_outcome", _outcome_line(row, life)))
     if subject is not None and _scoped_null(subject):
         facts.append(("scoped_null", {"lifecycle_state": subject["lifecycle_state"]}))
     lane = getattr(machine, "annotations", None)

@@ -99,6 +99,9 @@ def _compact_transition(row: Mapping[str, Any]) -> dict[str, Any]:
         "changed_bbox": cell_bbox([cell[:2] for cell in changed]),
         "disposition": row.get("disposition"),
         "boundary_state": row.get("boundary_state"),
+        "kind": row.get("kind"),
+        "life": row.get("life"),
+        "level": row.get("level"),
     }
 
 
@@ -166,6 +169,12 @@ class MemoryStore:
                     "changed_cells": _page(list(row.get("changed") or []), offset, limit),
                 }
         return None
+
+    def lives(self, offset: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Each life so far: its level, transitions, and how it ended (R9-R16)."""
+        record = getattr(self._machine, "lives", None)
+        rows = record.summary() if record is not None else []
+        return {"schema": SCHEMA, "kind": "lives", "current_life": len(rows), **_page(rows, offset, limit)}
 
     def site(self, row: int, col: int, offset: int = 0, limit: int = 20) -> dict[str, Any]:
         """Every recorded transition whose action was aimed at this cell, most recent first."""
@@ -268,6 +277,8 @@ class MemoryStore:
             return self.transitions(**paging)
         if kind == "transition":
             return self.transition(int(ident or 0), **paging)
+        if kind == "lives":
+            return self.lives(**paging)
         if kind == "site":
             return self.site(int(params.get("row", -1)), int(params.get("col", -1)), **paging)
         if kind == "evidence":
@@ -277,7 +288,7 @@ class MemoryStore:
         return self.notes(params.get("subject") or ident, **paging)
 
 
-QUERY_KINDS = ("products", "product", "transitions", "transition", "site", "evidence", "subject", "notes")
+QUERY_KINDS = ("products", "product", "transitions", "transition", "lives", "site", "evidence", "subject", "notes")
 
 
 def _fit(result: dict[str, Any] | None, pull: Any) -> dict[str, Any] | None:

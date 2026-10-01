@@ -71,6 +71,7 @@ from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
+from inference.framework.life_record import LifeRecord
 from inference.framework.lever_dossier import (
     LeverDossierAnswer,
     LeverDossierError,
@@ -106,9 +107,7 @@ COUNTER_TARGET = (
 ACTION_METADATA_GATE_ID = "G0-ACTION-METADATA"
 GATE_ID = "G1-EGO"
 COUNTER_GATE_ID = "G2-COUNTER"
-COUNTER_BOUNDARY_BATCH_MAX = max(
-    1, int(os.environ.get("VIRELAI_COUNTER_BOUNDARY_BATCH_MAX", "8"))
-)
+COUNTER_BOUNDARY_BATCH_MAX = max(1, int(os.environ.get("VIRELAI_COUNTER_BOUNDARY_BATCH_MAX", "8")))
 LEVER_GATE_ID = "G3-LEVERS"
 REACTION_GATE_ID = "G4-REACTIONS"
 ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
@@ -291,9 +290,7 @@ def control_archetype_prior(
 ) -> dict[str, Any]:
     """Translate the legal action surface into the supplied opening ontology."""
     names = {item.action for item in affordances}
-    movement_channels = tuple(
-        name for name in (f"ACTION{number}" for number in range(1, 5)) if name in names
-    )
+    movement_channels = tuple(name for name in (f"ACTION{number}" for number in range(1, 5)) if name in names)
     has_pointer = "ACTION6" in names
     has_interaction = "ACTION5" in names
     if movement_channels and has_pointer:
@@ -660,9 +657,7 @@ class EgoGateMachine:
         # event.  The offline evaluator must not have to reconstruct adaptive
         # coverage or re-run a scoped comparison from weaker prompt-facing data.
         event["gate_status_after"] = self.status
-        event["coverage_certificate"] = self.coverage_certificate(
-            include_unknown_members=False
-        )
+        event["coverage_certificate"] = self.coverage_certificate(include_unknown_members=False)
         if self.last_comparison is not None:
             event["demonstration_comparison"] = asdict(self.last_comparison)
         if self.ego_law is not None:
@@ -4886,7 +4881,7 @@ class CyberneticGateMachine:
             ORBIT_GATE_ID: _LeverStudyTarget(self),
             **later_adapters(self),
         }
-        self._high_step = 0
+        self.lives = LifeRecord()  # lives, levels and the high-water transition (R9-R16)
         self._capability_secret = secrets.token_bytes(32)
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
         self._consumed_capabilities: set[str] = set()
@@ -4946,7 +4941,7 @@ class CyberneticGateMachine:
     @property
     def observed_through_step(self) -> int:
         """The last transition any gate recorded (R9-R14: G3 onward advance it too, F2)."""
-        return max(self.ego.observed_through_step, self.counter.observed_through_step, self._high_step)
+        return max(self.ego.observed_through_step, self.counter.observed_through_step, self.lives.high_step)
 
     def next_probe(self) -> ProbeEnvelope | None:
         return self._active_adapter().next_probe()
@@ -5083,10 +5078,9 @@ class CyberneticGateMachine:
         self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
     ) -> dict[str, Any]:
         event = self._active_adapter().record_outcome(probe, outcome)
-        self._high_step = max(self._high_step, int(outcome.get("transition_id") or 0))
         from inference.framework.memory_store import transition_index_row
 
-        self.transition_index.append(transition_index_row(probe, outcome, event))
+        self.transition_index.append(self.lives.tag(transition_index_row(probe, outcome, event), outcome))
         return event
 
     def apply_counter_baseline(self, outcome: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -5110,11 +5104,14 @@ class CyberneticGateMachine:
             "mask_law_ref": None if mask is None else mask.law_version_id,
         }
 
-    def observe_system_reset(self, outcome: Mapping[str, Any]) -> EntityTransition | None:
-        """Deliver a harness-owned reset to the active G3 continuity ledger."""
-        self._high_step = max(self._high_step, int(outcome.get("transition_id") or 0))
-        if self.target_journal.active_product(COUNTER_GATE_ID) is None:
+    def observe_system_reset(self, outcome: Mapping[str, Any]) -> EntityTransition | dict[str, Any] | None:
+        """A reset ends a life: one row from G0 on (R9-R16, D2); G3's ledger sees it once G2 is certified."""
+        row = self.lives.reset(outcome, self.gate_id)
+        if row is None:
             return None
+        self.transition_index.append(row)
+        if self.target_journal.active_product(COUNTER_GATE_ID) is None:
+            return row
         return self._adapters[LEVER_GATE_ID].observe_reset(outcome)
 
     def g3_observation_scope(

@@ -26,6 +26,7 @@ from inference.framework.g4_relations import (
     RelationsAnswer,
     coverage,
     grade,
+    void,
     lever_regions,
     masked_address,
     masked_changes,
@@ -197,15 +198,17 @@ class LeverRelationsTarget:
         counter_baseline = self.machine.apply_counter_baseline({**dict(outcome), "evidence_id": evidence_id})
         law = self.machine.counter.mask_law
         before, after = grids
-        try:
-            grade(prediction, self._regions, masked_changes(before, after, law),
-                  evidence_ref=evidence_id, transition_id=int(outcome.get("transition_id") or 0))
-        except G4RelationError as exc:
-            raise GateContractError(f"{probe.gate_id} grading refused: {exc}") from exc
-        condition = self._record.note(prediction.action, masked_address(before, law), masked_address(after, law), evidence_id)
         boundary = outcome.get("boundary_event")
         state = dict(boundary) if isinstance(boundary, Mapping) else None
-        closed = is_terminal(state) and level_changed(state)
+        closed, transition_id, condition = is_terminal(state) and level_changed(state), int(outcome.get("transition_id") or 0), None
+        if is_terminal(state):  # a death or a level change is not evidence about the levers (R9-R16)
+            void(prediction, evidence_ref=evidence_id, transition_id=transition_id)
+        else:
+            try:
+                grade(prediction, self._regions, masked_changes(before, after, law), evidence_ref=evidence_id, transition_id=transition_id)
+            except G4RelationError as exc:
+                raise GateContractError(f"{probe.gate_id} grading refused: {exc}") from exc
+            condition = self._record.note(prediction.action, masked_address(before, law), masked_address(after, law), evidence_id)
         return {
             "schema": SCHEMA_VERSION, "evidence_id": evidence_id, "gate_id": probe.gate_id,
             "probe_id": probe.probe_id, "action": dict(prediction.action),
@@ -335,6 +338,7 @@ class LeverRelationsTarget:
         assessment = self.assess()
         acted, missing = coverage(self._predictions, self._levers())
         graded = [item for item in self._predictions if item.graded]
+        voided = [item.prediction_id for item in self._predictions if item.status == "INDETERMINATE"]
         templates = self._templates(missing)
         closed = self._closed()
         view: dict[str, Any] = {
@@ -355,7 +359,8 @@ class LeverRelationsTarget:
             "progress": {
                 "pressed_levers": len(acted), "total_levers": len(self._levers()), "unpressed": missing,
                 "predictions": {"supported": sum(1 for item in graded if item.status == "SUPPORTED"),
-                                "contradicted": sum(1 for item in graded if item.status == "CONTRADICTED")},
+                                "contradicted": sum(1 for item in graded if item.status == "CONTRADICTED"),
+                                **({"cut_off_by_death_or_level": voided[-3:]} if voided else {})},
                 "recent": [item.compact() for item in graded[-LEDGER_ON_CARD:]],
                 "missing_conditions": [item["condition_id"] for item in self._record.conditions],
             },
