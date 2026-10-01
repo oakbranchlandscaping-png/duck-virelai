@@ -17,6 +17,16 @@ Version 2 is frozen at `kaggle/ring9-g4-nav-ls20-v2/`. It preserves source commi
 behavioral rubric, while using an accessible, checksum-identical wheelhouse mirror and a pinned
 Qwen3.8 Kaggle model source. The model difference is explicit in the receipt.
 
+## Version 2 launch
+
+- Private source dataset created and reported `ready`.
+- Private notebook `stephenkaskin/taaf-virelai-ring9-g4-nav-ls20-v2`, version 1, was accepted with
+  no invalid-source warnings.
+- Requested accelerator: one NVIDIA RTX PRO 6000.
+- Initial status after push: `RUNNING`.
+- Behavioral evidence remains pending until the notebook completes and its receipt-bound output is
+  downloaded and reviewed.
+
 ## Resume commands
 
 The old resume commands below are historical; do not rerun v1. Upload and run the verified v2
