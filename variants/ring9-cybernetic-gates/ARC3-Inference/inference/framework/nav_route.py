@@ -10,7 +10,7 @@ Author: Sol (Alpha build seat), 2026-10-01.
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Mapping
 
 Cell = tuple[int, int]
@@ -34,6 +34,33 @@ class NavStep:
     landing: Cell
     target_entity_id: str
     reason: str
+
+
+@dataclass(frozen=True)
+class ReachabilityCertificate:
+    """Evidence shape emitted only after the reachable lattice is exhausted.
+
+    Geometry proves a routing limit, never inertness.  The gate binds evidence
+    references and asks Duck to explain the conclusion before releasing the
+    target.
+    """
+
+    schema: str
+    target_entity_id: str
+    status: str
+    target_cell_count: int
+    reachable_stands: tuple[Cell, ...]
+    refused_edges: tuple[tuple[Cell, str], ...]
+    closest_stand: Cell
+    remaining_gap: int
+    contact_surface_count: int
+    open_frontier_edge_count: int
+    reason: str
+    inertness_claim_permitted: bool
+    reopen_conditions: tuple[str, ...]
+
+    def snapshot(self) -> dict:
+        return asdict(self)
 
 
 def footprint(lat: NavLattice, anchor: Cell) -> frozenset[Cell]:
@@ -72,11 +99,15 @@ def _in_bounds(lat: NavLattice, anchor: Cell) -> bool:
     return all(0 <= r < rows and 0 <= c < cols for r, c in footprint(lat, anchor))
 
 
-def plan_contact(lat: NavLattice, target_entity_id: str, target_cells) -> NavStep | None:
-    target = frozenset(tuple(map(int, cell)) for cell in target_cells)
-    if not target or not lat.bearings:
-        return None
-    dist, parent = routes(lat)
+def _distance(lat: NavLattice, anchor: Cell, target: frozenset[Cell]) -> int:
+    return min(
+        abs(r-tr) + abs(c-tc)
+        for r, c in footprint(lat, anchor)
+        for tr, tc in target
+    )
+
+
+def _contact_surfaces(lat: NavLattice, dist, target: frozenset[Cell]):
     contacts = []
     for stand, distance in dist.items():
         for action, delta in sorted(lat.bearings.items()):
@@ -85,6 +116,31 @@ def plan_contact(lat: NavLattice, target_entity_id: str, target_cells) -> NavSte
             landing = (stand[0]+delta[0], stand[1]+delta[1])
             if _in_bounds(lat, landing) and footprint(lat, landing) & target:
                 contacts.append((distance, stand, action, landing))
+    return sorted(contacts)
+
+
+def _frontier_edges(lat: NavLattice, dist, target: frozenset[Cell]):
+    """All one-step experiments reachable through demonstrated stands."""
+    edges = []
+    for stand, route_distance in dist.items():
+        for action, delta in sorted(lat.bearings.items()):
+            if (stand, action) in lat.refused:
+                continue
+            landing = (stand[0]+delta[0], stand[1]+delta[1])
+            if not _in_bounds(lat, landing) or landing in lat.stands:
+                continue
+            edges.append((
+                _distance(lat, landing, target), route_distance, stand, action, landing,
+            ))
+    return sorted(edges)
+
+
+def plan_contact(lat: NavLattice, target_entity_id: str, target_cells) -> NavStep | None:
+    target = frozenset(tuple(map(int, cell)) for cell in target_cells)
+    if not target or not lat.bearings:
+        return None
+    dist, parent = routes(lat)
+    contacts = _contact_surfaces(lat, dist, target)
     if contacts:
         _, stand, contact_action, landing = min(contacts)
         action = contact_action if stand == lat.anchor else first_step(parent, lat.anchor, stand)
@@ -95,29 +151,75 @@ def plan_contact(lat: NavLattice, target_entity_id: str, target_cells) -> NavSte
         return NavStep(action, intent, lat.anchor, actual_landing, target_entity_id,
                        "predicted footprint intersects target" if intent == "CONTACT_ATTEMPT"
                        else "shortest demonstrated route to a contact stand")
-    # No contact surface is known. Move through the demonstrated graph to the
-    # stand closest to the target, then make exactly one frontier experiment.
-    def distance(anchor):
-        return min(abs(r-tr)+abs(c-tc) for r, c in footprint(lat, anchor) for tr, tc in target)
-    best = min(dist, key=lambda cell: (distance(cell), dist[cell], cell))
-    if best != lat.anchor:
-        action = first_step(parent, lat.anchor, best)
+    # No contact surface is known. Consider one-step experiments from every
+    # reachable stand, then route through demonstrated stands to the best one.
+    # This is Golden's wall-crawl order: a whole route stays on known floor;
+    # exactly one terminal step may cross the current frontier.
+    frontier = _frontier_edges(lat, dist, target)
+    if frontier:
+        _, _, stand, frontier_action, landing = frontier[0]
+        if stand != lat.anchor:
+            action = first_step(parent, lat.anchor, stand)
+            assert action is not None
+            delta = lat.bearings[action]
+            return NavStep(action, "APPROACH", lat.anchor,
+                           (lat.anchor[0]+delta[0], lat.anchor[1]+delta[1]), target_entity_id,
+                           "shortest demonstrated route to an untried frontier edge")
+        action = frontier_action
         delta = lat.bearings[action]
         return NavStep(action, "APPROACH", lat.anchor,
-                       (lat.anchor[0]+delta[0], lat.anchor[1]+delta[1]), target_entity_id,
-                       "shortest demonstrated route toward unresolved target")
-    probes = []
-    for action, delta in sorted(lat.bearings.items()):
-        if (lat.anchor, action) in lat.refused:
-            continue
-        landing = (lat.anchor[0]+delta[0], lat.anchor[1]+delta[1])
-        if _in_bounds(lat, landing):
-            probes.append((distance(landing), action, landing))
-    if not probes:
+                       landing, target_entity_id, "one-step frontier experiment")
+    return None
+
+
+def certify_unreachable(
+    lat: NavLattice, target_entity_id: str, target_cells,
+) -> ReachabilityCertificate | None:
+    """Certify exhaustion only when no contact or frontier press remains.
+
+    The certificate is recomputed from the current lattice.  A newly stood
+    anchor, yielded refusal, changed target, control map, or world state makes
+    it disappear without a permanent filter.
+    """
+    target = frozenset(tuple(map(int, cell)) for cell in target_cells)
+    if not target or not lat.bearings:
         return None
-    _, action, landing = min(probes)
-    return NavStep(action, "CONTACT_ATTEMPT" if footprint(lat, landing) & target else "APPROACH",
-                   lat.anchor, landing, target_entity_id, "one-step frontier experiment")
+    dist, _parent = routes(lat)
+    contacts = _contact_surfaces(lat, dist, target)
+    frontier = _frontier_edges(lat, dist, target)
+    if contacts or frontier:
+        return None
+    closest = min(dist, key=lambda cell: (_distance(lat, cell, target), dist[cell], cell))
+    refused = tuple(sorted(
+        (stand, action)
+        for stand in dist
+        for action in lat.bearings
+        if (stand, action) in lat.refused
+    ))
+    return ReachabilityCertificate(
+        schema="virelai-nav-reachability-certificate-v1",
+        target_entity_id=str(target_entity_id),
+        status="PRESUMED_UNREACHABLE",
+        target_cell_count=len(target),
+        reachable_stands=tuple(sorted(dist)),
+        refused_edges=refused,
+        closest_stand=closest,
+        remaining_gap=_distance(lat, closest, target),
+        contact_surface_count=0,
+        open_frontier_edge_count=0,
+        reason=(
+            "No demonstrated stand has a contact press and every in-bounds edge from the "
+            "reachable component has either been stood or refused."
+        ),
+        inertness_claim_permitted=False,
+        reopen_conditions=(
+            "new stood anchor",
+            "previously refused edge yields",
+            "target geometry or identity changes",
+            "ego footprint, bearing map, or action surface changes",
+            "terrain or level state changes",
+        ),
+    )
 
 
 def classify_contact(before_cells, after_cells, target_cells, board_changed: bool) -> str:
@@ -129,4 +231,7 @@ def classify_contact(before_cells, after_cells, target_cells, board_changed: boo
     return "TRANSFORMED" if board_changed else "REFUSED"
 
 
-__all__ = ["NavLattice", "NavStep", "classify_contact", "first_step", "footprint", "plan_contact", "routes"]
+__all__ = [
+    "NavLattice", "NavStep", "ReachabilityCertificate", "certify_unreachable",
+    "classify_contact", "first_step", "footprint", "plan_contact", "routes",
+]

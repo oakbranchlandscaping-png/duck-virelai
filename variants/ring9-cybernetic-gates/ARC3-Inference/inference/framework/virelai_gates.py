@@ -2408,7 +2408,11 @@ class _LeverTarget:
         self._bounded_ambiguities: dict[str, dict[str, Any]] = {}
         self._pending_confirmation: dict[str, Any] | None = None
         self._pending_dossier: dict[str, str] | None = None
+        self._pending_reachability: dict[str, Any] | None = None
         self._confirmation_records: list[dict[str, Any]] = []
+        self._reachability_records: list[dict[str, Any]] = []
+        self._reachability_answers: dict[str, GateAnswer] = {}
+        self._reopened_reachability_indices: set[int] = set()
         self._deferred_observations: list[dict[str, Any]] = []
         self.entity_ledger: EntityLedger | None = None
         self.lifecycle_journal: LifecycleJournal | None = None
@@ -2418,6 +2422,8 @@ class _LeverTarget:
         self._navigation_steps = 0
         self._navigation_limit = 24
         self._nav_refused: set[tuple[tuple[int, int], str]] = set()
+        self._nav_refused_evidence: dict[tuple[tuple[int, int], str], str] = {}
+        self._nav_stand_evidence: dict[tuple[int, int], str] = {}
         self._nav_route_evidence: list[str] = []
         self._last_nav_plan: Any | None = None
         self._phase = "CLICK" if self._world_type in {"CLICK_GOD_MODE", "HYBRID"} else "NAV"
@@ -2618,9 +2624,9 @@ class _LeverTarget:
                 % str(record.get("entity_id") or "")
             ),
         }
-        for field in ("predicted_local_cells", "predicted_remote_cells"):
-            cells = list(record.get(field) or [])
-            compact[field.removesuffix("_cells") + "_summary"] = {
+        for cell_field in ("predicted_local_cells", "predicted_remote_cells"):
+            cells = list(record.get(cell_field) or [])
+            compact[cell_field.removesuffix("_cells") + "_summary"] = {
                 "cell_count": len(cells),
                 "bbox": cell_bbox(cells),
                 "evidence_query": (
@@ -2751,7 +2757,52 @@ class _LeverTarget:
             expected_ego_motion=authorized_ego_motion,
         )
         self._observed_transition_ids.add(int(outcome.get("transition_id") or 0))
+        evidence_ref = str(outcome.get("evidence_id") or "")
+        if evidence_ref:
+            for record in tuple(self._reachability_records):
+                entity_id = str(record.get("target_entity_id") or "")
+                hypothesis = ledger.entities.get(entity_id)
+                old_version = record.get("target_version")
+                if (
+                    hypothesis is not None and old_version is not None
+                    and hypothesis.version > int(old_version)
+                ):
+                    self._reopen_reachability(
+                        entity_id=entity_id,
+                        evidence_ref=evidence_ref,
+                        reason="target geometry or identity changed after route exhaustion",
+                    )
         return scope
+
+    def _reopen_reachability(
+        self, *, evidence_ref: str, reason: str, entity_id: str | None = None,
+    ) -> None:
+        """Queue provisional route conclusions for another evidence-led attempt."""
+        ledger = self._ensure_entity_ledger()
+        journal = self.lifecycle_journal
+        assert journal is not None
+        candidates = self._roster_after_inherited_nulls()
+        entity_to_index = {
+            ledger.entity_for_member(row["member_id"]): index
+            for index, row in enumerate(candidates)
+        }
+        for record in self._reachability_records:
+            candidate = str(record.get("target_entity_id") or "")
+            if entity_id is not None and candidate != entity_id:
+                continue
+            lifecycle = journal.entities.get(candidate)
+            if lifecycle is None or lifecycle.state != "PRESUMED_UNREACHABLE":
+                continue
+            index = entity_to_index.get(candidate)
+            if index is None:
+                continue
+            journal.reopen(candidate, evidence_ref=evidence_ref, reason=reason)
+            self._bounded_ambiguities.pop(candidate, None)
+            record["status"] = "REOPENED"
+            record["disposition"] = "REOPENED"
+            record["reopened_by_evidence_ref"] = evidence_ref
+            record["reopen_reason"] = reason
+            self._reopened_reachability_indices.add(index)
 
     def _counter_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(COUNTER_GATE_ID)
@@ -2769,6 +2820,11 @@ class _LeverTarget:
             disposition = "UNRESOLVED"
             unmet = (
                 "new discriminating evidence is required for the explicitly bounded entities",
+            )
+        elif self._pending_reachability is not None:
+            disposition = "ANSWER_REQUIRED"
+            unmet = (
+                "explain the evidence-bound routing limit before releasing this target",
             )
         elif self._pending_dossier is not None:
             disposition = "ANSWER_REQUIRED"
@@ -2788,8 +2844,9 @@ class _LeverTarget:
             explanation=(
                 "G3 inherits G2's exact object frontier and mask. It must enumerate every "
                 "remaining object and may type a lever only from an attributed positive residue. "
-                "A target with no distinct admissible follow-up is recorded as bounded ambiguity "
-                "so it cannot monopolize the sweep or become a false inertness claim."
+                "A target outside the exhausted reachable component receives an evidence-bound, "
+                "reopenable reachability certificate so it cannot monopolize the sweep or become "
+                "a false inertness claim."
             ),
         )
 
@@ -2797,7 +2854,7 @@ class _LeverTarget:
         self._counter_product()
         ledger = self._ensure_entity_ledger()
         candidates = self._roster_after_inherited_nulls()
-        if self._pending_dossier is not None:
+        if self._pending_dossier is not None or self._pending_reachability is not None:
             return None
         if self._pending_confirmation is not None:
             pending = self._pending_confirmation
@@ -2834,6 +2891,12 @@ class _LeverTarget:
                 ),
                 target=target,
             )
+        if self._reopened_reachability_indices:
+            self._target_index = min(self._reopened_reachability_indices)
+            self._reopened_reachability_indices.remove(self._target_index)
+            self._navigation_steps = 0
+            self._nav_route_evidence.clear()
+            self._last_nav_plan = None
         if self._phase == "CLICK" and self._target_index >= len(candidates):
             if self._world_type == "HYBRID":
                 self._phase = "NAV"
@@ -2897,7 +2960,7 @@ class _LeverTarget:
         if self._phase != "NAV":
             return None
         from inference.framework.nav_control import compile_nav_control_map
-        from inference.framework.nav_route import NavLattice, plan_contact
+        from inference.framework.nav_route import NavLattice, certify_unreachable, plan_contact
 
         control = compile_nav_control_map(self.machine.ego)
         bearings = control.bearing_map()
@@ -2926,6 +2989,36 @@ class _LeverTarget:
         if hypothesis is not None and hypothesis.current is not None:
             target_cells = hypothesis.current.cells
         self._last_nav_plan = plan_contact(lattice, target_entity, target_cells)
+        if self._last_nav_plan is None:
+            certificate = certify_unreachable(lattice, target_entity, target_cells)
+            if certificate is not None and self._pending_reachability is None:
+                member_id = str(target.get("member_id") or "")
+                evidence_refs = tuple(dict.fromkeys(
+                    [
+                        self._nav_stand_evidence.get(stand, "")
+                        for stand in certificate.reachable_stands
+                    ]
+                    + [
+                        self._nav_refused_evidence.get((stand, action), "")
+                        for stand, action in certificate.refused_edges
+                    ]
+                    + [ref for _action, ref in control.evidence_refs]
+                ))
+                evidence_refs = tuple(ref for ref in evidence_refs if ref)
+                if evidence_refs:
+                    snapshot = certificate.snapshot()
+                    snapshot.update({
+                        "target_member_id": member_id,
+                        "target_version": (
+                            hypothesis.version if hypothesis is not None else None
+                        ),
+                        "evidence_refs": list(evidence_refs),
+                        "level": self.machine.lives.level,
+                        "life": self.machine.lives.life,
+                        "confirmation_deferred": self._pending_confirmation is not None,
+                    })
+                    self._pending_reachability = snapshot
+                    self.revision += 1
         return self._last_nav_plan
 
     def validate_probe(
@@ -2969,7 +3062,7 @@ class _LeverTarget:
         assert journal is not None
         entity_id = entity_id or str((probe.target or {}).get("entity_id") or "")
         if entity_id and not is_confirmation and journal.entities[entity_id].state in {
-            "UNTOUCHED", "AMBIGUOUS", "NO_RESPONSE_YET"
+            "UNTOUCHED", "AMBIGUOUS", "NO_RESPONSE_YET", "REOPENED"
         }:
             journal.attempt(entity_id, evidence_ref=evidence_id)
         changed = {
@@ -2995,6 +3088,8 @@ class _LeverTarget:
             "target": dict(probe.target or {}),
             "outcome": compact_probe_outcome(outcome),
         }
+        if probe.pilot_intent:
+            event["pilot_intent"] = probe.pilot_intent
         action = probe.actions[0] if probe.actions else outcome.get("action")
         if isinstance(action, Mapping) and "row" in action and "col" in action:
             lossless.setdefault("acted_site", {
@@ -3005,22 +3100,66 @@ class _LeverTarget:
             target_member_id=target_member_id,
             target_entity_id=entity_id,
         )
-        if (
-            self._phase == "NAV" and probe.pilot_intent == "CONTACT_ATTEMPT"
-            and not target_changed and not scope.ego_expected_cells
+        plan = self._last_nav_plan
+        action_name = str(action.get("action") or "") if isinstance(action, Mapping) else ""
+        ego_ids = ledger.role_entities("EGO")
+        anchors_after = [
+            ledger.entities[item].current.anchor
+            for item in ego_ids
+            if ledger.entities[item].current is not None
+        ]
+        anchor_after = min(anchors_after) if anchors_after else None
+        plan_matches_action = (
+            self._phase == "NAV" and plan is not None and action_name
+            and action_name == getattr(plan, "action", None)
+        )
+        movement_yielded = bool(
+            plan_matches_action and anchor_after == getattr(plan, "landing", None)
+        )
+        movement_refused = bool(
+            plan_matches_action
+            and not terminal
+            and anchor_after == getattr(plan, "stand", None)
+            and not target_changed
+            and not scope.ego_expected_cells
             and not scope.ground_exchange_cells
-        ):
-            # This is the production refused-contact observation: the predicted
-            # contact press yielded no target, ego, or ground residue after the
-            # counter was partitioned away.
-            lossless["refused_contact"] = True
-            if isinstance(action, Mapping):
-                action_name = str(action.get("action") or "")
-                ego_ids = ledger.role_entities("EGO")
-                anchors = [ledger.entities[item].current.anchor for item in ego_ids
-                           if ledger.entities[item].current is not None]
-                if anchors and action_name:
-                    self._nav_refused.add((min(anchors), action_name))
+        )
+        if movement_yielded:
+            landing = tuple(getattr(plan, "landing"))
+            edge = (tuple(getattr(plan, "stand")), action_name)
+            self._nav_stand_evidence[landing] = evidence_id
+            # A later success is direct evidence that a provisional refusal no
+            # longer describes the current world state.
+            self._nav_refused.discard(edge)
+            self._nav_refused_evidence.pop(edge, None)
+            event["nav_terrain"] = {
+                "schema": "virelai-nav-terrain-observation-v1",
+                "disposition": "FLOOR_TRAVERSED",
+                "stand_before": list(getattr(plan, "stand")),
+                "stand_after": list(landing),
+                "action": action_name,
+                "evidence_ref": evidence_id,
+            }
+            self._reopen_reachability(
+                evidence_ref=evidence_id,
+                reason="a new demonstrated floor stand expanded the reachable component",
+            )
+        elif movement_refused:
+            edge = (tuple(getattr(plan, "stand")), action_name)
+            self._nav_refused.add(edge)
+            self._nav_refused_evidence[edge] = evidence_id
+            if probe.pilot_intent == "CONTACT_ATTEMPT":
+                lossless["refused_contact"] = True
+            event["nav_terrain"] = {
+                "schema": "virelai-nav-terrain-observation-v1",
+                "disposition": "WALL_EDGE_REFUSED",
+                "stand": list(edge[0]),
+                "predicted_landing": list(getattr(plan, "landing")),
+                "action": action_name,
+                "evidence_ref": evidence_id,
+                "target_member_id": target_member_id,
+                "inertness_claim_permitted": False,
+            }
         pending = self._pending_confirmation
         if is_confirmation and pending is not None:
             frozen_cells = tuple(
@@ -3100,6 +3239,40 @@ class _LeverTarget:
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         event["counter_baseline"] = counter_baseline
         ambiguity_bounded = False
+        confirmation_approach = bool(
+            is_confirmation and self._phase == "NAV"
+            and probe.pilot_intent == "APPROACH"
+            and not attribution.boundary_state
+        )
+        if confirmation_approach:
+            self._navigation_steps += 1
+            self._nav_route_evidence.append(evidence_id)
+            event["confirmation"] = {
+                "witness_evidence_ref": (
+                    self._pending_confirmation["witness_evidence_ref"]
+                    if self._pending_confirmation else None
+                ),
+                "confirmation_evidence_ref": None,
+                "target_member_id": target_member_id,
+                "entity_id": entity_id,
+                "declared_at_transition": (
+                    self._pending_confirmation["declared_at_transition"]
+                    if self._pending_confirmation else None
+                ),
+                "graded_at_transition": None,
+                "status": "ROUTING",
+                "graded": False,
+            }
+            event["scheduler"] = {
+                "phase": self._phase,
+                "target_index": self._target_index,
+                "navigation_steps": self._navigation_steps,
+                "entity_id": entity_id,
+                "target_changed": target_changed,
+                "route_evidence_refs": list(self._nav_route_evidence),
+            }
+            self.revision += 1
+            return event
         if is_confirmation:
             pending = self._pending_confirmation
             predicted_local = set(pending["local_cells"]) if pending else set()
@@ -3224,6 +3397,14 @@ class _LeverTarget:
                     "observation": "LEVER_TARGET_ATTEMPT_INTERRUPTED_BY_BOUNDARY",
                     "epistemic_limit": "The interrupted target remains at the head of the G3 roster.",
                 })
+            elif (
+                entity_id and self._phase == "NAV"
+                and probe.pilot_intent == "APPROACH" and not target_changed
+            ):
+                # Route cost is terrain evidence, not a target activation.
+                # Counter-only or ego-only approach frames must not turn the
+                # bound target into a null or ambiguous lever observation.
+                pass
             elif entity_id and attribution.positive:
                 journal.response(entity_id, positive=True, evidence_ref=evidence_id)
                 self._pending_confirmation = {
@@ -3337,6 +3518,8 @@ class _LeverTarget:
 
     def submit_answer(self, raw: Mapping[str, Any]) -> GateAnswer | LeverDossierAnswer:
         answer_kind = str(raw.get("answer_kind") or "").strip().upper()
+        if answer_kind == "TARGET_REACHABILITY":
+            return self._submit_reachability(raw)
         if answer_kind == "LEVER_INVENTORY" or "lever_entities" in raw:
             return self._submit_inventory(raw)
         member_id = str(raw.get("target_member_id") or "").strip()
@@ -3384,6 +3567,119 @@ class _LeverTarget:
         self.revision += 1
         return answer
 
+    def _submit_reachability(self, raw: Mapping[str, Any]) -> GateAnswer:
+        pending = self._pending_reachability
+        if pending is None:
+            raise GateContractError(
+                "G3 accepts a reachability explanation only after controller-certified map exhaustion."
+            )
+        member_id = str(raw.get("target_member_id") or "").strip()
+        entity_id = str(pending.get("target_entity_id") or "")
+        if member_id != str(pending.get("target_member_id") or ""):
+            raise GateContractError("The reachability answer must describe the currently bound target.")
+        if str(raw.get("conclusion") or "").strip().upper() != "PRESUMED_UNREACHABLE":
+            raise GateContractError("Reachability conclusion must remain PRESUMED_UNREACHABLE.")
+        if raw.get("inertness_claim_permitted") is not False:
+            raise GateContractError("A routing limit cannot claim that the target is inert.")
+        if raw.get("move_to_next_target") is not True:
+            raise GateContractError("The accepted reachability explanation must release the target.")
+        explanation = str(raw.get("explanation") or "").strip()
+        epistemic_limit = str(raw.get("epistemic_limit") or "").strip()
+        evidence_refs = _strings(raw.get("evidence_refs"), "evidence_refs")
+        required_refs = tuple(str(ref) for ref in pending.get("evidence_refs") or ())
+        reopen_conditions = _strings(raw.get("reopen_conditions"), "reopen_conditions")
+        if not explanation or not epistemic_limit:
+            raise GateContractError(
+                "Reachability explanation requires the mapped-field basis and its provisional limit."
+            )
+        if tuple(evidence_refs) != required_refs:
+            raise GateContractError(
+                "Reachability evidence_refs must exactly match the controller certificate."
+            )
+        if set(reopen_conditions) != set(pending.get("reopen_conditions") or ()):
+            raise GateContractError(
+                "Reachability answer must preserve every certified reopen condition."
+            )
+        answer_id = str(raw.get("answer_id") or "G3-REACHABILITY-" + hashlib.sha256(
+            _canonical({
+                "entity": entity_id,
+                "evidence": evidence_refs,
+                "explanation": explanation,
+            }).encode()
+        ).hexdigest()[:16])
+        answer = GateAnswer(
+            answer_id=answer_id,
+            answer_kind="TARGET_REACHABILITY",
+            subjects=(entity_id,),
+            mechanism=explanation,
+            action_laws={
+                "routing_status": "PRESUMED_UNREACHABLE",
+                "closest_stand": str(pending.get("closest_stand")),
+                "remaining_gap": str(pending.get("remaining_gap")),
+                "reachable_stand_count": str(len(pending.get("reachable_stands") or ())),
+                "refused_edge_count": str(len(pending.get("refused_edges") or ())),
+            },
+            conditions=tuple(reopen_conditions),
+            constraints=(epistemic_limit,),
+            evidence_refs=tuple(evidence_refs),
+            competing_models=(
+                "The object may become reachable after terrain, control, or world state changes.",
+            ),
+            falsifier="A certified movement path or terminal contact to this target becomes available.",
+            novel_prediction={
+                "target_entity_id": entity_id,
+                "status": "PRESUMED_UNREACHABLE",
+                "move_to_next_target": True,
+            },
+            limitations=(epistemic_limit,),
+        )
+        journal = self.lifecycle_journal
+        assert journal is not None
+        journal.transition(
+            entity_id,
+            "PRESUMED_UNREACHABLE",
+            evidence_ref=evidence_refs[-1],
+            actor="DUCK",
+            reason="explained exhausted reachable component and released target",
+        )
+        record = {
+            **dict(pending),
+            "answer_id": answer_id,
+            "explanation": explanation,
+            "epistemic_limit": epistemic_limit,
+            "terminal_state": "PRESUMED_UNREACHABLE",
+            "disposition": "PRESUMED_UNREACHABLE",
+            "inertness_claim_permitted": False,
+            "retry_condition": "; ".join(reopen_conditions),
+            "evidence_ref": evidence_refs[-1],
+            "entity_id": entity_id,
+            "target_member_id": member_id,
+        }
+        self._reachability_answers[entity_id] = answer
+        self._reachability_records.append(record)
+        self._bounded_ambiguities[entity_id] = record
+        if self._pending_confirmation is not None:
+            self._deferred_observations.append({
+                "target_gate": "G3-LEVERS",
+                "evidence_ref": evidence_refs[-1],
+                "target_member_id": member_id,
+                "entity_id": entity_id,
+                "observation": "LEVER_CONFIRMATION_DEFERRED_BY_REACHABILITY",
+                "witness_evidence_ref": self._pending_confirmation["witness_evidence_ref"],
+                "epistemic_limit": (
+                    "The target became unreachable before re-contact; the positive witness "
+                    "remains recorded and is neither confirmed nor contradicted."
+                ),
+            })
+            self._pending_confirmation = None
+        self._pending_reachability = None
+        self._target_index += 1
+        self._navigation_steps = 0
+        self._nav_route_evidence.clear()
+        self._last_nav_plan = None
+        self.revision += 1
+        return answer
+
     def _submit_inventory(self, raw: Mapping[str, Any]) -> GateAnswer:
         if self._complete_reason is None or self._pending_confirmation is not None:
             raise GateContractError("G3 inventory requires a completed probe roster with no pending confirmation.")
@@ -3404,10 +3700,13 @@ class _LeverTarget:
             entity_id: journal.entities[entity_id].state
             for entity_id in sorted(expected_entities)
             if journal.entities[entity_id].state not in {
-                "G3-CLOSED", "G4-READY", "AMBIGUOUS", "BUDGET_STOPPED"
+                "G3-CLOSED", "G4-READY", "AMBIGUOUS", "BUDGET_STOPPED",
+                "PRESUMED_UNREACHABLE",
             }
             or (
-                journal.entities[entity_id].state in {"AMBIGUOUS", "BUDGET_STOPPED"}
+                journal.entities[entity_id].state in {
+                    "AMBIGUOUS", "BUDGET_STOPPED", "PRESUMED_UNREACHABLE",
+                }
                 and entity_id not in self._bounded_ambiguities
             )
         }
@@ -3433,7 +3732,9 @@ class _LeverTarget:
         }
         ambiguous = {
             entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state in {"AMBIGUOUS", "BUDGET_STOPPED"}
+            if journal.entities[entity_id].state in {
+                "AMBIGUOUS", "BUDGET_STOPPED", "PRESUMED_UNREACHABLE",
+            }
         }
         if set(lever_entities) != witnessed:
             raise GateContractError(
@@ -3597,6 +3898,11 @@ class _LeverTarget:
                     if self._bounded_coverage_answer is not None else None
                 ),
                 "confirmation_records": list(self._confirmation_records),
+                "reachability_records": list(self._reachability_records),
+                "reachability_answers": [
+                    asdict(answer)
+                    for _, answer in sorted(self._reachability_answers.items())
+                ],
                 "bounded_ambiguities": [
                     dict(item) for _, item in sorted(self._bounded_ambiguities.items())
                 ],
@@ -3619,6 +3925,10 @@ class _LeverTarget:
                     if self._pending_confirmation is not None else None
                 ),
                 "pending_dossier": dict(self._pending_dossier) if self._pending_dossier else None,
+                "pending_reachability": (
+                    dict(self._pending_reachability)
+                    if self._pending_reachability is not None else None
+                ),
             },
             "deferred_observations": self._deferred_observations + ([{
                 "target_gate": "G4-REACTIONS",
@@ -3631,6 +3941,33 @@ class _LeverTarget:
                 ),
             }] if boundary_ref and changed_outside_mask else []),
             "answer_template": ({
+                "answer_kind": "TARGET_REACHABILITY",
+                "target_member_id": self._pending_reachability["target_member_id"],
+                "target_entity_id": self._pending_reachability["target_entity_id"],
+                "conclusion": "PRESUMED_UNREACHABLE",
+                "explanation": (
+                    "Explain why this object cannot be reached from the mapped field of play "
+                    "and why the sweep should move to the next target."
+                ),
+                "evidence_refs": list(self._pending_reachability["evidence_refs"]),
+                "reachable_stand_count": len(
+                    self._pending_reachability.get("reachable_stands") or ()
+                ),
+                "refused_edge_count": len(
+                    self._pending_reachability.get("refused_edges") or ()
+                ),
+                "closest_stand": self._pending_reachability.get("closest_stand"),
+                "remaining_gap": self._pending_reachability.get("remaining_gap"),
+                "inertness_claim_permitted": False,
+                "move_to_next_target": True,
+                "reopen_conditions": list(
+                    self._pending_reachability.get("reopen_conditions") or ()
+                ),
+                "epistemic_limit": (
+                    "This is a provisional routing conclusion, not evidence that the object is "
+                    "inert or permanently unreachable."
+                ),
+            } if self._pending_reachability is not None else {
                 "answer_kind": "LEVER_DOSSIER",
                 "target_member_id": self._pending_dossier["target_member_id"],
                 "explanation": "Explain what this intervention changed and why it is a lever.",
@@ -3675,7 +4012,8 @@ class _LeverTarget:
                 and self._bounded_coverage_answer is None
             ) else None),
             "next_operation": (
-                "SUBMIT_GATE_ANSWER" if self._pending_dossier is not None
+                "SUBMIT_GATE_ANSWER" if self._pending_reachability is not None
+                else "SUBMIT_GATE_ANSWER" if self._pending_dossier is not None
                 else "QUERY_NEXT_G3_TARGET" if self._complete_reason is None
                 else "SUBMIT_GATE_ANSWER" if (
                     self._inventory_answer is None
@@ -3713,6 +4051,10 @@ class _LeverTarget:
         if self._pending_confirmation is not None:
             member_id = str(self._pending_confirmation.get("target_member_id") or "")
             entity_id = ledger.member_to_entity.get(member_id)
+            if entity_id:
+                relevant_entity_ids.add(entity_id)
+        if self._pending_reachability is not None:
+            entity_id = str(self._pending_reachability.get("target_entity_id") or "")
             if entity_id:
                 relevant_entity_ids.add(entity_id)
         compact_entities: dict[str, Any] = {}
@@ -3780,7 +4122,49 @@ class _LeverTarget:
             for record in attribution.get("confirmation_records") or ()
             if isinstance(record, Mapping)
         ]
+        attribution["reachability_records"] = [
+            {
+                "schema": record.get("schema"),
+                "target_entity_id": record.get("target_entity_id"),
+                "target_member_id": record.get("target_member_id"),
+                "target_version": record.get("target_version"),
+                "status": record.get("status"),
+                "reachable_stand_count": len(record.get("reachable_stands") or ()),
+                "refused_edge_count": len(record.get("refused_edges") or ()),
+                "closest_stand": record.get("closest_stand"),
+                "remaining_gap": record.get("remaining_gap"),
+                "evidence_refs": record.get("evidence_refs"),
+                "answer_id": record.get("answer_id"),
+                "inertness_claim_permitted": False,
+                "detail_delivery": "FULL_SNAPSHOT_OR_EVIDENCE_QUERY",
+            }
+            for record in attribution.get("reachability_records") or ()
+            if isinstance(record, Mapping)
+        ]
         view = dict(snapshot)
+        scheduler = dict(view.get("scheduler") or {})
+        pending_reachability = scheduler.get("pending_reachability")
+        if isinstance(pending_reachability, Mapping):
+            scheduler["pending_reachability"] = {
+                "schema": pending_reachability.get("schema"),
+                "target_entity_id": pending_reachability.get("target_entity_id"),
+                "target_member_id": pending_reachability.get("target_member_id"),
+                "target_version": pending_reachability.get("target_version"),
+                "status": pending_reachability.get("status"),
+                "reachable_stand_count": len(
+                    pending_reachability.get("reachable_stands") or ()
+                ),
+                "refused_edge_count": len(
+                    pending_reachability.get("refused_edges") or ()
+                ),
+                "closest_stand": pending_reachability.get("closest_stand"),
+                "remaining_gap": pending_reachability.get("remaining_gap"),
+                "evidence_refs": pending_reachability.get("evidence_refs"),
+                "reopen_conditions": pending_reachability.get("reopen_conditions"),
+                "inertness_claim_permitted": False,
+                "detail_delivery": "FULL_SNAPSHOT_OR_EVIDENCE_QUERY",
+            }
+        view["scheduler"] = scheduler
         view["inherited_frontier"] = self._compact_frontier_snapshot()
         view["attribution_contract"] = attribution
         view["entity_ledger"] = {

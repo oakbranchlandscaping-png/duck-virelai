@@ -423,7 +423,13 @@ def wake_reason(
     if confirmation in {"CONTRADICTED", "BOUNDARY_DEFERRED"}:
         return f"a G3 confirmation was {confirmation}"
     attribution = event.get("attribution") or {}
-    if event.get("bounded_ambiguity") or attribution.get("disposition") in AMBIGUOUS_DISPOSITIONS:
+    if (
+        event.get("bounded_ambiguity")
+        or (
+            event.get("pilot_intent") != "APPROACH"
+            and attribution.get("disposition") in AMBIGUOUS_DISPOSITIONS
+        )
+    ):
         return f"attribution is {attribution.get('disposition') or 'ambiguous'}"
     if attribution.get("boundary_state"):
         return "a boundary interrupted the attribution"

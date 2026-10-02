@@ -1,12 +1,15 @@
 """NAV control, routing, and intervention contracts.  Author: Sol, 2026-10-01."""
+import json
 from types import SimpleNamespace
 
 from inference.framework.nav_control import compile_nav_control_map
 from inference.framework.nav_intervention import ContactEpoch, ContactProcedure, InterventionRef
-from inference.framework.nav_route import NavLattice, classify_contact, plan_contact
+from inference.framework.nav_route import (
+    NavLattice, certify_unreachable, classify_contact, plan_contact,
+)
 from inference.framework.cybernetic_targeting import MemoryProduct
 from inference.framework.virelai_gates import CyberneticGateMachine
-from inference.framework.controller_executor import next_owned_step
+from inference.framework.controller_executor import next_owned_step, wake_reason
 from inference.framework.nav_route import NavStep
 
 
@@ -44,6 +47,48 @@ def test_refused_edge_is_not_retried():
                      stands=frozenset({(1, 1)}), refused=frozenset({((1, 1), "ACTION1")}),
                      bounds=(4, 4))
     assert plan_contact(lat, "E-T", {(1, 2)}).action == "ACTION2"
+
+
+def test_route_searches_another_stands_frontier_before_giving_up():
+    lat = NavLattice(
+        anchor=(1, 1), shape=frozenset({(0, 0)}),
+        bearings={"ACTION1": (0, 1), "ACTION2": (1, 0)},
+        stands=frozenset({(1, 1), (1, 2)}),
+        refused=frozenset({((1, 1), "ACTION2"), ((1, 2), "ACTION1")}),
+        bounds=(4, 5),
+    )
+    step = plan_contact(lat, "E-T", {(3, 2)})
+    assert (step.action, step.intent, step.reason) == (
+        "ACTION1", "APPROACH", "shortest demonstrated route to an untried frontier edge",
+    )
+    advanced = NavLattice(
+        anchor=(1, 2), shape=lat.shape, bearings=lat.bearings,
+        stands=lat.stands, refused=lat.refused, bounds=lat.bounds,
+    )
+    assert plan_contact(advanced, "E-T", {(3, 2)}).landing == (2, 2)
+
+
+def test_unreachable_certificate_requires_exhausted_reachable_component():
+    open_lat = NavLattice(
+        anchor=(1, 1), shape=frozenset({(0, 0)}),
+        bearings={"ACTION1": (0, 1), "ACTION2": (1, 0)},
+        stands=frozenset({(1, 1)}), refused=frozenset(), bounds=(3, 3),
+    )
+    assert certify_unreachable(open_lat, "E-HUD", {(0, 0)}) is None
+    closed = NavLattice(
+        anchor=open_lat.anchor, shape=open_lat.shape, bearings=open_lat.bearings,
+        stands=open_lat.stands,
+        refused=frozenset({((1, 1), "ACTION1"), ((1, 1), "ACTION2")}),
+        bounds=open_lat.bounds,
+    )
+    certificate = certify_unreachable(closed, "E-HUD", {(0, 0)})
+    assert certificate.status == "PRESUMED_UNREACHABLE"
+    assert certificate.open_frontier_edge_count == 0
+    assert certificate.contact_surface_count == 0
+    assert certificate.refused_edges == (
+        ((1, 1), "ACTION1"), ((1, 1), "ACTION2"),
+    )
+    assert certificate.inertness_claim_permitted is False
 
 
 def test_contact_classification_separates_refusal_from_motion():
@@ -200,3 +245,153 @@ def test_nav_controller_carries_computed_intent_with_the_bound_action(monkeypatc
     step = next_owned_step(machine)
     assert (step.owner, step.action) == ("CONTROLLER", {"action": "ACTION3"})
     assert step.decision == {"pilot_intent": "CONTACT_ATTEMPT"}
+
+
+def _unchanged_outcome(grid, transition, action="ACTION1"):
+    return {
+        "transition_id": transition,
+        "action": {"action": action},
+        "changed_cells": [],
+        "site_transitions": [
+            {"row": row, "col": col, "before": value, "after": value}
+            for row, values in enumerate(grid)
+            for col, value in enumerate(values)
+        ],
+        "shape_before": [len(grid), len(grid[0])],
+        "shape_after": [len(grid), len(grid[0])],
+        "boundary_event": {"state": "PLAYING"},
+    }
+
+
+def test_g3_failed_approach_is_wall_evidence_and_does_not_type_target():
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((1, 1),))
+    adapter._target_index = 1
+    capability = machine.next_probe_capability()
+    target_entity = capability["target"]["entity_id"]
+    adapter._last_nav_plan = NavStep(
+        "ACTION1", "APPROACH", (1, 1), (1, 2), target_entity,
+        "one-step frontier experiment",
+    )
+    probe = machine.validate_probe(
+        {"probe_token": capability["probe_token"], "pilot_intent": "APPROACH"},
+        [{"action": "ACTION1"}],
+    )
+    event = machine.record_outcome(probe, _unchanged_outcome(GRID, 1))
+
+    assert event["nav_terrain"]["disposition"] == "WALL_EDGE_REFUSED"
+    assert ((1, 1), "ACTION1") in adapter._nav_refused
+    assert adapter.lifecycle_journal.entities[target_entity].state == "ATTEMPTED"
+    assert adapter._target_index == 1
+    assert wake_reason(machine, event, {}) is None
+
+
+def test_g3_confirmation_approach_remains_pending_and_is_not_graded():
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((1, 1),))
+    adapter._target_index = 1
+    original = machine.next_probe_capability()
+    entity_id = original["target"]["entity_id"]
+    journal = adapter.lifecycle_journal
+    journal.attempt(entity_id, evidence_ref="E-WITNESS")
+    journal.response(entity_id, positive=True, evidence_ref="E-WITNESS")
+    adapter._pending_confirmation = {
+        "probe_id": "G3-LEVERS:CONFIRM:test",
+        "phase": "NAV",
+        "target": dict(original["target"]),
+        "action": {"action": "ACTION1"},
+        "target_member_id": original["target"]["member_id"],
+        "entity_id": entity_id,
+        "pre_action_owner_entity_id": entity_id,
+        "witness_evidence_ref": "E-WITNESS",
+        "declared_at_transition": 0,
+        "local_cells": tuple(tuple(cell) for cell in original["target"]["cells"]),
+        "remote_cells": (),
+    }
+    adapter._last_nav_plan = NavStep(
+        "ACTION1", "APPROACH", (1, 1), (1, 2), entity_id,
+        "route through demonstrated floor",
+    )
+    capability = machine.next_probe_capability()
+    probe = machine.validate_probe(
+        {"probe_token": capability["probe_token"], "pilot_intent": "APPROACH"},
+        [{"action": "ACTION1"}],
+    )
+    event = machine.record_outcome(probe, _unchanged_outcome(GRID, 1))
+
+    assert event["confirmation"]["status"] == "ROUTING"
+    assert event["confirmation"]["graded"] is False
+    assert adapter._pending_confirmation is not None
+    assert adapter.lifecycle_journal.entities[entity_id].state == "RESPONDED"
+
+
+def test_reachability_answer_explains_limit_releases_target_and_stays_bounded():
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    target = machine.next_probe_capability()["target"]
+    stands = [[row, col] for row in range(40) for col in range(40)]
+    refused = [[[row, col], "ACTION1"] for row, col in stands]
+    adapter._pending_reachability = {
+        "schema": "virelai-nav-reachability-certificate-v1",
+        "target_entity_id": target["entity_id"],
+        "target_member_id": target["member_id"],
+        "target_version": 1,
+        "status": "PRESUMED_UNREACHABLE",
+        "reachable_stands": stands,
+        "refused_edges": refused,
+        "closest_stand": [1, 1],
+        "remaining_gap": 3,
+        "contact_surface_count": 0,
+        "open_frontier_edge_count": 0,
+        "inertness_claim_permitted": False,
+        "reopen_conditions": [
+            "new stood anchor", "previously refused edge yields",
+            "target geometry or identity changes",
+            "ego footprint, bearing map, or action surface changes",
+            "terrain or level state changes",
+        ],
+        "evidence_refs": ["E-FLOOR", "E-WALL"],
+    }
+    compact = machine.gate_view()
+    assert len(json.dumps(compact)) < 24_000
+    assert "reachable_stands" not in compact["scheduler"]["pending_reachability"]
+    template = compact["answer_template"]
+    answer = machine.submit_answer({
+        **template,
+        "explanation": (
+            "Every demonstrated floor stand and every remaining frontier press was tested; "
+            "none provides a contact surface to this object, so the sweep should continue."
+        ),
+    })
+
+    assert answer.answer_kind == "TARGET_REACHABILITY"
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "PRESUMED_UNREACHABLE"
+    assert adapter._target_index == 1
+    assert adapter._reachability_records[-1]["inertness_claim_permitted"] is False
+    assert machine.next_probe_capability()["target"]["rank"] == 2
+
+    adapter._reopen_reachability(
+        evidence_ref="E-NEW-FLOOR",
+        reason="a new demonstrated floor stand expanded the reachable component",
+    )
+    reopened = machine.next_probe_capability()
+    assert reopened["target"]["rank"] == 1
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
+    assert target["entity_id"] not in adapter._bounded_ambiguities
+    assert adapter._reachability_records[-1]["reopened_by_evidence_ref"] == "E-NEW-FLOOR"
