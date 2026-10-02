@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-02  
-**Status:** notebook version 1 failed before benchmark; version 2 running
+**Status:** notebook version 1 failed before benchmark; version 2 completed; G1 checkpoint passed
 
 ## Frozen identities
 
@@ -67,5 +67,24 @@ recorded by Kaggle for the successful v6 Python 3.12 run.
 - Kaggle notebook version: 2;
 - immediate status: `KernelWorkerStatus.RUNNING`;
 - pulled Kaggle metadata confirms the intended Docker image pin.
+
+## Version 2 result
+
+- Kaggle status: complete.
+- Behavior duration: 45 minutes.
+- Environment actions: 9.
+- Generated tokens: 68,674 in the benchmark summary.
+- Score and levels: zero; neither is an acceptance criterion for this slice.
+- G1 protocol: two probes for each of `ACTION1` through `ACTION4`, followed by one prospective
+  demonstration.
+- Controller result: G1 closed and the automatically supplied G2 card became active.
+- Receipt-bound evaluator result: all six G1 grades PASS; overall checkpoint PASS.
+- G2 result: card and first `PILOT_TO_CONTACT` target supplied, but no G2 action executed before the
+  behavior time cap.
+
+The full evidence review is in
+`REVIEW_RING9_G3_NAV_REACHABILITY_V7_V2_2026-10-02.md`. V7 has satisfied its preregistered purpose and
+should not be rerun merely to collect more G1 evidence. The next build should bound inference effort
+so the proven G1-to-G2 handoff can progress within the live-test budget.
 
 — **Sol**
