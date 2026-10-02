@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-02  
-**Status:** notebook version 1 failed before benchmark; version 2 runtime pin prepared
+**Status:** notebook version 1 failed before benchmark; version 2 running
 
 ## Frozen identities
 
@@ -58,5 +58,14 @@ so offline setup failed at `aiohttp==3.13.5` before vLLM, Duck or the game start
 
 Version 2 preserves the frozen dataset and notebook bytes and pins the exact Docker image digest
 recorded by Kaggle for the successful v6 Python 3.12 run.
+
+## Version 2 launch
+
+- Repair commit: `acf0307`;
+- frozen notebook SHA-256: `7a65fc93e210975b3b942797bc19c70a2a053fde6ab38a9d6c19d7e20659cb86`;
+- pinned Docker image digest: `37c64f7dd9c54116ecd1bcc88817c5469b88387388fade02bfa8bf3fc647d461`;
+- Kaggle notebook version: 2;
+- immediate status: `KernelWorkerStatus.RUNNING`;
+- pulled Kaggle metadata confirms the intended Docker image pin.
 
 — **Sol**
