@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-02  
-**Status:** Kaggle notebook version 1 running
+**Status:** Kaggle notebook version 1 complete; review recorded
 
 ## Private Kaggle artifacts
 
@@ -58,7 +58,9 @@ Download outputs into:
 
 `runs/kaggle-ring9-g3-nav-reachability-v4-v1/output/`
 
-The run was confirmed `KernelWorkerStatus.RUNNING` immediately after the push. No polling is
-required; review begins after the user reports completion.
+The run completed at the planned 2,700-second behavior cap. The package and downloaded execution
+receipt hashes match exactly. The result did not reach G3: Duck executed one G1 action, then entered
+an identical read-only inspection loop. See
+`REVIEW_RING9_G3_NAV_REACHABILITY_V4_2026-10-02.md` for the evidence and grade.
 
 — **Sol**
