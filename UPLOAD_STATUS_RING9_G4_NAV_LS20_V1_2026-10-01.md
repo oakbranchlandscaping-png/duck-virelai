@@ -32,18 +32,27 @@ directory while the notebook constructed the case-preserving `PyTorch` path. The
 wheelhouse mounted successfully. Version 3 is frozen at `kaggle/ring9-g4-nav-ls20-v3/`; it changes
 only model mount discovery and passes all seven package checks.
 
+## Version 3 launch
+
+- Private dataset `stephenkaskin/taaf-duck-virelai-ring9-g4-nav-ls20-v3` reported `ready` on
+  2026-10-02.
+- Private notebook `stephenkaskin/taaf-virelai-ring9-g4-nav-ls20-v3`, version 1, was accepted.
+- Requested accelerator: one NVIDIA RTX PRO 6000.
+- Initial status after push: `QUEUED`.
+- No runtime or behavioral conclusion is warranted until the notebook starts. The first checkpoint
+  is successful model-mount resolution; gameplay grading begins only after model startup and game
+  actions are present in the receipt-bound output.
+
 ## Resume commands
 
-The old resume commands below are historical; do not rerun v1. Upload and run the verified v2
-package instead.
+The old resume commands below are historical; do not rerun v1 or v2. Version 3 is already uploaded
+and queued. Check it with:
 
 ```text
-kaggle datasets create -p kaggle/ring9-g4-nav-ls20-v2/source-dataset -r skip
-kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-g4-nav-ls20-v2
-kaggle kernels push -p kaggle/ring9-g4-nav-ls20-v2/kernel --accelerator NvidiaRtxPro6000
+kaggle kernels status stephenkaskin/taaf-virelai-ring9-g4-nav-ls20-v3
 ```
 
-Wait for the dataset status to be `ready` before pushing the notebook. Review the downloaded
-execution receipt against the package receipt before grading any gameplay artifacts.
+When it completes, review the downloaded execution receipt against the package receipt before
+grading any gameplay artifacts.
 
 — **Sol**
