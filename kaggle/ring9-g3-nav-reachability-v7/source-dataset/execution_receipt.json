@@ -1,0 +1,46 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 96,
+    "max_output_tokens_per_turn": "server_default",
+    "max_runtime_seconds_per_world": 2700,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "mikedan7/qwen3-8-27b-fp8-official",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "Qwen/Qwen3.8-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_xml",
+    "wheelhouse": "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  },
+  "inference_profile": {
+    "duplicate_read_only_limit": 2,
+    "enable_thinking": true,
+    "max_read_only_without_progress": 8,
+    "temperature": 0.6
+  },
+  "mode": "gated",
+  "model": {
+    "id": "Qwen/Qwen3.8-27B-FP8",
+    "pinned_revision": "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+    "source": "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1"
+  },
+  "package": {
+    "manifest_sha256": "a2a45dc09db60e4153fa159f09d64f82c0727ae225bfd07e1f857fe9abefd562",
+    "name": "ring9-g3-nav-reachability-v7",
+    "sha256": "42199149aa4a640af04273bb01419b8429f159d8da7d4ede1930034eda36d6bd"
+  },
+  "passes": 1,
+  "revisions": "R9-R19 plus G3 NAV reachability, R9-I03 no-progress guard, and bounded gate contract repair",
+  "schema": "virelai-g3-nav-reachability-v7-execution-receipt-v1",
+  "source_commit": "0a2e4dcb2749bcc93d8632499e04db0b90743a35",
+  "worlds": [
+    "ls20-9607627b"
+  ]
+}

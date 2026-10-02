@@ -1,0 +1,3 @@
+Source 0a2e4dc: full Ring 9 suite 542 passed; focused gate, card, evaluator and repair tests 58 passed.
+V7 regression: rejected answers enter bounded repair; G1 evidence refs are certified; runtime output cap 0 and the receipt both normalize to server_default.
+Package guards require ReachabilityCertificate, TARGET_REACHABILITY, world-state topology invalidation, PRESUMED_UNREACHABLE, no_progress_tool_loop, compiled notebook code and exact manifests.

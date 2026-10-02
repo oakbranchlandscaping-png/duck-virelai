@@ -1,0 +1,1 @@
+R9 G3 NAV reachability v7: ls20, 96 actions, 2700 seconds, server-default output cap, thinking enabled, no-progress and contract-repair guards active. Human review required.
