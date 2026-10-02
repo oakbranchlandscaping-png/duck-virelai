@@ -178,6 +178,31 @@ COMPACT_TOOL_SESSION_ADDENDUM = (
     "- Keep code snippets short and purpose-built rather than dumping large frameworks into one call.\n"
 )
 
+GATED_COMPACT_TOOL_SESSION_ADDENDUM = COMPACT_TOOL_SESSION_ADDENDUM.replace(
+    "- You can call the `python` tool as many times as you want per step. Investigate until your code has a clear probe or plan.\n",
+    "- Use only the inspection calls needed to choose the next probe or answer. Never repeat an identical read-only call when its result is already present.\n",
+).replace(
+    "- Do not ration tool calls when the state is unclear. Spend extra tool calls to confirm what changed between frames and whether the last action affected gameplay state or only HUD elements such as countdown bars.\n",
+    "- When the state is unclear, make each additional inspection answer a new concrete question. After the relevant observation is available, execute the binding probe or submit the required answer.\n",
+)
+
+
+def no_progress_tool_prompt(*, gates_enabled: bool, reason: str) -> str:
+    """One bounded recovery instruction after read-only tool use stops adding evidence."""
+    if gates_enabled:
+        next_step = (
+            "Your next Python call must create gate progress: execute the binding current_probe "
+            "with its probe_token, or submit the required gate_answer."
+        )
+    else:
+        next_step = "Your next Python call must execute an environment action selected from the current evidence."
+    return (
+        "NO-PROGRESS TOOL GUARD: "
+        f"{reason} The existing observation is already in context; do not inspect it again. "
+        f"{next_step} Another read-only Python call before progress will end this run with the "
+        "diagnostic `no_progress_tool_loop`."
+    )
+
 
 def no_tool_followup_prompt(
     *, gates_enabled: bool, controller_enabled: bool, tool_call_markup_in_text: bool

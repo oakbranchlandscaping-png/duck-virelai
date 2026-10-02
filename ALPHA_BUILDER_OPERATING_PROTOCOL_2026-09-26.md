@@ -1,5 +1,13 @@
 # Alpha Builder operating protocol — Cybernetic Duck
 
+> **2026-10-02 AMENDMENT (live no-progress law; recorded by Sol, Alpha build seat).** A wall-clock
+> turn budget is not a progress bound. The ls20 G3 NAV v4 canary made one environment action and
+> then repeated the same read-only inspection 687 times across 43 timed-out turns. Gated mode now
+> treats an environment step or accepted gate transition as progress, gives one explicit correction
+> after duplicate or excessive read-only work, carries that state across turns, and ends a repeated
+> violation as the clean diagnostic `no_progress_tool_loop`. Never restart an unchanged semantic
+> loop merely because a turn timer expired. Ring 0 and observer prompt surfaces remain byte-stable.
+
 > **2026-09-28 EVENING AMENDMENT (Director rulings; recorded by Claude, Alpha build seat).** (1) **The controller executes every move it can compute; Duck is woken where judgment is needed** (G0–G3 without Duck; G4-A runs by the controller, explained by Duck). (2) **Memory is the architecture:** `DESIGN_VIRELAI_MEMORY_v1_2026-09-28.md` is RATIFIED and governs how Duck's card, recall and the executor are built — record / certified world model / slot-built card, memory laws M1–M10 (`DOCTRINE_FRICTION_AXIOMS_v3`). (3) **Build it as one comprehensive design, staged M-0…M-6, never piecemeal**; replay every stage against the real recorded worlds (`tools/record_from_artifacts.py`) before any Kaggle run. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-28_EVENING.md`.
 
 > **2026-09-28 AMENDMENT (Director rulings; recorded by Claude, Alpha build seat).** (1) **The ranked list stays:** an exhaustive ranked search on a stated-target card is by design, not a lapse into scripting. (2) **The card is bounded regardless of world size (axiom A6):** detail is queried, never pushed; any card field that grows with the world must be windowed, with a test on the largest recorded world. (3) **A counter label must agree with the record (A1 v2).** (4) **Every build revision is labelled** `R9-Rnn` (harness `R9-Inn`) in its slice document, commit message and Kaggle package; ledger in `BUILD_PLAN_G4_CLICK_COMPLETION_v4_2026-09-28.md` §1. `DOCTRINE_FRICTION_AXIOMS_v2_2026-09-28.md` governs. Current state: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-28.md`.
@@ -400,6 +408,7 @@ Stream or summarize large logs. Never dump entire payloads or secrets.
 | Lifecycle | Did success advance once while routine observations preserved products? |
 | Semantics | Did Duck accurately use the evidence? |
 | Budget | Was the target reached before action/token/time limits? |
+| No-progress loop | Did the model repeat an available observation without acting or advancing the gate? |
 
 Fix the earliest broken layer. Prompting cannot repair missing data. More actions cannot repair a
 router that returned to a completed gate.

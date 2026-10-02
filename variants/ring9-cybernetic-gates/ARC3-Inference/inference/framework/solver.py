@@ -170,6 +170,9 @@ def _turn_ends_game(result: Any, run: Any) -> bool:
         raise RuntimeError("Analyzer did not return a result.")
     if result.fatal_failure:
         raise RuntimeError(f"Analyzer request failed permanently: {result.fatal_failure}")
+    if getattr(result, "controlled_stop", ""):
+        run.solver_note = f"controlled_stop: {result.controlled_stop}"
+        return True
     if getattr(result, "planned_stop", ""):
         run.solver_note = f"planned_stop: {result.planned_stop}"
         return True

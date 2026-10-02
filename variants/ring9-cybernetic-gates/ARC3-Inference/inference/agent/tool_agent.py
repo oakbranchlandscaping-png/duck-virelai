@@ -1,6 +1,7 @@
 """Direct OpenAI-compatible tool-calling analyzer for ARC puzzle runs."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ from inference.agent.prompts import (
     COMPACT_TOOL_SESSION_ADDENDUM,
     GAME_OVERVIEW_ADDENDUM,
     GATED_GAME_OVERVIEW_ADDENDUM,
+    GATED_COMPACT_TOOL_SESSION_ADDENDUM,
     GATED_PYTHON_ADDENDUM,
     GATED_VISUAL_GAME_ADDENDUM,
     PYTHON_ADDENDUM,
@@ -25,6 +27,7 @@ from inference.agent.prompts import (
     MULTIMODAL_CONTEXT_ADDENDUM,
     TOOL_CALL_FORMAT_GUIDANCE,
     VISUAL_GAME_ADDENDUM,
+    no_progress_tool_prompt,
     no_tool_followup_prompt,
 )
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
@@ -214,6 +217,12 @@ _LOCAL_ANALYZER_TIMEOUT = _get_env_float("LOCAL_ANALYZER_TIMEOUT", 0.0)
 _LOCAL_ANALYZER_TOOL_STEPS = _get_env_int("LOCAL_ANALYZER_TOOL_STEPS", 12)
 _LOCAL_ANALYZER_MAX_NO_TOOL_RESPONSES = _get_env_int(
     "LOCAL_ANALYZER_MAX_NO_TOOL_RESPONSES", 2
+)
+_LOCAL_ANALYZER_DUPLICATE_READ_ONLY_LIMIT = _get_env_int(
+    "LOCAL_ANALYZER_DUPLICATE_READ_ONLY_LIMIT", 2
+)
+_LOCAL_ANALYZER_MAX_READ_ONLY_WITHOUT_PROGRESS = _get_env_int(
+    "LOCAL_ANALYZER_MAX_READ_ONLY_WITHOUT_PROGRESS", 8
 )
 _LOCAL_ANALYZER_TOOL_TIMEOUT = _get_env_int("LOCAL_ANALYZER_TOOL_TIMEOUT", 30)
 _LOCAL_ANALYZER_TOOL_OUTPUT_TOKENS = _get_env_int("LOCAL_ANALYZER_TOOL_OUTPUT_TOKENS", 1024)
@@ -491,7 +500,12 @@ def _build_system_prompt(
         prompt += MULTIMODAL_CONTEXT_ADDENDUM
     prompt += GATED_VISUAL_GAME_ADDENDUM if virelai_gates_enabled else VISUAL_GAME_ADDENDUM
     prompt += GATED_PYTHON_ADDENDUM if virelai_gates_enabled else PYTHON_ADDENDUM
-    prompt += COMPACT_TOOL_SESSION_ADDENDUM.format(tool_output_tokens=tool_output_tokens)
+    compact_addendum = (
+        GATED_COMPACT_TOOL_SESSION_ADDENDUM
+        if virelai_gates_enabled
+        else COMPACT_TOOL_SESSION_ADDENDUM
+    )
+    prompt += compact_addendum.format(tool_output_tokens=tool_output_tokens)
     if virelai_gates_enabled:
         # Legacy prompt copy used semantic model-facing aliases. Gated mode must
         # expose only the engine's opaque symbols while retaining coordinate
@@ -515,6 +529,7 @@ class AnalyzerTurnResult:
     reasoning: str = ""
     yielded_control: bool = False
     planned_stop: str = ""  # the built ladder is finished; the harness ends the game cleanly
+    controlled_stop: str = ""  # a bounded runtime guard stopped work without a harness crash
 
 
 @dataclass(frozen=True)
@@ -1092,6 +1107,11 @@ class ToolAgent:
         self._api_key = str(api_key or "").strip()
         self._tool_steps = None if _LOCAL_ANALYZER_TOOL_STEPS <= 0 else max(1, _LOCAL_ANALYZER_TOOL_STEPS)
         self._max_no_tool_responses = max(1, _LOCAL_ANALYZER_MAX_NO_TOOL_RESPONSES)
+        self._duplicate_read_only_limit = max(2, _LOCAL_ANALYZER_DUPLICATE_READ_ONLY_LIMIT)
+        self._max_read_only_without_progress = max(
+            self._duplicate_read_only_limit + 1,
+            _LOCAL_ANALYZER_MAX_READ_ONLY_WITHOUT_PROGRESS,
+        )
         self._python_timeout = min(30, max(1, _LOCAL_ANALYZER_TOOL_TIMEOUT))
         self._yield_seconds = None if _LOCAL_ANALYZER_YIELD_SECONDS <= 0 else float(_LOCAL_ANALYZER_YIELD_SECONDS)
         configured_max_output = _LOCAL_ANALYZER_MAX_OUTPUT
@@ -1139,6 +1159,70 @@ class ToolAgent:
         self._controller_last_focus_id: str | None = None
         self._controller_last_model_step: int | None = None
         self._gate_transitioned_this_turn = False
+        self._reset_no_progress_tool_guard()
+
+    def _reset_no_progress_tool_guard(self) -> None:
+        self._no_progress_scope: tuple[str, int, int, str] | None = None
+        self._last_no_progress_tool_fingerprint: str | None = None
+        self._duplicate_read_only_count = 0
+        self._read_only_calls_without_progress = 0
+        self._no_progress_correction_issued = False
+
+    def _current_no_progress_scope(self, state_path: Path) -> tuple[str, int, int, str]:
+        frame, _history = load_runtime_state(state_path)
+        machine = getattr(self, "_gate_machine", None)
+        return (
+            str(state_path.parent.resolve()),
+            int(frame.step if frame is not None else -1),
+            int(frame.level if frame is not None else -1),
+            str(getattr(machine, "gate_id", "") or ""),
+        )
+
+    def _sync_no_progress_tool_guard(self, state_path: Path) -> None:
+        scope = self._current_no_progress_scope(state_path)
+        if getattr(self, "_no_progress_scope", None) == scope:
+            return
+        self._reset_no_progress_tool_guard()
+        self._no_progress_scope = scope
+
+    @staticmethod
+    def _tool_call_fingerprint(name: str, arguments: dict[str, Any]) -> str:
+        normalized = json.loads(json.dumps(arguments, ensure_ascii=True, sort_keys=True, default=str))
+        if str(name).strip().lower() == "python" and isinstance(normalized, dict):
+            code = str(normalized.get("code", "")).replace("\r\n", "\n").replace("\r", "\n")
+            normalized["code"] = "\n".join(line.rstrip() for line in code.strip().splitlines())
+        payload = json.dumps(
+            {"name": str(name).strip().lower(), "arguments": normalized},
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _record_read_only_tool_call(self, fingerprint: str) -> tuple[str, str] | None:
+        """Return a warning or halt when read-only work has stopped adding evidence."""
+        if getattr(self, "_no_progress_correction_issued", False):
+            return (
+                "halt",
+                "Duck issued another read-only tool call after the no-progress correction.",
+            )
+        if fingerprint == getattr(self, "_last_no_progress_tool_fingerprint", None):
+            self._duplicate_read_only_count += 1
+        else:
+            self._last_no_progress_tool_fingerprint = fingerprint
+            self._duplicate_read_only_count = 1
+        self._read_only_calls_without_progress += 1
+        if self._duplicate_read_only_count >= self._duplicate_read_only_limit:
+            return (
+                "warn",
+                f"The same read-only Python request was repeated {self._duplicate_read_only_count} times.",
+            )
+        if self._read_only_calls_without_progress >= self._max_read_only_without_progress:
+            return (
+                "warn",
+                f"{self._read_only_calls_without_progress} read-only Python calls occurred without an environment step or gate transition.",
+            )
+        return None
 
     def _controller_focus_update(self) -> str:
         if not getattr(self, "_virelai_controller_enabled", False) or self._virelai_query_callback is None:
@@ -1321,6 +1405,7 @@ class ToolAgent:
             self._transition_briefing_acknowledged = False
             self._virelai_evidence_delivered_levels = set()
             self._virelai_boundary_delivered_levels = set()
+            self._reset_no_progress_tool_guard()
 
     @property
     def total_tokens(self) -> int:
@@ -2644,6 +2729,7 @@ class ToolAgent:
         )
         controller_focus_update = self._controller_focus_update()
         gate_context_update = self._gate_context_update(state_path)
+        self._sync_no_progress_tool_guard(state_path)
         controller_handoff = self._controller.take_handoff()
         user_prompt = self._build_user_prompt(
             action_num,
@@ -2699,6 +2785,7 @@ class ToolAgent:
         turn_started_at = time.monotonic()
         yielded_control_reason: str | None = None
         consecutive_no_tool_responses = 0
+        controlled_stop_reason: str | None = None
 
         def control_yield_reason() -> str | None:
             if should_stop is not None:
@@ -2880,6 +2967,7 @@ class ToolAgent:
                 assistant_message["tool_calls"] = tool_calls
                 messages.append(assistant_message)
 
+                pending_no_progress_warning: str | None = None
                 for tool_index, tool_call in enumerate(tool_calls):
                     function = tool_call.get("function", {}) if isinstance(tool_call, dict) else {}
                     tool_name = str(function.get("name", "")).strip()
@@ -2894,6 +2982,7 @@ class ToolAgent:
                     except json.JSONDecodeError:
                         arguments = {}
                     rendered_tool_call = _render_tool_call_markup(tool_name, raw_args)
+                    tool_fingerprint = self._tool_call_fingerprint(tool_name, arguments)
                     append_transcript(
                         f"TOOL CALL: {tool_name}",
                         rendered_tool_call or (json.dumps(arguments, indent=2) if arguments else "{}"),
@@ -2909,6 +2998,22 @@ class ToolAgent:
                             "content": dispatch.content,
                         }
                     )
+                    made_progress = dispatch.step_executed or self._gate_transitioned_this_turn
+                    if made_progress:
+                        self._reset_no_progress_tool_guard()
+                        pending_no_progress_warning = None
+                    else:
+                        no_progress = self._record_read_only_tool_call(tool_fingerprint)
+                        if no_progress is not None:
+                            disposition, reason = no_progress
+                            if disposition == "halt":
+                                controlled_stop_reason = f"no_progress_tool_loop: {reason}"
+                                yielded_control_reason = "no_progress_tool_loop"
+                                append_transcript("ANALYZER STATUS", controlled_stop_reason)
+                                if tool_index < len(tool_calls) - 1:
+                                    preserve_history = False
+                                break
+                            pending_no_progress_warning = reason
                     no_legal_move = self._controller_no_legal_move(state_path)
                     if no_legal_move:
                         append_transcript("ANALYZER STATUS", no_legal_move)
@@ -2930,6 +3035,14 @@ class ToolAgent:
                         if tool_index < len(tool_calls) - 1:
                             preserve_history = False
                         break
+                if pending_no_progress_warning is not None and not made_progress:
+                    self._no_progress_correction_issued = True
+                    correction = no_progress_tool_prompt(
+                        gates_enabled=getattr(self, "_virelai_gates_enabled", False),
+                        reason=pending_no_progress_warning,
+                    )
+                    append_transcript("USER PROMPT", correction)
+                    messages.append({"role": "user", "content": correction})
                 if yielded_control_reason is not None:
                     break
                 if step_executed:
@@ -3034,4 +3147,5 @@ class ToolAgent:
             step_executed=step_executed,
             reasoning=captured_reasoning,
             yielded_control=yielded_control_reason is not None,
+            controlled_stop=controlled_stop_reason or "",
         )
