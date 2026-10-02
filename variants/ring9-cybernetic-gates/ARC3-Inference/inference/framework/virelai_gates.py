@@ -57,7 +57,12 @@ from inference.framework.ego_verification import (
     prediction_from_mapping,
 )
 from inference.framework.probe_evidence import EVIDENCE_SCHEMA, compact_probe_outcome
-from inference.framework.masked_world_state import MaskedStateArchive, grids_from_probe_outcome
+from inference.framework.masked_world_state import (
+    MaskedStateArchive,
+    grids_from_probe_outcome,
+    partition_delta,
+    world_address,
+)
 from inference.framework.lever_attribution import (
     ATTRIBUTION_CHANNELS,
     COUNTER_ONLY_DISPOSITION,
@@ -2425,6 +2430,8 @@ class _LeverTarget:
         self._nav_refused_evidence: dict[tuple[tuple[int, int], str], str] = {}
         self._nav_stand_evidence: dict[tuple[int, int], str] = {}
         self._nav_route_evidence: list[str] = []
+        self._nav_world_address: str | None = None
+        self._nav_seen_world_addresses: set[str] = set()
         self._last_nav_plan: Any | None = None
         self._phase = "CLICK" if self._world_type in {"CLICK_GOD_MODE", "HYBRID"} else "NAV"
         self._complete_reason: str | None = None
@@ -2804,6 +2811,67 @@ class _LeverTarget:
             record["reopen_reason"] = reason
             self._reopened_reachability_indices.add(index)
 
+    def _apply_nav_world_delta(
+        self,
+        outcome: Mapping[str, Any],
+        scope: ObservationScope,
+        *,
+        evidence_ref: str,
+    ) -> dict[str, Any] | None:
+        """Invalidate topology evidence when the counter-masked world changes.
+
+        Ego translation and the paired ground exchange are route execution,
+        not a topology change.  Any remaining counter-masked delta creates a
+        new routing context: old refused edges may now yield.
+        """
+        law = self.machine.counter.mask_law
+        grids = grids_from_probe_outcome(outcome)
+        if law is None or grids is None:
+            return None
+        before, after = grids
+        try:
+            partition = partition_delta(before, after, law)
+        except ValueError:
+            return None
+        before_address = world_address(before, law)
+        after_address = world_address(after, law)
+        was_seen = after_address in self._nav_seen_world_addresses
+        self._nav_seen_world_addresses.update((before_address, after_address))
+        self._nav_world_address = after_address
+        ego_exchange = set(scope.ego_expected_cells)
+        ego_exchange.update(scope.ego_confounded_cells)
+        ego_exchange.update(scope.ground_exchange_cells)
+        world_cells = set(partition.world_cells) - ego_exchange
+        if not world_cells or before_address == after_address:
+            return None
+        invalidated_edges = tuple(sorted(self._nav_refused))
+        self._nav_refused.clear()
+        self._nav_refused_evidence.clear()
+        self._reopen_reachability(
+            evidence_ref=evidence_ref,
+            reason=(
+                "the counter-masked world changed, so prior impassability evidence belongs "
+                "to an earlier grid state"
+            ),
+        )
+        return {
+            "schema": "virelai-nav-world-state-transition-v1",
+            "before_world_address": before_address,
+            "after_world_address": after_address,
+            "after_state_previously_seen": was_seen,
+            "world_delta_cells": [list(cell) for cell in sorted(world_cells)],
+            "invalidated_refused_edges": [
+                {"stand": list(stand), "action": action}
+                for stand, action in invalidated_edges
+            ],
+            "reopened_reachability": bool(self._reopened_reachability_indices),
+            "reason": (
+                "A world delta may change passability; routing refusals are scoped to their "
+                "observed counter-masked grid state."
+            ),
+            "evidence_ref": evidence_ref,
+        }
+
     def _counter_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(COUNTER_GATE_ID)
         if product is None:
@@ -3013,6 +3081,7 @@ class _LeverTarget:
                             hypothesis.version if hypothesis is not None else None
                         ),
                         "evidence_refs": list(evidence_refs),
+                        "world_state_address": self._nav_world_address,
                         "level": self.machine.lives.level,
                         "life": self.machine.lives.life,
                         "confirmation_deferred": self._pending_confirmation is not None,
@@ -3100,6 +3169,11 @@ class _LeverTarget:
             target_member_id=target_member_id,
             target_entity_id=entity_id,
         )
+        nav_world_state = self._apply_nav_world_delta(
+            lossless, scope, evidence_ref=evidence_id,
+        )
+        if nav_world_state is not None:
+            event["nav_world_state"] = nav_world_state
         plan = self._last_nav_plan
         action_name = str(action.get("action") or "") if isinstance(action, Mapping) else ""
         ego_ids = ledger.role_entities("EGO")

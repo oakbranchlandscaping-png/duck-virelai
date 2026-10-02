@@ -83,12 +83,19 @@ Each refused demonstrated displacement records:
 A refused edge is immediately useful for routing. Calling a visual object WALL requires the
 additional object-level stability evidence already represented by the prior art.
 
+Refusal evidence is scoped to the counter-masked grid state in which it was observed. Ego motion
+and its paired ground exchange do not create a new topology. Any remaining world delta does: it
+may have opened a passage, removed a blocker or changed an object's collision behavior. On such a
+transition, prior refused edges are invalidated and provisional reachability certificates reopen.
+The controller may then test those edges again in the new world state.
+
 ## Reachability certificate
 
 When the reachable component is exhausted for a target, emit a compact, queryable certificate:
 
 ```text
 target entity and current version
+counter-masked world-state address
 ego entity and footprint
 demonstrated bearing map
 reachable stood anchors with evidence refs
@@ -128,6 +135,7 @@ from screen position, color, class integer, or a hard-coded HUD region.
 - the target moves, transforms, disappears and reappears, or receives a new entity version;
 - the ego footprint, controlled entity, bearing map or available action surface changes;
 - a lever or environmental force changes terrain;
+- any non-counter, non-ego world delta creates a new routing context;
 - level or other relevant world state changes.
 
 Death on the same level preserves supported stood anchors and refusal evidence, while the active

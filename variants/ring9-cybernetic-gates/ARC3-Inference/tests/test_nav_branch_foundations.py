@@ -263,6 +263,30 @@ def _unchanged_outcome(grid, transition, action="ACTION1"):
     }
 
 
+def _changed_outcome(before, after, transition, action="ACTION1"):
+    return {
+        "transition_id": transition,
+        "action": {"action": action},
+        "changed_cells": [
+            {"row": row, "col": col, "before": before[row][col], "after": value}
+            for row, values in enumerate(after)
+            for col, value in enumerate(values)
+            if before[row][col] != value
+        ],
+        "site_transitions": [
+            {
+                "row": row, "col": col,
+                "before": before[row][col], "after": value,
+            }
+            for row, values in enumerate(after)
+            for col, value in enumerate(values)
+        ],
+        "shape_before": [len(before), len(before[0])],
+        "shape_after": [len(after), len(after[0])],
+        "boundary_event": {"state": "PLAYING"},
+    }
+
+
 def test_g3_failed_approach_is_wall_evidence_and_does_not_type_target():
     from test_g3_scheduler import GRID, machine_for
 
@@ -290,6 +314,47 @@ def test_g3_failed_approach_is_wall_evidence_and_does_not_type_target():
     assert adapter.lifecycle_journal.entities[target_entity].state == "ATTEMPTED"
     assert adapter._target_index == 1
     assert wake_reason(machine, event, {}) is None
+
+
+def test_non_ego_world_delta_invalidates_old_refusals_before_learning_new_state():
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((1, 1),))
+    adapter._target_index = 1
+    capability = machine.next_probe_capability()
+    target_entity = capability["target"]["entity_id"]
+    old_edge = ((1, 1), "ACTION2")
+    adapter._nav_refused.add(old_edge)
+    adapter._nav_refused_evidence[old_edge] = "E-OLD-STATE"
+    adapter._last_nav_plan = NavStep(
+        "ACTION1", "APPROACH", (1, 1), (1, 2), target_entity,
+        "one-step frontier experiment",
+    )
+    probe = machine.validate_probe(
+        {"probe_token": capability["probe_token"], "pilot_intent": "APPROACH"},
+        [{"action": "ACTION1"}],
+    )
+    after = tuple(
+        tuple(5 if (row, col) == (0, 0) else value for col, value in enumerate(values))
+        for row, values in enumerate(GRID)
+    )
+    event = machine.record_outcome(probe, _changed_outcome(GRID, after, 1))
+
+    transition = event["nav_world_state"]
+    assert transition["before_world_address"] != transition["after_world_address"]
+    assert transition["world_delta_cells"] == [[0, 0]]
+    assert transition["invalidated_refused_edges"] == [
+        {"stand": [1, 1], "action": "ACTION2"}
+    ]
+    assert old_edge not in adapter._nav_refused
+    # The failed ACTION1 belongs to the new state and is learned after the old
+    # state's refusal set is invalidated.
+    assert ((1, 1), "ACTION1") in adapter._nav_refused
 
 
 def test_g3_confirmation_approach_remains_pending_and_is_not_graded():

@@ -78,6 +78,12 @@ when a newly demonstrated floor stand expands the reachable component. It remove
 bounded ambiguities and queues it for another ranked attempt. Route evidence and refused edges are
 level-scoped across death; the single pending movement plan is transient.
 
+Navigation refusals are also bound to the counter-masked world state in which they were observed.
+The controller subtracts counter cells, expected ego translation and paired ground exchange from
+each frame delta. If world cells remain, the grid has entered a new routing context: previously
+refused edges are cleared and all provisional reachability conclusions reopen. This implements the
+rule that a lever or environmental change may make a formerly impassable object passable.
+
 ### Confirmation boundary
 
 NAV confirmation now remains `ROUTING` and ungraded during every approach step. Only the terminal
@@ -109,10 +115,14 @@ The dedicated tests prove:
 6. Duck's accepted explanation releases the target without an inertness claim;
 7. new floor evidence reopens and requeues the provisional target;
 8. every new field has an explicit cross-life persistence tier.
+9. a non-ego, non-counter world delta invalidates old-state refusals before the new state records
+   fresh terrain evidence.
 
-Focused NAV, G3, life-record and level-freeze suite: **44 passed**.  
-Ruff on every changed Python file: **passed**.  
-Full Ring 9 suite with the vendored harness path: **526 passed** (14 third-party deprecation
+Focused NAV, G3, life-record and level-freeze suite: **45 passed**.
+
+Ruff on every changed Python file: **passed**.
+
+Full Ring 9 suite with the vendored harness path: **527 passed** (14 third-party deprecation
 warnings, no failures).
 
 ## What remains unproven
