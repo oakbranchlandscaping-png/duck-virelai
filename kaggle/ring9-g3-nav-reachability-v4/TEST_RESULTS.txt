@@ -1,0 +1,2 @@
+Source 2b2a3d6: full Ring 9 suite 527 passed; focused NAV test 17 passed; Ruff clean.
+Package guards require ReachabilityCertificate, TARGET_REACHABILITY, world-state topology invalidation, PRESUMED_UNREACHABLE, compiled notebook code and exact manifests.

@@ -1,0 +1,1 @@
+R9 G3 NAV reachability v4: ls20, 96 actions, 2700 seconds, 2048 output tokens, thinking off. Human artifact review required.

@@ -1,0 +1,82 @@
+{
+  "claim": "Efficiently tests whether ls20 G3 NAV learns floor and refused edges, grades lever confirmation only on contact, releases an exhausted target provisionally, and reopens topology knowledge after a counter-masked world delta.",
+  "claim_limits": [
+    "This canary does not grade competition score, level completion, or the full gate stack.",
+    "Criteria not reached inside the narrow budget remain ungraded rather than failed.",
+    "The 2048-token, thinking-off inference profile differs from v3 and is not a model-quality comparison.",
+    "Human review of lossless artifacts is required before claiming behavioral success."
+  ],
+  "concurrency": 1,
+  "context_window_tokens": 65536,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "mikedan7/qwen3-8-27b-fp8-official",
+    "model_source": "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "Qwen/Qwen3.8-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_xml",
+    "wheelhouse": "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  },
+  "inference_profile": {
+    "enable_thinking": false,
+    "purpose": "fast infrastructure canary; not a model-quality comparison",
+    "temperature": 0.2
+  },
+  "infrastructure_criteria": [
+    "I0: the shipped source holds no tools/live_level_carry_gate.py and no world name in the solver's executable code other than the harness's public game roster (packager guard).",
+    "I1: G0 assigns NAVIGATION from metadata, and the controller executor is on (probe envelopes carry executor CONTROLLER and the protocol stamp g3_inherits_g2_nulls true).",
+    "I2: the downloaded execution receipt is byte-identical to the package receipt.",
+    "I3: the run writes the memory artifacts: turn ledger, gate answers with executor, probe envelopes, control-map evidence, and contact epochs where reached.",
+    "I4: approach and contact remain distinct in recorded evidence and only contact can advance G4."
+  ],
+  "live_criteria": [
+    "C1: G0-G2 open G3 on ls20 with a demonstrated NAV control map and total counter mask.",
+    "C2: a failed APPROACH becomes a refused (stand, action) edge and the unchanged edge is not immediately retried.",
+    "C3: a pending NAV lever confirmation remains ROUTING and ungraded until terminal contact.",
+    "C4: exhaustion, if reached, produces an evidence-bound PRESUMED_UNREACHABLE explanation, advances the ranked target, and makes no inertness claim.",
+    "C5: any non-counter, non-ego world delta invalidates old-state refusal evidence and reopens provisional reachability conclusions.",
+    "C6: the run ends at planned stop or the explicit 96-action/2700-second cap without crashing."
+  ],
+  "max_actions_per_world": 96,
+  "max_output_tokens_per_turn": 2048,
+  "max_runtime_seconds_per_world": 2700,
+  "model": "Qwen/Qwen3.8-27B-FP8",
+  "passes": 1,
+  "precondition": "Gate criteria are graded only when the run reaches that gate; a stall earlier leaves them ungraded, not failed. All measurements come from artifact state (turn ledger, gate events, gate answers, probe envelopes, annotations), not from prose.",
+  "request_preflight": {
+    "card_budget_chars": 16200,
+    "context_window_tokens": 65536,
+    "output_reserve_tokens": 16384,
+    "system_prompt_chars": 20576,
+    "tool_schema_chars": 1354,
+    "worst_case_request_chars": 99474,
+    "worst_case_tokens_at_3_chars": 33158
+  },
+  "required_mounted_directories": [
+    "src/ARC3-Inference",
+    "src/tufa-arc-agi-framework"
+  ],
+  "required_mounted_files": [
+    "source-manifest.json",
+    "checkpoint-preflight.json",
+    "execution_receipt.json",
+    "taaf-kaggle-bundle.json",
+    "benchmark_initial.pkl",
+    "deploy_target.pkl",
+    "setup_commands.json"
+  ],
+  "revisions": "R9-R19 plus G3 NAV terrain/reachability",
+  "schema": "virelai-g3-nav-reachability-v4-preflight-v1",
+  "semantic_action_aliases_exposed": false,
+  "source_commit": "2b2a3d6da901ddcecb16e90b51f5ac9dc9ea75f5",
+  "source_delivery": "Kaggle may mount src/ directly or transport it as src.zip; the notebook verifies extracted files before imports.",
+  "stage": "G3-NAV-TERRAIN-REACHABILITY-V4-CANARY",
+  "tool_output_tokens": 1024,
+  "virelai_mode": "gated",
+  "worlds": [
+    "ls20-9607627b"
+  ]
+}
