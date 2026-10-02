@@ -43,6 +43,14 @@ only model mount discovery and passes all seven package checks.
   is successful model-mount resolution; gameplay grading begins only after model startup and game
   actions are present in the receipt-bound output.
 
+The builder-launched version remained queued and the user stopped it. On 2026-10-02 the user then
+ran the same verified `kaggle kernels push` command directly in Terminal. The retry entered
+`RUNNING` immediately; an independent CLI status check confirmed `KernelWorkerStatus.RUNNING`.
+The package, accelerator request, notebook slug, model source, and data sources were unchanged.
+This is direct evidence of a launch-path correlation in this session, not yet evidence of a known
+Kaggle scheduling rule or its cause. Future checkpoint packages should be prepared and verified by
+the builder, then launched by the user from Terminal unless later evidence overturns this practice.
+
 ## Resume commands
 
 The old resume commands below are historical; do not rerun v1 or v2. Version 3 is already uploaded
