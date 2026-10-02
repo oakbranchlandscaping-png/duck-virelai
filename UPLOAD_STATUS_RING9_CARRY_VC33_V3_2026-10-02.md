@@ -64,3 +64,30 @@ The world, budgets, model, dependencies and criteria are v2's. Two additions:
 4. `kaggle kernels push -p kaggle/ring9-carry-vc33-v3/kernel`
 
 — Claude, Alpha build seat, 2026-10-02
+
+## Upload log (2026-10-02)
+
+**Committed on `main`:** `e96754a` (230 files: the 227-file package, the v3 packager, `tools/check_level_entry_from_record.py` and this document). The source commit `fbea80c` stays on branch `r9-r20-level-entry`.
+
+**Dataset upload:** `kaggle datasets create -p kaggle/ring9-carry-vc33-v3/source-dataset -r skip`
+
+| Field | Value |
+|---|---|
+| Files uploaded | 12 |
+| Sizes | `src.zip` 901 KB, `checkpoint-preflight.json` 8 KB (v2: 7 KB; it now carries I7 and the updated claim limit) |
+| Visibility | private |
+| Kaggle at upload end | "being created" |
+
+"Skipping folder: src" is expected, as in v2: the source travels as `src.zip` and is verified against the manifest before any import.
+
+**Next:**
+1. `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-carry-vc33-v3` until it says `ready`.
+2. `kaggle kernels push -p kaggle/ring9-carry-vc33-v3/kernel`
+
+**First signs in the live log:**
+- **Setup (I5):** the same lines as v2: both self-hosted paths, the 174-wheel install, the smoke test, and the 33.66 GiB model.
+- **Level 1 (I6):** the same 26 transitions as the exit run and v2.
+- **The new part (I7):** controller steps continue past transition 26 with no model call. The ledger shows `G0-ACTION-METADATA` → `G1-EGO` → `G2-COUNTER` on level 2, with `executor: CONTROLLER`.
+- **What v2 did instead:** a ledger row with `executor: DUCK` at `G1-EGO` with `turn_time_budget`, repeated. In v3 the watchdog would stop that within one turn and record `controller_no_legal_move`.
+
+— Claude, Alpha build seat, 2026-10-02
