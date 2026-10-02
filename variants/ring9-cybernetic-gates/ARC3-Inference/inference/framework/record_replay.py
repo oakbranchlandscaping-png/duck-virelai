@@ -109,6 +109,15 @@ def click_world_machine(
     return machine
 
 
+def record_like_live(
+    machine: CyberneticGateMachine, probe: Any, outcome: Mapping[str, Any], valid_actions: Sequence[str],
+) -> None:
+    """What a live action does to the machine: record it, then refresh the action metadata from the
+    frame's valid actions, as ``agent/gate_artifacts.py`` does (R9-R20 D3: replay skipped the refresh)."""
+    machine.record_outcome(probe, outcome)
+    machine.update_action_metadata(list(valid_actions))
+
+
 def lossless_outcome(
     grid: Sequence[Sequence[int]],
     transition_id: int,
@@ -221,7 +230,7 @@ def replay(
         result.grid, outcome = lossless_outcome(
             result.grid, step["transition_id"], step["action"], step["changed"], step.get("boundary")
         )
-        machine.record_outcome(probe, outcome)
+        record_like_live(machine, probe, outcome, record.get("valid_actions") or ["ACTION6"])
         result.steps_replayed += 1
         last = int(step["transition_id"])
     if max_steps is None or max_steps >= len(record["steps"]):

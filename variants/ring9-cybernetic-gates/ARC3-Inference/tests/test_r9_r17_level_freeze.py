@@ -12,7 +12,7 @@ from inference.framework.card_builder import build_card, world_model_digest
 from inference.framework.controller_executor import ladder_end, next_owned_step
 from inference.framework.life_record import undeclared
 from inference.framework.memory_store import MemoryStore
-from inference.framework.record_replay import lossless_outcome, load_record, replay
+from inference.framework.record_replay import lossless_outcome, load_record, replay, record_like_live
 from test_r9_r15_replay_fidelity import FT09_EXIT, VC33_EXIT
 
 WIN = {"action": "ACTION6", "row": 32, "col": 60}
@@ -71,7 +71,7 @@ def test_level_two_runs_g0_to_g3_on_its_own_board():
         probe = machine.validate_probe({"probe_token": step.probe_token}, [step.action])
         transition += 1
         grid, outcome = lossless_outcome(grid, transition, step.action, [[0, 90 - transition, 7, 4]])
-        machine.record_outcome(probe, outcome)
+        record_like_live(machine, probe, outcome, ["ACTION6"])  # with the live metadata refresh (R9-R20)
     assert [row["gate_id"] for row in machine.completed_gate_rows()] == ["G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER"]
     assert {row["level"] for row in machine.transition_index if row["transition_id"] > 26} == {2}
 

@@ -106,6 +106,11 @@ COUNTER_TARGET = (
     "and freeze one prediction about the counter's footprint for an action you choose."
 )
 ACTION_METADATA_GATE_ID = "G0-ACTION-METADATA"
+_NO_PROBE = "a probe is demanded but no admissible probe is offered"
+NO_MOVE_OPERATIONS = {  # axiom A2: with no probe offered, these operations ask for a move none can make
+    "QUERY_NEXT_PROBE": _NO_PROBE, "QUERY_NEXT_G3_TARGET": _NO_PROBE,
+    "WAIT_FOR_REPRESENTATION_OR_NEW_ACTION": "the gate waits for a new action but admits none (R9-R20 D2)",
+}
 GATE_ID = "G1-EGO"
 COUNTER_GATE_ID = "G2-COUNTER"
 COUNTER_BOUNDARY_BATCH_MAX = max(1, int(os.environ.get("VIRELAI_COUNTER_BOUNDARY_BATCH_MAX", "8")))
@@ -514,9 +519,14 @@ class EgoGateMachine:
             if any(item.requires_coordinates for item in additions):
                 self._coordinate_enabled = True
         self._currently_available = refreshed_names
-        if self.status in {"ACTIVE", "ANSWER_REQUIRED", "REOPENED", "UNRESOLVED"}:
+        if self._refresh_settles():
             self._settle_coverage()
         self.revision += 1
+
+    def _refresh_settles(self) -> bool:
+        """A pointer ego closes on the G0 interface axiom, never on coverage (R9-R20 D1)."""
+        pointer = self._control_archetype["world_type"] == "CLICK_GOD_MODE"
+        return not pointer and self.status in {"ACTIVE", "ANSWER_REQUIRED", "REOPENED", "UNRESOLVED"}
 
     def next_probe(self) -> ProbeEnvelope | None:
         item = self._unobserved()
@@ -5177,28 +5187,18 @@ class CyberneticGateMachine:
         """
         view = self.gate_view()
         operation = str(view.get("next_operation") or "")
-        base = {
-            "gate_id": self.gate_id,
-            "status": view.get("status"),
-            "next_operation": operation,
-        }
+        base = {"gate_id": self.gate_id, "status": view.get("status"), "next_operation": operation}
         if self.next_probe_capability() is not None:
             return {**base, "legal": True, "move": "PROBE"}
         if operation == "SUBMIT_GATE_ANSWER":
-            has_template = view.get("answer_template") is not None or bool(
-                view.get("answer_templates")
-            )
+            has_template = view.get("answer_template") is not None or bool(view.get("answer_templates"))
             if "answer_template" in view and not has_template:
-                return {
-                    **base, "legal": False,
-                    "reason": "an answer is demanded but the card supplies no answer template",
-                }
+                reason = "an answer is demanded but the card supplies no answer template"
+                return {**base, "legal": False, "reason": reason}
             return {**base, "legal": True, "move": "ANSWER"}
-        if operation in {"QUERY_NEXT_PROBE", "QUERY_NEXT_G3_TARGET"}:
-            return {
-                **base, "legal": False,
-                "reason": "a probe is demanded but no admissible probe is offered",
-            }
+        reason = NO_MOVE_OPERATIONS.get(operation)
+        if reason is not None:
+            return {**base, "legal": False, "reason": reason}
         return {**base, "legal": True, "move": "DECLARED_STATE"}
 
     def gate_view(self) -> dict[str, Any]:
