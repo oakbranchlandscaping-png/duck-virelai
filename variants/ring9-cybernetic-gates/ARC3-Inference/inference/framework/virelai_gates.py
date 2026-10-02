@@ -6080,7 +6080,10 @@ class CyberneticGateMachine:
                     "novelty": "Explain why this test occurs from a later, untested grid state.",
                 }
                 view["answer_template_note"] = (
+                    "The controller binds evidence_refs; omit that field or leave it CERTIFIED. "
                     "Replace the example footprint, displacement, and prose with the observed subject. "
+                    "For PATTERN_TRANSLATION, before_footprint and after_footprint mean every cell "
+                    "of the moved multi-integer ego, not only an anchor or bounding-box corner. "
                     "Keep the nested object and list shapes exactly as shown."
                 )
         return view

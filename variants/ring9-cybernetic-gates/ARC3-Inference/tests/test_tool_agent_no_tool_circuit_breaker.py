@@ -280,6 +280,115 @@ def test_gate_transition_after_duplicate_correction_resets_guard(tmp_path, monke
     assert agent._read_only_calls_without_progress == 0
 
 
+def test_rejected_gate_answer_gets_binding_repair_turn_then_can_transition(tmp_path, monkeypatch):
+    answer = "print(virelai('gate_answer', answer={}))"
+    agent, state_path, requests = _guard_agent(tmp_path, monkeypatch, [answer, answer])
+    calls = 0
+
+    def dispatch(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _ToolDispatchResult(
+                '{"error": "bad evidence"}',
+                interaction_kind="CONTRACT_REPAIR",
+                repair_signature="failure-a",
+                repair_error="bad evidence",
+            )
+        agent._gate_transitioned_this_turn = True
+        return _ToolDispatchResult(
+            '{"error": null}', interaction_kind="GATE_TRANSITION"
+        )
+
+    monkeypatch.setattr(agent, "_dispatch_tool", dispatch)
+    result = agent.analyze(state_path, 0, valid_actions=["ACTION1"])
+
+    assert result is not None and result.controlled_stop == ""
+    assert result.yielded_control
+    assert len(requests) == 2
+    assert any(
+        "GATE CONTRACT REPAIR" in message.get("content", "")
+        for message in requests[-1]
+        if message.get("role") == "user"
+    )
+
+
+def test_same_contract_failure_twice_stops_cleanly(tmp_path, monkeypatch):
+    answer = "print(virelai('gate_answer', answer={}))"
+    agent, state_path, _requests = _guard_agent(tmp_path, monkeypatch, [answer])
+    rejected = _ToolDispatchResult(
+        '{"error": "bad evidence"}',
+        interaction_kind="CONTRACT_REPAIR",
+        repair_signature="failure-a",
+        repair_error="bad evidence",
+    )
+    monkeypatch.setattr(agent, "_dispatch_tool", lambda *_args, **_kwargs: rejected)
+
+    result = agent.analyze(state_path, 0, valid_actions=["ACTION1"])
+
+    assert result is not None
+    assert result.controlled_stop.startswith("contract_repair_loop:")
+
+
+def test_inspection_during_contract_repair_stops_cleanly(tmp_path, monkeypatch):
+    answer = "print(virelai('gate_answer', answer={}))"
+    inspect = "print(current_frame.step)"
+    agent, state_path, _requests = _guard_agent(tmp_path, monkeypatch, [answer, inspect])
+    calls = 0
+
+    def dispatch(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _ToolDispatchResult(
+                '{"error": "bad evidence"}',
+                interaction_kind="CONTRACT_REPAIR",
+                repair_signature="failure-a",
+                repair_error="bad evidence",
+            )
+        return _ToolDispatchResult('{"returncode": 0}')
+
+    monkeypatch.setattr(agent, "_dispatch_tool", dispatch)
+    result = agent.analyze(state_path, 0, valid_actions=["ACTION1"])
+
+    assert result is not None
+    assert result.controlled_stop.startswith("contract_repair_loop:")
+
+
+def test_contract_attempt_supersedes_existing_no_progress_warning(tmp_path, monkeypatch):
+    inspect = "print(current_frame.step)"
+    answer = "print(virelai('gate_answer', answer={}))"
+    agent, state_path, _requests = _guard_agent(
+        tmp_path, monkeypatch, [inspect, inspect, answer, answer]
+    )
+    calls = 0
+
+    def dispatch(_path, _name, arguments):
+        nonlocal calls
+        calls += 1
+        code = arguments.get("code", "")
+        if "gate_answer" not in code:
+            return _ToolDispatchResult('{"returncode": 0}')
+        if calls == 3:
+            return _ToolDispatchResult(
+                '{"error": "bad evidence"}',
+                interaction_kind="CONTRACT_REPAIR",
+                repair_signature="failure-a",
+                repair_error="bad evidence",
+            )
+        agent._gate_transitioned_this_turn = True
+        return _ToolDispatchResult(
+            '{"error": null}', interaction_kind="GATE_TRANSITION"
+        )
+
+    monkeypatch.setattr(agent, "_dispatch_tool", dispatch)
+    result = agent.analyze(state_path, 0, valid_actions=["ACTION1"])
+
+    assert result is not None and result.controlled_stop == ""
+    assert result.yielded_control
+    assert calls == 4
+
+
 def test_world_step_change_clears_cross_turn_duplicate_state(tmp_path, monkeypatch):
     inspect = "print(current_frame.step)"
     agent, state_path, _requests = _guard_agent(tmp_path, monkeypatch, [inspect])

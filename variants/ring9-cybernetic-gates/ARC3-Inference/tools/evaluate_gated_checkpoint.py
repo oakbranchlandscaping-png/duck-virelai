@@ -15,6 +15,9 @@ RECEIPT_SCHEMAS = frozenset({
     "virelai-g1-execution-receipt-v1",
     "virelai-g2-execution-receipt-v1",
     "virelai-g2-reliability-execution-receipt-v2",
+    "virelai-g3-nav-reachability-v5-execution-receipt-v1",
+    "virelai-g3-nav-reachability-v6-execution-receipt-v1",
+    "virelai-g3-nav-reachability-v7-execution-receipt-v1",
 })
 REVIEW_SCHEMA = "virelai-g1-human-review-v1"
 REPORT_SCHEMA = "virelai-gated-checkpoint-evaluation-v2"

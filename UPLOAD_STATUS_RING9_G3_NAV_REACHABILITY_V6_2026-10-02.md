@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-02  
-**Status:** Kaggle notebook version 1 running
+**Status:** Kaggle notebook version 1 completed; behavior reviewed
 
 ## Private Kaggle artifacts
 
@@ -35,7 +35,24 @@ rubric are unchanged from v5.
 - kernel version 1 pushed successfully;
 - immediate Kaggle status: `KernelWorkerStatus.RUNNING`.
 
-The run should be graded against the unchanged v5 criteria only after lossless artifacts are
-downloaded. Infrastructure success alone does not prove G3 NAV behavior.
+## Completed run
+
+- Runtime: 19m 23s;
+- world: `ls20-9607627b`, pass 0;
+- environment actions: 8;
+- generated tokens: 31,664;
+- levels cleared: 0;
+- terminal diagnostic: `controlled_stop: no_progress_tool_loop`.
+
+The run completed the exact G1 Delphi sequence: two probes each of ACTION1, ACTION2, ACTION3 and
+ACTION4. Duck identified the 25-cell blue/orange embodied ego and described the four rigid
+five-cell cardinal translations correctly. Its G1 answer was rejected because one opaque evidence
+identifier was mistyped (`...28281b9` rather than `...2481b9`). The existing no-progress guard then
+treated that rejected answer as another read-only call and stopped the run. G2 and G3 were not
+reached, so this run supplies no G3 NAV result.
+
+After evaluator receipt support was updated, the frozen receipt passes every identity and alignment
+check. The behavioral grade remains failed for the correct reason: G1 has no accepted answer or
+prospective demonstration. See `REVIEW_RING9_G3_NAV_REACHABILITY_V6_2026-10-02.md`.
 
 — **Sol**

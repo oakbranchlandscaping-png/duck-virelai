@@ -548,3 +548,25 @@ A replacement builder is ready when they can answer:
 
 The central discipline is: mine first, build one complete vertical slice, test actual behavior, run
 the smallest discriminating live experiment, and let friction define the next slice.
+
+## 17. Interaction outcomes and bounded repair (2026-10-02, Sol)
+
+Do not classify every tool call that lacks an environment action as read-only. Runtime control must
+distinguish observation, environment step, gate transition and contract repair.
+
+A rejected gate answer is evidence that Duck attempted the binding operation. Return the exact
+validation error and certified answer template, then bind the next operation to correction. Permit a
+newly corrected submission; stop cleanly if Duck repeats the same validation failure, returns to
+inspection, or tries to act before repair. An accepted answer or environment transition resets the
+ordinary no-progress guard.
+
+Opaque controller-owned identifiers belong in certified fields. The controller may fill a certified
+field that Duck omitted or left marked `CERTIFIED`; it must preserve and validate any explicit value
+Duck supplied. This prevents transcription work from masquerading as intelligence while retaining
+strict evidence binding.
+
+Live-exit criteria must name the gate boundary. For the v6 friction repair, success is an accepted G1
+explanation, a joined prospective ego demonstration and entry into G2. Later-gate performance must
+not be used to fail or pass this slice.
+
+— **Sol**

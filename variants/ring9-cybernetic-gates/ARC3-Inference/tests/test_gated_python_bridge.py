@@ -116,6 +116,35 @@ def test_gate_query_result_is_visible_without_an_environment_call(tmp_path):
     assert calls == []
 
 
+def test_rejected_gate_answer_is_classified_as_contract_repair(tmp_path):
+    agent, state_path = _agent(tmp_path)
+    result = agent._run_python_tool(
+        state_path, {"code": "result = virelai('gate_answer', answer={})"}
+    )
+    assert result.interaction_kind == "CONTRACT_REPAIR"
+    assert result.repair_signature
+    assert result.repair_error == "G0 answer_id is required."
+
+
+def test_rejected_gate_answer_blocks_later_action_in_same_tool_call(tmp_path):
+    agent, state_path = _agent(tmp_path)
+    calls = []
+    agent._step_env_callback = lambda payload: calls.append(payload) or {"executed": True}
+    result = agent._run_python_tool(
+        state_path,
+        {
+            "code": (
+                "virelai('gate_answer', answer={})\n"
+                "action([{'action': 'ACTION1'}])"
+            )
+        },
+    )
+    assert result.interaction_kind == "CONTRACT_REPAIR"
+    assert not result.step_executed
+    assert calls == []
+    assert "action failed in sandbox host" in json.loads(result.content)["error"]
+
+
 def test_passive_agenda_cannot_override_binding_gate(tmp_path):
     agent, state_path = _agent(tmp_path)
     calls = []

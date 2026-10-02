@@ -20,6 +20,7 @@ from inference.framework.card_builder import (
     CARD_BUDGET,
     CERTIFIED,
     build_card,
+    card_template,
     fill_certified_fields,
     worst_case_request_chars,
 )
@@ -151,6 +152,23 @@ def test_certified_fields_are_filled_by_the_controller_but_still_checked():
             "tracked_variable": "t", "mechanism": "m", "bookkeeping_reason": "b",
             "competing_models": ["c"], "falsifier": "f",
         })))
+
+
+def test_g1_evidence_ids_are_controller_bound_without_rewriting_explicit_input():
+    class G1Machine:
+        gate_id = "G1-EGO"
+
+        @staticmethod
+        def gate_view():
+            return {"answer_template": {"answer_id": "G1-1", "evidence_refs": ["E-exact"]}}
+
+    machine = G1Machine()
+    shown = card_template(machine.gate_id, machine.gate_view()["answer_template"])
+    assert shown["evidence_refs"] == CERTIFIED
+    assert fill_certified_fields(machine, {"answer_id": "G1-1"})["evidence_refs"] == ["E-exact"]
+    assert fill_certified_fields(
+        machine, {"answer_id": "G1-1", "evidence_refs": ["E-wrong"]}
+    )["evidence_refs"] == ["E-wrong"]
 
 
 def test_preflight_worst_case_request_fits_the_model_window():

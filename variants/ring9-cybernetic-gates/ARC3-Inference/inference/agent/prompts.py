@@ -204,6 +204,18 @@ def no_progress_tool_prompt(*, gates_enabled: bool, reason: str) -> str:
     )
 
 
+def contract_repair_prompt(*, error: str) -> str:
+    """Bind the next model operation to repairing a rejected gate answer."""
+    return (
+        "GATE CONTRACT REPAIR\n"
+        f"The previous gate_answer was rejected: {error}\n"
+        "Do not inspect the frame, query more evidence, or execute an environment action. "
+        "Use the returned correction and answer_template to fix the named field, then resubmit "
+        "gate_answer now. Controller-certified fields may be omitted or left CERTIFIED. "
+        "Repeating the same validation failure ends this checkpoint cleanly."
+    )
+
+
 def no_tool_followup_prompt(
     *, gates_enabled: bool, controller_enabled: bool, tool_call_markup_in_text: bool
 ) -> str:

@@ -175,6 +175,15 @@ def test_g1_evaluator_accepts_frozen_g2_reliability_v2_receipt(tmp_path):
     assert report["execution_receipt"]["checks"]["schema"]["passed"]
 
 
+def test_g1_evaluator_accepts_g3_nav_v6_receipt(tmp_path):
+    _stem, receipt_path = _g1_fixture(tmp_path)
+    receipt = json.loads(receipt_path.read_text())
+    receipt["schema"] = "virelai-g3-nav-reachability-v6-execution-receipt-v1"
+    receipt_path.write_text(json.dumps(receipt, sort_keys=True))
+    report = evaluate(tmp_path, "g1", receipt_path=receipt_path)
+    assert report["execution_receipt"]["checks"]["schema"]["passed"]
+
+
 def test_click_only_interface_axiom_passes_automated_g1_without_actions(tmp_path):
     artifacts = tmp_path / "artifacts"
     stem = "click-world_p0"

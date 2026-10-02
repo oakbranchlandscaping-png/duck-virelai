@@ -27,6 +27,7 @@ from inference.agent.prompts import (
     MULTIMODAL_CONTEXT_ADDENDUM,
     TOOL_CALL_FORMAT_GUIDANCE,
     VISUAL_GAME_ADDENDUM,
+    contract_repair_prompt,
     no_progress_tool_prompt,
     no_tool_followup_prompt,
 )
@@ -536,6 +537,9 @@ class AnalyzerTurnResult:
 class _ToolDispatchResult:
     content: str
     step_executed: bool = False
+    interaction_kind: str = "OBSERVATION"
+    repair_signature: str = ""
+    repair_error: str = ""
 
 
 @dataclass(frozen=True)
@@ -1167,6 +1171,28 @@ class ToolAgent:
         self._duplicate_read_only_count = 0
         self._read_only_calls_without_progress = 0
         self._no_progress_correction_issued = False
+        self._contract_repair_required = False
+        self._contract_repair_signatures: set[str] = set()
+
+    def _record_contract_repair(
+        self, signature: str, error: str
+    ) -> tuple[str, str]:
+        """Require a corrected answer while bounding repeated contract failures."""
+        normalized = signature or hashlib.sha256(error.encode("utf-8")).hexdigest()
+        if normalized in self._contract_repair_signatures:
+            return (
+                "halt",
+                "Duck repeated a gate answer with the same validation failure instead of repairing it.",
+            )
+        self._contract_repair_signatures.add(normalized)
+        self._contract_repair_required = True
+        # A contract attempt is not passive inspection. Supersede any earlier
+        # no-progress warning so the model receives one fair correction turn.
+        self._last_no_progress_tool_fingerprint = None
+        self._duplicate_read_only_count = 0
+        self._read_only_calls_without_progress = 0
+        self._no_progress_correction_issued = False
+        return ("warn", error)
 
     def _current_no_progress_scope(self, state_path: Path) -> tuple[str, int, int, str]:
         frame, _history = load_runtime_state(state_path)
@@ -2236,11 +2262,20 @@ class ToolAgent:
             }
 
         terminal_action_result: dict[str, Any] | None = None
+        interaction_kind = "OBSERVATION"
+        repair_signature = ""
+        repair_error = ""
+        contract_repair_required_in_dispatch = False
 
         def _handle_action(
             actions: list[dict[str, Any]], decision: dict[str, Any] | None = None
         ) -> dict[str, Any]:
             nonlocal terminal_action_result
+            if contract_repair_required_in_dispatch:
+                raise RuntimeError(
+                    "A gate_answer was rejected in this tool call. Correct and resubmit the "
+                    "answer before executing an environment action."
+                )
             if self._step_env_callback is None:
                 raise RuntimeError("action(actions) is not available in this session.")
             normalized_actions = self._normalize_python_actions(actions)
@@ -2372,6 +2407,8 @@ class ToolAgent:
             operation: str,
             parameters: dict[str, Any],
         ) -> dict[str, Any]:
+            nonlocal interaction_kind, repair_signature, repair_error
+            nonlocal contract_repair_required_in_dispatch
             if getattr(self, "_turn_ledger", None) is not None:
                 self._turn_ledger.query(operation)
             if self._virelai_gates_enabled:
@@ -2412,6 +2449,12 @@ class ToolAgent:
                                 gate_machine, notes, source="ANSWER", gate_id=answering_gate_id,
                             ))
                     except (GateContractError, AnnotationError) as exc:
+                        interaction_kind = "CONTRACT_REPAIR"
+                        repair_error = str(exc)
+                        repair_signature = hashlib.sha256(
+                            f"{answering_gate_id}:{repair_error}".encode("utf-8")
+                        ).hexdigest()
+                        contract_repair_required_in_dispatch = True
                         gate_view = gate_machine.gate_view()
                         answer_template = card_template(gate_machine.gate_id, gate_view.get("answer_template"))
                         already_accepted = (
@@ -2436,6 +2479,10 @@ class ToolAgent:
                         }
                     self._record_gate_answer(state_path, gate_machine, answering_gate_id, answer)
                     self._gate_transitioned_this_turn = True
+                    interaction_kind = "GATE_TRANSITION"
+                    repair_signature = ""
+                    repair_error = ""
+                    contract_repair_required_in_dispatch = False
                     return {
                         "schema": "virelai-query-v1", "operation": operation,
                         "data": self._binding_gate_payload(gate_machine),
@@ -2524,6 +2571,9 @@ class ToolAgent:
         return _ToolDispatchResult(
             self._render_tool_payload(payload, truncate_fields=("stdout", "error", "result")),
             step_executed=step_executed,
+            interaction_kind=interaction_kind,
+            repair_signature=repair_signature,
+            repair_error=repair_error,
         )
 
     def _dispatch_tool(self, state_path: Path, name: str, arguments: dict[str, Any]) -> _ToolDispatchResult:
@@ -2968,6 +3018,7 @@ class ToolAgent:
                 messages.append(assistant_message)
 
                 pending_no_progress_warning: str | None = None
+                pending_contract_repair: str | None = None
                 for tool_index, tool_call in enumerate(tool_calls):
                     function = tool_call.get("function", {}) if isinstance(tool_call, dict) else {}
                     tool_name = str(function.get("name", "")).strip()
@@ -2999,7 +3050,33 @@ class ToolAgent:
                         }
                     )
                     made_progress = dispatch.step_executed or self._gate_transitioned_this_turn
-                    if made_progress:
+                    if (
+                        self._contract_repair_required
+                        and dispatch.interaction_kind not in {"CONTRACT_REPAIR", "GATE_TRANSITION"}
+                    ):
+                        controlled_stop_reason = (
+                            "contract_repair_loop: Duck inspected or acted instead of correcting "
+                            "the rejected gate answer."
+                        )
+                        yielded_control_reason = "contract_repair_loop"
+                        append_transcript("ANALYZER STATUS", controlled_stop_reason)
+                        if tool_index < len(tool_calls) - 1:
+                            preserve_history = False
+                        break
+                    if dispatch.interaction_kind == "CONTRACT_REPAIR":
+                        disposition, reason = self._record_contract_repair(
+                            dispatch.repair_signature, dispatch.repair_error
+                        )
+                        if disposition == "halt":
+                            controlled_stop_reason = f"contract_repair_loop: {reason}"
+                            yielded_control_reason = "contract_repair_loop"
+                            append_transcript("ANALYZER STATUS", controlled_stop_reason)
+                            if tool_index < len(tool_calls) - 1:
+                                preserve_history = False
+                            break
+                        pending_contract_repair = reason
+                        pending_no_progress_warning = None
+                    elif made_progress:
                         self._reset_no_progress_tool_guard()
                         pending_no_progress_warning = None
                     else:
@@ -3035,7 +3112,11 @@ class ToolAgent:
                         if tool_index < len(tool_calls) - 1:
                             preserve_history = False
                         break
-                if pending_no_progress_warning is not None and not made_progress:
+                if pending_contract_repair is not None and yielded_control_reason is None:
+                    correction = contract_repair_prompt(error=pending_contract_repair)
+                    append_transcript("USER PROMPT", correction)
+                    messages.append({"role": "user", "content": correction})
+                elif pending_no_progress_warning is not None and not made_progress:
                     self._no_progress_correction_issued = True
                     correction = no_progress_tool_prompt(
                         gates_enabled=getattr(self, "_virelai_gates_enabled", False),

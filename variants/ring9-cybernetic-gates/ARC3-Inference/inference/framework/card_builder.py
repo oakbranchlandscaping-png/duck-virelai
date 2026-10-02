@@ -48,6 +48,7 @@ CARD_BUDGET = sum(SLOT_BUDGETS.values()) + ENVELOPE_CHARS
 
 # Template fields the controller certifies, per gate. Dotted names are nested fields.
 CERTIFIED_TEMPLATE_FIELDS: dict[str, tuple[str, ...]] = {
+    "G1-EGO": ("evidence_refs",),
     "G2-COUNTER": ("candidate_id", "evidence_refs", "novel_prediction.scope"),
     "G3-LEVERS": (
         "effect_summary", "evidence_refs", "lever_entities", "clean_null_entities",
