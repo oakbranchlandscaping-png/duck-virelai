@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-02  
-**Status:** frozen and verified; Kaggle upload awaiting explicit approval
+**Status:** private Kaggle notebook version 1 running
 
 ## Frozen identities
 
@@ -35,8 +35,19 @@ contract-repair stop. G2 and G3 results are recorded but do not determine this s
 
 ## Upload decision
 
-The automated approval reviewer rejected the upload attempt because a new source bundle would be
+The automated approval reviewer initially rejected the upload because a new source bundle would be
 sent to third-party Kaggle and prior run approvals were not considered explicit approval for this
-exact v7 payload and destination. No upload occurred. Resume only after fresh user approval.
+exact payload and destination. The user then explicitly approved the named v7 upload.
+
+## Launch record
+
+- Private dataset creation accepted:
+  <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-g3-nav-reachability-v7>
+- Private notebook version 1 pushed:
+  <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-g3-nav-reachability-v7>
+- Immediate status after launch: `KernelWorkerStatus.RUNNING`.
+
+The run should be reviewed after completion against the behavioral checkpoint above. Its live output
+must remain distinct from the frozen package and the prior v6 artifacts.
 
 — **Sol**
