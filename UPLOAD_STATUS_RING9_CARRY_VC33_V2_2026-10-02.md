@@ -96,3 +96,44 @@ v2 keeps the shipped command unchanged except for the 4 dependency lines, so it 
 5. `kaggle kernels push -p kaggle/ring9-carry-vc33-v2/kernel`
 
 — Claude, Alpha build seat, 2026-10-02
+
+## Upload log (2026-10-02)
+
+**Committed:** `43e083b` (232 files: the 227-file package, the v2 packager, the mount simulator, the two kit files and this document).
+
+**Dataset upload:** `kaggle datasets create -p kaggle/ring9-carry-vc33-v2/source-dataset -r skip`
+
+| Field | Value |
+|---|---|
+| Files uploaded | 12 |
+| Sizes | `src.zip` 901 KB, `setup_commands.json` 10 KB, `source-manifest.json` 26 KB, the rest small |
+| Visibility | private |
+| Kaggle at upload end | "being created" |
+
+The CLI printed "Skipping folder: src". That is expected: the source travels as `src.zip`, and the notebook verifies the extracted files against the manifest before any import. The simulator's `zip` and `nested` layouts cover both ways Kaggle has delivered it.
+
+**Next:**
+1. `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-carry-vc33-v2` until it says `ready`.
+2. `kaggle kernels push -p kaggle/ring9-carry-vc33-v2/kernel`
+
+**What the first minutes of the log should show if v2 works:**
+- `vLLM wheelhouse path: /kaggle/input/datasets/stephenkaskin/virelai-vllm-wheelhouse-v3`, or `/kaggle/input/virelai-vllm-wheelhouse-v3`.
+- `Qwen model path: …/virelai-qwen3-6-27b-fp8`.
+- A no-index pip install of the 174 wheels.
+- vLLM loading weights at about 33.7 GiB.
+- The server smoke test's real model output.
+- `source manifest verified (217 files)`, `checkpoint worlds verified: ['vc33-5430563c']` and `G0-G4 execution receipt verified`.
+
+These lines are criterion I5. If the install or the model load fails, it fails before any model call, and the failure is about the datasets, not the solver.
+
+**v1's pre-run risks still apply unchanged:**
+- Duck may change level 1's path.
+- Level 2 is unknown.
+- The 200-action budget may end the run inside level 2.
+- There is one extra Duck turn at level entry.
+- Level 2 may be won by accident.
+- F4 is still open.
+
+I6 adds one check: any difference before Duck's first own action is the environment's, and the review names it.
+
+— Claude, Alpha build seat, 2026-10-02
