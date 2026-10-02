@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-02  
-**Status:** private Kaggle notebook version 1 running
+**Status:** notebook version 1 failed before benchmark; version 2 runtime pin prepared
 
 ## Frozen identities
 
@@ -49,5 +49,14 @@ exact payload and destination. The user then explicitly approved the named v7 up
 
 The run should be reviewed after completion against the behavioral checkpoint above. Its live output
 must remain distinct from the frozen package and the prior v6 artifacts.
+
+## Version 1 failure
+
+Version 1 selected a new Kaggle Python 3.13 Docker image. The attached wheelhouse is CPython 3.12,
+so offline setup failed at `aiohttp==3.13.5` before vLLM, Duck or the game started. See
+`REVIEW_RING9_G3_NAV_REACHABILITY_V7_V1_FAILURE_2026-10-02.md`.
+
+Version 2 preserves the frozen dataset and notebook bytes and pins the exact Docker image digest
+recorded by Kaggle for the successful v6 Python 3.12 run.
 
 — **Sol**
