@@ -1,0 +1,37 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 200,
+    "max_output_tokens_per_turn": "server_default",
+    "max_runtime_seconds_per_world": 10800,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "stephenkaskin/virelai-qwen3-6-27b-fp8",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "vrfai/Qwen3.6-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_coder",
+    "wheelhouse": "stephenkaskin/virelai-vllm-wheelhouse-v3"
+  },
+  "mode": "gated",
+  "model": {
+    "id": "vrfai/Qwen3.6-27B-FP8"
+  },
+  "package": {
+    "manifest_sha256": "af52d2a6dd79af966572f2f4588b470ef29a7af1a8b553ed191ea29011eb231c",
+    "name": "ring9-carry-vc33-v2",
+    "sha256": "065a455423d8c38ff527138a8051f292eb299020f189f512ba430a8d32d97e50"
+  },
+  "passes": 1,
+  "revisions": "R9-R06 to R9-R18",
+  "schema": "virelai-g4-ft09-guided-execution-receipt-v1",
+  "worlds": [
+    "vc33-5430563c"
+  ]
+}

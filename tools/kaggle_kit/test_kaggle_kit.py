@@ -16,6 +16,7 @@ import pytest
 KIT = Path(__file__).resolve().parent
 ROOT = KIT.parents[1]
 CARRY = ROOT / "kaggle" / "ring9-carry-vc33-v1"
+CARRY_V2 = ROOT / "kaggle" / "ring9-carry-vc33-v2"
 
 
 def _load(name: str):
@@ -145,3 +146,18 @@ def test_the_mirror_refuses_a_file_whose_digest_differs(tmp_path, monkeypatch):
     _fake_hub(monkeypatch, {"model.safetensors": b"weights"}, digests={"model.safetensors": "0" * 64})
     with pytest.raises(SystemExit, match="sha256 mismatch"):
         mirror.main(["--repo", "org/m", "--out", str(tmp_path / "m"), "--dataset", "me/m-mirror"])
+
+
+@pytest.mark.skipif(not CARRY_V2.is_dir(), reason="needs the committed ring9-carry-vc33-v2 package")
+def test_the_self_hosted_package_mounts_and_records_only_the_directors_datasets():
+    old_owner = deps.THIRD_PARTY_V3.wheelhouse.split("/")[0].encode()
+    source = CARRY_V2 / "source-dataset" / "src"
+    read_by_machine = [
+        path for path in CARRY_V2.rglob("*")
+        if path.is_file() and source not in path.parents and path.name not in {"src.zip", "RUN.md"}
+    ]
+    assert read_by_machine and not [p.name for p in read_by_machine if old_owner in p.read_bytes()]
+    meta = json.loads((CARRY_V2 / "kernel" / "kernel-metadata.json").read_text())
+    assert meta["dataset_sources"][1:] == [deps.SELF_HOSTED_V3.wheelhouse, deps.SELF_HOSTED_V3.model]
+    for receipt in (CARRY_V2 / "execution_receipt.json", CARRY_V2 / "source-dataset" / "execution_receipt.json"):
+        assert json.loads(receipt.read_text())["dependencies"] == deps.SELF_HOSTED_V3.record()

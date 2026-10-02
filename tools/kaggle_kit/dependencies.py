@@ -9,7 +9,14 @@ The model and the vLLM wheelhouse reach the notebook in two places, and both mus
     owner and slug of each dataset, the served model name, the context length, the install stamp,
     and vLLM's tool-call and reasoning parsers).
 
-``retarget`` rewrites both from one ``Dependencies`` record. Every edit must match exactly once, so
+Correction, 2026-10-02 (packaging ring9-carry-vc33-v2): a TAAF package names the datasets in three
+more places, which a packager rewrites from the same record: the notebook's ``DATASET_SOURCES``
+(it maps each mount for setup), ``deploy_target.pkl`` ``additional_dataset_sources``, and the
+pickled solver's ``kaggle_wheelhouse_dataset_source`` / ``kaggle_model_dataset_source``. See
+``tools/package_ring9_carry_vc33_v2.py``, which also cross-checks the setup edit against the solver's
+own setup-command generator.
+
+``retarget`` rewrites the first two from one ``Dependencies`` record. Every edit must match exactly once, so
 a setup command of a different shape is refused rather than half-edited. A packager calls it and
 records the record in the checkpoint and receipt; a model swap is then one reviewed record, not a
 scattered edit.
