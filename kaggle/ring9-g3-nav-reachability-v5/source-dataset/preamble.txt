@@ -1,0 +1,1 @@
+R9 G3 NAV reachability v5: ls20, 96 actions, 2700 seconds, server-default output cap, thinking enabled, no-progress guard active. Human artifact review required.

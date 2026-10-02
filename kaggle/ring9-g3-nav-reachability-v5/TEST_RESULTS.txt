@@ -1,0 +1,2 @@
+Source 728f81b: full Ring 9 suite 534 passed; focused guard/tool tests 43 passed; Ruff clean.
+Package guards require ReachabilityCertificate, TARGET_REACHABILITY, world-state topology invalidation, PRESUMED_UNREACHABLE, no_progress_tool_loop, compiled notebook code and exact manifests.

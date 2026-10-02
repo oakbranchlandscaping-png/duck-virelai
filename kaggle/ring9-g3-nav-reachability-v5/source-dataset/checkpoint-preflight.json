@@ -1,0 +1,85 @@
+{
+  "claim": "Tests whether reasoning-enabled Duck reaches ls20 G3 NAV without a repeated read-only loop, then learns floor and refused edges, keeps confirmation bound to contact, releases an exhausted target provisionally, and reopens topology after a masked world delta.",
+  "claim_limits": [
+    "This canary does not grade competition score, level completion, or the full gate stack.",
+    "Criteria not reached inside the narrow budget remain ungraded rather than failed.",
+    "The reasoning-enabled profile restores the productive v3 settings; this remains a behavior test, not a controlled model comparison.",
+    "Human review of lossless artifacts is required before claiming behavioral success."
+  ],
+  "concurrency": 1,
+  "context_window_tokens": 65536,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "mikedan7/qwen3-8-27b-fp8-official",
+    "model_source": "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "Qwen/Qwen3.8-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_xml",
+    "wheelhouse": "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  },
+  "inference_profile": {
+    "duplicate_read_only_limit": 2,
+    "enable_thinking": true,
+    "max_read_only_without_progress": 8,
+    "purpose": "reasoning-enabled one-world gate checkpoint; not a model-quality comparison",
+    "temperature": 0.6
+  },
+  "infrastructure_criteria": [
+    "I0: the shipped source holds no tools/live_level_carry_gate.py and no world name in the solver's executable code other than the harness's public game roster (packager guard).",
+    "I1: G0 assigns NAVIGATION from metadata, and the controller executor is on (probe envelopes carry executor CONTROLLER and the protocol stamp g3_inherits_g2_nulls true).",
+    "I2: the downloaded execution receipt is byte-identical to the package receipt.",
+    "I3: the run writes the memory artifacts: turn ledger, gate answers with executor, probe envelopes, control-map evidence, and contact epochs where reached.",
+    "I4: approach and contact remain distinct in recorded evidence and only contact can advance G4."
+  ],
+  "live_criteria": [
+    "C0: repeated read-only inspection recovers after one correction or ends promptly as controlled_stop: no_progress_tool_loop; it never consumes the outer time cap.",
+    "C1: G0-G2 open G3 on ls20 with a demonstrated NAV control map and total counter mask.",
+    "C2: a failed APPROACH becomes a refused (stand, action) edge and the unchanged edge is not immediately retried.",
+    "C3: a pending NAV lever confirmation remains ROUTING and ungraded until terminal contact.",
+    "C4: exhaustion, if reached, produces an evidence-bound PRESUMED_UNREACHABLE explanation, advances the ranked target, and makes no inertness claim.",
+    "C5: any non-counter, non-ego world delta invalidates old-state refusal evidence and reopens provisional reachability conclusions.",
+    "C6: the run ends at planned stop, controlled no-progress stop, or the explicit 96-action/2700-second cap without crashing."
+  ],
+  "max_actions_per_world": 96,
+  "max_output_tokens_per_turn": 0,
+  "max_runtime_seconds_per_world": 2700,
+  "model": "Qwen/Qwen3.8-27B-FP8",
+  "passes": 1,
+  "precondition": "Gate criteria are graded only when the run reaches that gate; a stall earlier leaves them ungraded, not failed. All measurements come from artifact state (turn ledger, gate events, gate answers, probe envelopes, annotations), not from prose.",
+  "request_preflight": {
+    "card_budget_chars": 16200,
+    "context_window_tokens": 65536,
+    "output_reserve_tokens": 16384,
+    "system_prompt_chars": 20576,
+    "tool_schema_chars": 1354,
+    "worst_case_request_chars": 99474,
+    "worst_case_tokens_at_3_chars": 33158
+  },
+  "required_mounted_directories": [
+    "src/ARC3-Inference",
+    "src/tufa-arc-agi-framework"
+  ],
+  "required_mounted_files": [
+    "source-manifest.json",
+    "checkpoint-preflight.json",
+    "execution_receipt.json",
+    "taaf-kaggle-bundle.json",
+    "benchmark_initial.pkl",
+    "deploy_target.pkl",
+    "setup_commands.json"
+  ],
+  "revisions": "R9-R19 plus G3 NAV terrain/reachability and R9-I03 no-progress guard",
+  "schema": "virelai-g3-nav-reachability-v5-preflight-v1",
+  "semantic_action_aliases_exposed": false,
+  "source_commit": "728f81bb461b02e9524c101b960c9745f218b114",
+  "source_delivery": "Kaggle may mount src/ directly or transport it as src.zip; the notebook verifies extracted files before imports.",
+  "stage": "G3-NAV-TERRAIN-REACHABILITY-V5-CANARY",
+  "tool_output_tokens": 1024,
+  "virelai_mode": "gated",
+  "worlds": [
+    "ls20-9607627b"
+  ]
+}
