@@ -4,7 +4,7 @@
 
 **Date:** 2026-10-02
 
-**Status:** Kaggle notebook version 1 running
+**Status:** Kaggle notebook version 1 failed before benchmark start; evidence reviewed
 
 ## Private Kaggle artifacts
 
@@ -39,7 +39,8 @@
 - OpenRouter native tool and result-visibility canary: passed;
 - package verifier against the committed source export: **8/8 passed**;
 - embedded notebook code compiled;
-- receipt/runtime parameter assertions passed;
+- receipt/runtime parameter assertions were incomplete: both structures were present, but the
+  verifier did not execute their semantic comparison;
 - secret scan, including `src.zip`: clean;
 - bundled source matches the committed export with zero diffs.
 
@@ -68,6 +69,19 @@ verified `src.zip`, the CLI generated a second path with the same name and Kaggl
 creation. No dataset was created by that attempt. The successful retry used directory-skip mode,
 uploading the intended top-level files and single verified archive. Kernel version 1 was then
 pushed and immediately reported `KernelWorkerStatus.RUNNING`.
+
+## Final result
+
+The model server started successfully, loaded the pinned Qwen model and returned the smoke-test
+answer `2 + 2 equals 4.` The notebook then stopped before `bm.run`: runtime normalized output cap
+`0` to the semantic value `"server_default"`, while the frozen receipt still expected integer `0`.
+The strict receipt check correctly rejected that mismatch. No game action occurred, so this run
+provides no evidence for or against the no-progress guard or G3 NAV behavior.
+
+The authoritative Kaggle session stream is saved at
+`runs/kaggle-ring9-g3-nav-reachability-v5-v1/kaggle-session-log.json`. The failed package remains
+immutable. V6 fixes only the receipt encoding and adds the same comparison to the local package
+verifier.
 
 Download completed outputs into:
 

@@ -13,7 +13,8 @@ notebook will verify at startup, plus the checks the notebook cannot make:
   5. the kernel metadata runs offline on GPU and leads with the package's own dataset;
   6. no .env file (other than .env.example) and no key-shaped token exists anywhere,
      including inside src.zip;
-  7. optionally, every bundled source file is byte-identical to a `git archive` export
+  7. runtime setup values and their frozen receipt use the same semantic encoding;
+  8. optionally, every bundled source file is byte-identical to a `git archive` export
      of the source commit (pass --source-export DIR).
 
 Usage:
@@ -79,6 +80,20 @@ def main() -> int:
         and inner["package"]["manifest_sha256"] == sha(bundle / "source-manifest.json")
         and inner["package"]["sha256"] == sha(out / "package-manifest.json"),
         "execution receipts identical and bind both manifests",
+    )
+
+    setup_commands = json.loads((bundle / "setup_commands.json").read_text())
+    setup_text = "\n".join(str(command) for command in setup_commands)
+    output_caps = re.findall(r"'LOCAL_ANALYZER_MAX_OUTPUT':\s*'(-?\d+)'", setup_text)
+    expected_output_cap = None
+    if len(output_caps) == 1:
+        raw_output_cap = int(output_caps[0])
+        expected_output_cap = "server_default" if raw_output_cap <= 0 else raw_output_cap
+    receipt_output_cap = inner.get("budgets", {}).get("max_output_tokens_per_turn")
+    check(
+        expected_output_cap is not None and receipt_output_cap == expected_output_cap,
+        "runtime output cap and execution receipt use the same semantic encoding"
+        f" (setup={expected_output_cap!r}, receipt={receipt_output_cap!r})",
     )
 
     with zipfile.ZipFile(bundle / "src.zip") as archive:
