@@ -5,6 +5,13 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-02 CONTROLLER-FIRST ACTION MINE (Sol, Alpha build seat) — signed.** The completed v7
+> ls20 review exposed an ownership regression: NAV/HYBRID G0, G1 and G2 bypass the existing generic
+> controller executor, even when the gate binds an exact action. The current Director ruling is
+> controller by default and Duck only when code cannot compute the lawful next action. The repo mine,
+> superseded-document analysis and four-slice repair plan are in
+> `MINE_CONTROLLER_FIRST_ACTION_BOUNDARY_v1_2026-10-02.md`.
+
 > **2026-09-29 NIGHT STATUS (Claude, Alpha build seat) — signed.** R9-R09 (memory M-3) committed `e2c2b06` (Mac 461). **R9-R10 (memory M-4, G4 economy and lives)** built: ft09 offline reaches a satisfied G4-A in 92 actions and 7 Duck turns (orientation, 5 orbit explanations, 1 budget wake); the controller certifies G4.1 and runs every lever (D3), Duck may ask for an extra run, a same-level death re-studies the lever (D4), and the counter, action and time budgets wake Duck once on crossing (ruled 2026-09-29). Finding: on the continued-law world the ft09 bar does not cover the full five-lever protocol. Pending Mac pytest (470) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_NIGHT.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v10_2026-09-29.md`. Next: M-5, the package and the D7 throughput run.
 >
 > **2026-09-29 EVENING STATUS (Claude, Alpha build seat) — signed.** R9-R08 (memory M-2, the controller executor) committed `2941f53` (Mac 450). **R9-R09 (memory M-3)** built: at G3 close Duck's first turn is the orientation turn; its notes go to an UNCERTIFIED lane no gate reads (D6); every card carries keyed recall; `virelai('memory', …)` is the one pull interface, and every pull is fitted to reach Duck whole (T4 found a subject file that would have been truncated). Pending Mac pytest (461) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_EVENING.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v9_2026-09-29.md`. Next: M-4, G4 economy and lives.
