@@ -1,0 +1,91 @@
+{
+  "claim": "Tests whether Virelai derives floor and wall hypotheses from observed ego exchange and refused full-footprint landings, uses the resulting action-space map to approach each target, and requires a target-conditioned falsifier before a provisional unreachable conclusion.",
+  "claim_limits": [
+    "This checkpoint does not grade competition score, level completion, G4 closure, or a win.",
+    "UNREACHABLE_IN_CURRENT_WORLD_STATE is provisional and must reopen after a relevant world or routing change.",
+    "Duck may explain a semantic boundary but may not select a controller-computable environment action.",
+    "Human review of lossless artifacts is required before claiming behavioral success."
+  ],
+  "concurrency": 1,
+  "context_window_tokens": 65536,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "mikedan7/qwen3-8-27b-fp8-official",
+    "model_source": "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "Qwen/Qwen3.8-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_xml",
+    "wheelhouse": "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  },
+  "inference_profile": {
+    "duplicate_read_only_limit": 2,
+    "enable_thinking": true,
+    "max_read_only_without_progress": 8,
+    "model_request_timeout_seconds": 600,
+    "purpose": "bounded G3 NAV terrain/reachability checkpoint; not a score run",
+    "temperature": 0.6
+  },
+  "infrastructure_criteria": [
+    "I0: the shipped source holds no tools/live_level_carry_gate.py and no world name in the solver's executable code other than the harness's public game roster (packager guard).",
+    "I1: G0 assigns NAVIGATION from metadata, and the controller executor is on (probe envelopes carry executor CONTROLLER and the protocol stamp g3_inherits_g2_nulls true).",
+    "I2: the downloaded execution receipt is byte-identical to the package receipt.",
+    "I3: the run writes the memory artifacts: turn ledger, gate answers with executor, probe envelopes, control-map evidence, and contact epochs where reached.",
+    "I4: approach and contact remain distinct in recorded evidence and only contact can advance G4."
+  ],
+  "live_criteria": [
+    "C0: G0-G2 repeat the already-proven controller-owned closure and install the complete counter mask.",
+    "C1: G3 reports floor integer 3 from direct G1 ego/ground exchange evidence.",
+    "C2: a uniform refused full-footprint landing reports wall integer 4.",
+    "C3: the interacted floor and wall components are typed in the target ledger with evidence refs.",
+    "C4: the configuration map uses the demonstrated 5x5 ego footprint and learned action vectors.",
+    "C5: predicted reachable targets receive controller-owned route/contact actions.",
+    "C6: predicted unreachable targets receive a target-conditioned falsifier before any verdict.",
+    "C7: a yielding falsifier expands routing; a refused falsifier may open a provisional explanation.",
+    "C8: approach-time target changes do not advance incomplete rows; scoped-null contacts close immediately.",
+    "C9: relevant world deltas invalidate terrain/refusal conclusions and reopen affected rows.",
+    "C10: every controller-computable environment action remains controller-owned.",
+    "C11: the run ends at completion or the explicit 64-action/900-second safety cap without crashing."
+  ],
+  "max_actions_per_world": 64,
+  "max_output_tokens_per_turn": 4096,
+  "max_runtime_seconds_per_world": 900,
+  "model": "Qwen/Qwen3.8-27B-FP8",
+  "passes": 1,
+  "precondition": "Gate criteria are graded only when the run reaches that gate; a stall earlier leaves them ungraded, not failed. All measurements come from artifact state (turn ledger, gate events, gate answers, probe envelopes, annotations), not from prose.",
+  "request_preflight": {
+    "card_budget_chars": 16200,
+    "context_window_tokens": 65536,
+    "output_reserve_tokens": 16384,
+    "system_prompt_chars": 20576,
+    "tool_schema_chars": 1354,
+    "worst_case_request_chars": 99474,
+    "worst_case_tokens_at_3_chars": 33158
+  },
+  "required_mounted_directories": [
+    "src/ARC3-Inference",
+    "src/tufa-arc-agi-framework"
+  ],
+  "required_mounted_files": [
+    "source-manifest.json",
+    "checkpoint-preflight.json",
+    "execution_receipt.json",
+    "taaf-kaggle-bundle.json",
+    "benchmark_initial.pkl",
+    "deploy_target.pkl",
+    "setup_commands.json"
+  ],
+  "revisions": "G3 NAV integer terrain and reachability at c9fbc46",
+  "schema": "virelai-g3-nav-terrain-ls20-v1-preflight-v1",
+  "semantic_action_aliases_exposed": false,
+  "source_commit": "c9fbc469ccdd30ee5a00c27c52d3f7011e1a95ca",
+  "source_delivery": "Kaggle may mount src/ directly or transport it as src.zip; the notebook verifies extracted files before imports.",
+  "stage": "G3-NAV-INTEGER-TERRAIN-AND-REACHABILITY",
+  "tool_output_tokens": 1024,
+  "virelai_mode": "gated",
+  "worlds": [
+    "ls20-9607627b"
+  ]
+}

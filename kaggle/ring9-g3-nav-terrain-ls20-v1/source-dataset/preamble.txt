@@ -1,0 +1,1 @@
+R9 G3 NAV terrain ls20 v1: ls20, 64 actions, 900 seconds, 4096-token output cap, thinking enabled, Python 3.12 image pinned. Human review required.

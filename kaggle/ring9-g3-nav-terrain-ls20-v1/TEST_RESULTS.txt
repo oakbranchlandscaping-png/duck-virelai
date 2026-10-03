@@ -1,0 +1,2 @@
+Source c9fbc46: focused NAV/G3 regression set 95 passed; Ruff passed.
+Guards require evidence-derived terrain, complete-footprint mapping, a target-conditioned falsifier before provisional unreachable, world-delta reopening, and controller ownership.
