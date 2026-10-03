@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** BUILT, LIVE UNCONFIRMED
+**Status:** BUILT, LIVE PARTIALLY CONFIRMED
 **Active source:** `variants/ring9-cybernetic-gates/ARC3-Inference/`
 
 ## Purpose
@@ -74,12 +74,12 @@ The full command completed in 555.80 seconds. The first unconfigured attempt cou
 native solver tests because `taaf` was absent from `PYTHONPATH`; rerunning with
 `../tufa-arc-agi-framework/src` exercised the complete suite.
 
-## Evidence boundary and next checkpoint
+## Preregistered evidence boundary and checkpoint
 
-The implementation and local verification are direct observations. Runtime savings and successful
-G2 steering on a served model are not yet live-confirmed.
+Before the live run, the implementation and local verification were direct observations while
+runtime savings and successful G2 steering on a served model were unconfirmed.
 
-The next checkpoint should be a bounded ls20 NAV run. Grade only these claims:
+The bounded ls20 NAV run was preregistered to grade only these claims:
 
 1. G0 closes with no Duck call.
 2. The exact G1 Delphi probes and prospective demonstration execute with no Duck action-selection
@@ -101,6 +101,20 @@ deterministic pursuit, not the full world model.
   G3. A G2 target with no evidence-supported step therefore wakes Duck rather than being skipped.
 - Exact multi-action batches are still outside the one-action controller turn contract. This does
   not affect the G1 probes or ordinary G2 pursuit tested here.
-- No Kaggle package or executed artifact contains these bytes yet.
+- The executed checkpoint contains the frozen source at commit `0b1a5e4`; later active-source
+  changes are outside that evidence boundary.
+
+## Live checkpoint result
+
+The bounded ls20 run completed on 2026-10-03 and graded **5 PASS, 2 PARTIAL, 1 FAIL** against its
+eight preregistered criteria. The controller closed G0, performed seven of eight Delphi actions,
+executed the supported G1 demonstration, entered G2, and formed the complete recurrent counter
+candidate after two G2 pursuit actions. Duck's accepted G1 explanation correctly described the ego
+and all four movement laws.
+
+The remaining defects are ownership boundaries. A generic low-budget wake overrode one exact G1
+action, and NAV G2 woke Duck for an explanation after the controller already held the footprint,
+rewrite, recurrence, and trigger evidence needed for the narrow counter gate. Full evidence and the
+required repair are in `REVIEW_RING9_CONTROLLER_FIRST_LS20_V1_2026-10-03.md`.
 
 — Sol

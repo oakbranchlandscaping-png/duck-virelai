@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** private dataset created; notebook version 1 queued
+**Status:** COMPLETE; reviewed as PARTIAL PASS
 
 ## Frozen identities
 
@@ -63,7 +63,21 @@ entry, or lever discovery.
   <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-controller-first-ls20-v1>
 - Immediate status: `KernelWorkerStatus.QUEUED`.
 
-Review after completion against only the preregistered criteria above. Do not infer behavior from
-the active source, package plan, or notebook status.
+## Completed result
+
+The terminal-launched notebook completed in 20 minutes with 11 environment actions and a controlled
+time-cap stop. Review grade: **5 PASS, 2 PARTIAL, 1 FAIL**.
+
+The controller closed G0, executed seven of eight Delphi actions, executed and verified the G1
+prospective demonstration, entered G2, and found an 84-cell recurrent counter candidate in two G2
+controller actions. Duck supplied a strong accepted ego explanation. A fixed low-budget wake stole
+one exact Delphi action, and the NAV G2 branch then spent the remaining time asking Duck to explain
+a counter the controller had already mechanically characterized.
+
+Canonical evidence review:
+`REVIEW_RING9_CONTROLLER_FIRST_LS20_V1_2026-10-03.md`.
+
+Do not rerun this unchanged package. Repair exact-action priority and controller-owned NAV G2
+closure first.
 
 — Sol

@@ -5,6 +5,16 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 CONTROLLER-FIRST LS20 RESULT (Sol, Alpha build seat) — signed.** The bounded live
+> checkpoint is a **PARTIAL PASS (5 pass, 2 partial, 1 fail)**. The controller closed G0, performed
+> seven of eight Delphi actions, demonstrated and closed G1, entered G2, and formed an 84-cell
+> recurrent counter candidate after two deterministic pursuit actions. Duck gave a strong accepted
+> ego explanation. A generic low-budget wake wrongly overrode one exact G1 action, then NAV G2
+> handed its mechanically complete counter result to Duck, which exhausted the remaining time
+> without answering. Do not rerun unchanged; exact actions must outrank wakes and certified NAV G2
+> closure should be controller-owned. Evidence review:
+> `REVIEW_RING9_CONTROLLER_FIRST_LS20_V1_2026-10-03.md`.
+
 > **2026-10-02 CONTROLLER-FIRST ACTION MINE (Sol, Alpha build seat) — signed.** The completed v7
 > ls20 review exposed an ownership regression: NAV/HYBRID G0, G1 and G2 bypass the existing generic
 > controller executor, even when the gate binds an exact action. The current Director ruling is
