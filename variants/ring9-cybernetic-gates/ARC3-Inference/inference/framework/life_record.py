@@ -41,6 +41,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "machine": GAME, "revision": LEVEL, "entity_ledger": LEVEL, "evidence": LEVEL,
         "lifecycle_journal": LEVEL, "_bounded_ambiguities": LEVEL, "_bounded_coverage_answer": LEVEL,
         "_complete_reason": LEVEL, "_confirmation_records": LEVEL, "_deferred_observations": LEVEL,
+        "_repeat_readings": LEVEL,
         "_dossier_answers": LEVEL, "_eligible_frontier": LEVEL, "_excluded_frontier": LEVEL,
         "_frontier_mask_version": LEVEL, "_inheritance": LEVEL, "_inventory_answer": LEVEL,
         "_navigation_limit": LEVEL, "_observed_transition_ids": LEVEL, "_target_index": LEVEL,

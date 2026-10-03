@@ -81,4 +81,4 @@ def test_waiting_for_an_action_while_admitting_none_is_not_a_legal_move():
     assert (machine.gate_id, view["next_operation"]) == ("G1-EGO", "WAIT_FOR_REPRESENTATION_OR_NEW_ACTION")
     assert machine.next_probe_capability() is None
     status = machine.legal_move_status()
-    assert status["legal"] is False and "admits none" in status["reason"]
+    assert status["legal"] is False and "offers no probe, answer or end" in status["reason"]  # R9-R22 D11 wording

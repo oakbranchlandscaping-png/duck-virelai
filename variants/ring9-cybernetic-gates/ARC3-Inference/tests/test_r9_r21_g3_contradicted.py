@@ -12,6 +12,11 @@ Separately, the level-completed boundary woke Duck at level entry, so Duck, not 
 answered level 2's G0 (D6).
 
 Fixture: the v4 run's own record (47 transitions). Each test failed before R9-R21.
+
+R9-R22 (Director ruling 2026-10-03, DIAGNOSTIC_G3_G4_LEVER_TYPING_BOUNDARY_v1) supersedes D4: G3 discovers
+levers and G4 types them, so a repeat press that differs from its witness certifies the lever with typing
+evidence instead of bounding an ambiguity. D4's two tests are retired; their replacements are in
+test_r9_r22_lever_typing.py. D5 and D6 stand.
 """
 from __future__ import annotations
 
@@ -45,40 +50,16 @@ def _drive_level_two():
     return machine
 
 
-def test_a_contradicted_confirmation_is_recorded_as_a_bounded_ambiguity():
-    """D4: like every other CLICK-phase route to AMBIGUOUS, with no inertness claim and a retry condition."""
-    g3 = _drive_level_two()._adapters["G3-LEVERS"]
-    statuses = {item["entity_id"]: item["status"] for item in g3._confirmation_records}
-    assert statuses == {"E0004": "CONTRADICTED", "E0005": "CONTRADICTED", "E0006": "SUPPORTED", "E0007": "SUPPORTED"}
-    assert sorted(g3._bounded_ambiguities) == ["E0004", "E0005"]
-    for record in g3._bounded_ambiguities.values():
-        assert record["disposition"] == "CONFIRMATION_CONTRADICTED"
-        assert record["inertness_claim_permitted"] is False and record["retry_condition"]
+def test_an_inventory_no_answer_can_satisfy_is_not_a_legal_move(monkeypatch):
+    """D5 (axiom A2): an inventory refused for unbounded results, with no probe left, is a deadlock.
 
-
-def test_the_live_level_two_g3_reaches_an_accepted_coverage_report():
-    """The v4 stall, replayed: the coverage report is Duck's by design, it is legal, and it is accepted."""
+    Since R9-R22 (D7) this record's repeat presses certify their levers, so the v4 state is rebuilt by
+    reporting the two live ambiguities the way the v4 code held them.
+    """
     machine = _drive_level_two()
-    owned = next_owned_step(machine)
-    assert owned.owner == "DUCK" and "bounded ambiguity" in owned.reason
-    assert machine.legal_move_status()["legal"] is True
-    answer = dict(machine.gate_view()["answer_template"])
-    answer.update(
-        explanation="E0006 and E0007 repeat their remote rewrite; E0004 and E0005 did not on a second press.",
-        competing_models=["E0004 and E0005 respond to board state, not to the press alone."],
-        falsifier="A repeated press of E0004 or E0005 from the same board that reproduces its first rewrite.",
-    )
-    machine.submit_answer(answer)
-    inventory = machine._adapters["G3-LEVERS"]._bounded_coverage_answer
-    assert inventory is not None
-    assert (answer["lever_entities"], answer["ambiguous_entities"]) == (["E0006", "E0007"], ["E0004", "E0005"])
-
-
-def test_an_inventory_no_answer_can_satisfy_is_not_a_legal_move():
-    """D5 (axiom A2): the exact live state (ambiguity left unbounded) is a deadlock the watchdog must see."""
-    machine = _drive_level_two()
-    machine._adapters["G3-LEVERS"]._bounded_ambiguities.clear()  # the v4 state, before D4
-    assert machine.next_probe_capability() is None
+    g3 = machine._adapters["G3-LEVERS"]
+    monkeypatch.setattr(g3, "_unbounded_entities", lambda: {"E0004": "AMBIGUOUS", "E0005": "AMBIGUOUS"})
+    assert machine.gate_id == "G3-LEVERS" and machine.next_probe_capability() is None
     status = machine.legal_move_status()
     assert status["legal"] is False and "unbounded" in status["reason"]
 

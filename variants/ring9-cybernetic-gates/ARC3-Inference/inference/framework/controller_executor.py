@@ -38,6 +38,7 @@ from typing import Any, Mapping
 
 from inference.framework.annotation_lane import orientation_due
 from inference.framework.card_builder import world_budgets
+from inference.framework.lever_repeat import certified
 from inference.framework.memory_store import cell_bbox as _bbox
 from inference.framework.virelai_gates import control_archetype_prior
 
@@ -262,8 +263,16 @@ def _counter_answer(machine: Any, template: Mapping[str, Any]) -> tuple[dict[str
     }, f"G2 label and prediction ({trigger})"
 
 
+REPEAT_TEXT = {  # R9-R22 D7: the repeat press, said as observed (a typing input for G4, never a retraction)
+    "NULL_AT_OBSERVED_STATE": "; a repeat press then changed nothing (it moved, then held).",
+    "OBSERVED_STATE_RECURRENCE": "; a repeat press then undid it exactly.",
+    "NOVEL_STATE_REVEALED": "; a repeat press then changed the board again, to a third state.",
+}
+
+
 def _dossier_answer(template: Mapping[str, Any]) -> dict[str, Any]:
     summary = template["effect_summary"]
+    repeat = (template.get("repeat") or {}).get("repeat_disposition")
     action = template["intervention"]
     site = f"({action.get('row')}, {action.get('col')})" if "row" in action else str(action.get("action"))
     remote = int(summary.get("remote_changed_cell_count") or 0)
@@ -271,7 +280,7 @@ def _dossier_answer(template: Mapping[str, Any]) -> dict[str, Any]:
         f"Clicking {template['target_member_id']} at {site} rewrote {summary.get('local_changed_cell_count')} "
         f"of its own cells (bbox {summary.get('local_changed_bbox')}) and {remote} cells elsewhere"
         + (f" (bbox {summary.get('remote_changed_bbox')})" if remote else "")
-        + ", and the prospective repeat reproduced that residue."
+        + REPEAT_TEXT.get(repeat, ", and the prospective repeat reproduced that residue.")
     )
     if int(summary.get("counter_masked_cell_count") or 0):
         text += (
@@ -366,7 +375,8 @@ def wake_reason(
     if event.get("gate_status_after") in {"UNRESOLVED", "REOPENED"}:
         return f"{event.get('gate_id')} is {event['gate_status_after']}"
     confirmation = (event.get("confirmation") or {}).get("status")
-    if confirmation in {"CONTRADICTED", "BOUNDARY_DEFERRED"}:
+    readings = getattr((getattr(machine, "_adapters", None) or {}).get("G3-LEVERS"), "_repeat_readings", {})
+    if confirmation in {"CONTRADICTED", "BOUNDARY_DEFERRED"} and not certified(event["confirmation"], readings):
         return f"a G3 confirmation was {confirmation}"
     attribution = event.get("attribution") or {}
     if event.get("bounded_ambiguity") or attribution.get("disposition") in AMBIGUOUS_DISPOSITIONS:
