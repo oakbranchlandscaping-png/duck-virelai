@@ -370,6 +370,42 @@ def test_g3_failed_approach_is_wall_evidence_and_does_not_type_target():
     assert wake_reason(machine, event, {}) is None
 
 
+def test_approach_time_target_change_rebinds_without_advancing_the_row():
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((1, 1),))
+    adapter._target_index = 1
+    capability = machine.next_probe_capability()
+    entity_id = capability["target"]["entity_id"]
+    target_cell = tuple(capability["target"]["cells"][0])
+    adapter._last_nav_plan = NavStep(
+        "ACTION1", "APPROACH", (1, 1), (1, 2), entity_id,
+        "route step while the target changes independently",
+    )
+    probe = machine.validate_probe(
+        {"probe_token": capability["probe_token"], "pilot_intent": "APPROACH"},
+        [{"action": "ACTION1"}],
+    )
+    after = tuple(
+        tuple(
+            5 if (row, col) == target_cell else value
+            for col, value in enumerate(values)
+        )
+        for row, values in enumerate(GRID)
+    )
+    event = machine.record_outcome(probe, _changed_outcome(GRID, after, 1))
+
+    assert event["scheduler"]["target_changed"] is True
+    assert adapter._target_index == 1
+    assert adapter._pending_confirmation is None
+    assert adapter.lifecycle_journal.entities[entity_id].state == "ATTEMPTED"
+
+
 def test_non_ego_world_delta_invalidates_old_refusals_before_learning_new_state():
     from test_g3_scheduler import GRID, machine_for
 
@@ -550,12 +586,12 @@ def test_g3_inventory_labels_observed_contact_reachable_with_contact_type():
     )
     adapter = machine._adapters["G3-LEVERS"]
     ledger = adapter._ensure_entity_ledger()
-    assert ledger.bind_role_cells("EGO", ((1, 2),))
+    assert ledger.bind_role_cells("EGO", ((1, 1),))
     adapter._target_index = 1
     capability = machine.next_probe_capability()
     entity_id = capability["target"]["entity_id"]
     adapter._last_nav_plan = NavStep(
-        "ACTION1", "CONTACT_ATTEMPT", (1, 2), (1, 3), entity_id,
+        "ACTION1", "CONTACT_ATTEMPT", (1, 1), (1, 2), entity_id,
         "predicted footprint intersects target",
     )
     probe = machine.validate_probe(
@@ -573,6 +609,8 @@ def test_g3_inventory_labels_observed_contact_reachable_with_contact_type():
     assert row["reachability_basis"] == "OBSERVED_CONTACT_ATTEMPT"
     assert row["contact_type"] in {"REFUSED", "ENTERED", "DISPLACED", "TRANSFORMED"}
     assert row["contact_evidence_refs"]
+    assert adapter.lifecycle_journal.entities[entity_id].state == "G3-CLOSED"
+    assert adapter._target_index == 2
 
 
 def test_g3_inventory_labels_certified_route_exhaustion_unreachable():

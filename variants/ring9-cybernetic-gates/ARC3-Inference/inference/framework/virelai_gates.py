@@ -2526,6 +2526,14 @@ class _LeverTarget:
         self._nav_world_address: str | None = None
         self._nav_seen_world_addresses: set[str] = set()
         self._last_nav_plan: Any | None = None
+        # Sol, 2026-10-03: integer terrain is a current-state hypothesis built
+        # from demonstrated ego/ground exchange and observed refused landings.
+        # A predicted routing limit never becomes a verdict until its shortest
+        # target-conditioned falsifier has actually been tried.
+        self._terrain_palette: Any | None = None
+        self._terrain_hypotheses: dict[str, dict[str, Any]] = {}
+        self._terrain_falsification_refs: dict[str, str] = {}
+        self._terrain_roles: dict[str, dict[str, Any]] = {}
         self._phase = "CLICK" if self._world_type in {"CLICK_GOD_MODE", "HYBRID"} else "NAV"
         self._complete_reason: str | None = None
         self._eligible_frontier: tuple[dict[str, Any], ...] | None = None
@@ -2564,6 +2572,138 @@ class _LeverTarget:
                 continue
             evidence_ref = entity.events[-1].evidence_ref if entity.events else "G3-ENUMERATION-COMPLETE"
             journal.close(entity_id, evidence_ref=evidence_ref)
+
+    def _terrain_context(self) -> dict[str, Any] | None:
+        """Compile the current footprint/action-space map from direct evidence."""
+        if self._phase != "NAV":
+            return None
+        from inference.framework.nav_control import compile_nav_control_map
+        from inference.framework.nav_terrain import infer_terrain_palette
+
+        control = compile_nav_control_map(self.machine.ego)
+        bearings = control.bearing_map()
+        if not bearings:
+            return None
+        ledger = self._ensure_entity_ledger()
+        ego_ids = ledger.role_entities("EGO")
+        sightings = [
+            ledger.entities[item].current
+            for item in ego_ids
+            if item in ledger.entities and ledger.entities[item].current is not None
+        ]
+        cells = tuple(sorted({cell for sighting in sightings for cell in sighting.cells}))
+        if not cells:
+            return None
+        anchor = min(cells)
+        shape = frozenset((row-anchor[0], col-anchor[1]) for row, col in cells)
+        stands = {
+            min(sighting.cells)
+            for entity_id in ego_ids
+            for sighting in ledger.entities[entity_id].sightings
+            if sighting.cells
+        }
+        palette = infer_terrain_palette(
+            self.machine.ego,
+            current_grid=ledger._grid,
+            current_ego_cells=cells,
+            bearings=bearings,
+            refused=self._nav_refused,
+            refused_evidence=self._nav_refused_evidence,
+        )
+        self._terrain_palette = palette
+        return {
+            "control": control,
+            "bearings": bearings,
+            "ledger": ledger,
+            "grid": ledger._grid,
+            "cells": cells,
+            "anchor": anchor,
+            "shape": shape,
+            "stands": stands,
+            "palette": palette,
+        }
+
+    def _classify_terrain_rows(self, context: Mapping[str, Any] | None = None) -> None:
+        """Account for visual floor/wall objects already touched as terrain.
+
+        A floor integer is supported by an observed body/ground exchange.  A
+        wall integer is supported by a refused full-footprint landing.  These
+        are legitimate G3 interactions, so the matching frozen roster rows do
+        not need a redundant collision merely to be called floor or wall.
+        """
+        context = context or self._terrain_context()
+        if context is None:
+            return
+        palette = context["palette"]
+        ledger = context["ledger"]
+        journal = self.lifecycle_journal
+        assert journal is not None
+        floor = set(palette.floor_integers)
+        wall = set(palette.wall_integers)
+        floor_cells = set(palette.floor_cells)
+        wall_cells = set(palette.wall_cells)
+        for row in self._ensure_frontier():
+            integer = int(row["integer"])
+            row_cells = set(row.get("cells") or ())
+            if integer in floor and row_cells & floor_cells:
+                role = "FLOOR"
+                refs = palette.floor_refs(integer)
+                interaction = "EGO_TRAVERSED_INTEGER"
+            elif integer in wall and row_cells & wall_cells:
+                role = "WALL"
+                refs = palette.wall_refs(integer)
+                interaction = "EGO_FOOTPRINT_REFUSED_BY_INTEGER"
+            else:
+                continue
+            entity_id = ledger.entity_for_member(str(row["member_id"]))
+            if not entity_id or not refs:
+                continue
+            lifecycle = journal.entities[entity_id]
+            if lifecycle.witness_refs or lifecycle.state in {"RESPONDED", "WITNESSED", "G4-READY"}:
+                continue
+            if lifecycle.state == "PRESUMED_UNREACHABLE":
+                journal.reopen(
+                    entity_id,
+                    evidence_ref=refs[-1],
+                    reason="direct terrain interaction supersedes the prior routing limit",
+                )
+                lifecycle = journal.entities[entity_id]
+            if lifecycle.state in {"BUDGET_STOPPED", "FILED_TO_G5"}:
+                continue
+            self._terrain_roles[entity_id] = {
+                "schema": "virelai-nav-terrain-role-v1",
+                "role": role,
+                "integer": integer,
+                "interaction": interaction,
+                "evidence_refs": list(refs),
+                "palette_id": palette.palette_id,
+                "world_state_address": self._nav_world_address,
+                "scope": "CURRENT_LEVEL_STATE",
+            }
+            ref = refs[-1]
+            if lifecycle.state in {"UNTOUCHED", "AMBIGUOUS", "REOPENED"}:
+                journal.attempt(entity_id, evidence_ref=ref, actor="NAV_TERRAIN_MAP")
+                lifecycle = journal.entities[entity_id]
+            if lifecycle.state == "ATTEMPTED":
+                journal.response(
+                    entity_id, positive=False, evidence_ref=ref,
+                    actor="NAV_TERRAIN_MAP",
+                )
+                lifecycle = journal.entities[entity_id]
+            if lifecycle.state == "NO_RESPONSE_YET":
+                journal.close(entity_id, evidence_ref=ref, actor="NAV_TERRAIN_MAP")
+
+    def _advance_accounted_terrain_rows(self, candidates: Sequence[Mapping[str, Any]]) -> None:
+        """Skip current roster rows whose terrain interaction already typed them."""
+        ledger = self._ensure_entity_ledger()
+        while self._target_index < len(candidates):
+            entity_id = ledger.entity_for_member(str(candidates[self._target_index]["member_id"]))
+            if entity_id not in self._terrain_roles:
+                break
+            self._target_index += 1
+            self._navigation_steps = 0
+            self._nav_route_evidence.clear()
+            self._last_nav_plan = None
 
     def _bound_ambiguity(
         self,
@@ -2940,6 +3080,20 @@ class _LeverTarget:
         invalidated_edges = tuple(sorted(self._nav_refused))
         self._nav_refused.clear()
         self._nav_refused_evidence.clear()
+        self._terrain_palette = None
+        self._terrain_hypotheses.clear()
+        self._terrain_falsification_refs.clear()
+        journal = self.lifecycle_journal
+        if journal is not None:
+            for entity_id in tuple(self._terrain_roles):
+                lifecycle = journal.entities.get(entity_id)
+                if lifecycle is not None and lifecycle.state == "G3-CLOSED":
+                    journal.reopen(
+                        entity_id,
+                        evidence_ref=evidence_ref,
+                        reason="terrain role must be checked in the changed world state",
+                    )
+        self._terrain_roles.clear()
         self._reopen_reachability(
             evidence_ref=evidence_ref,
             reason=(
@@ -3058,6 +3212,10 @@ class _LeverTarget:
             self._navigation_steps = 0
             self._nav_route_evidence.clear()
             self._last_nav_plan = None
+        if self._phase == "NAV":
+            terrain_context = self._terrain_context()
+            self._classify_terrain_rows(terrain_context)
+            self._advance_accounted_terrain_rows(candidates)
         if self._phase == "CLICK" and self._target_index >= len(candidates):
             if self._world_type == "HYBRID":
                 self._phase = "NAV"
@@ -3120,37 +3278,102 @@ class _LeverTarget:
         """Return the controller's next evidence-bounded route/contact step."""
         if self._phase != "NAV":
             return None
-        from inference.framework.nav_control import compile_nav_control_map
         from inference.framework.nav_route import NavLattice, certify_unreachable, plan_contact
+        from inference.framework.nav_terrain import (
+            analyze_terrain_reachability,
+            plan_hypothesis_test,
+        )
 
-        control = compile_nav_control_map(self.machine.ego)
-        bearings = control.bearing_map()
-        if not bearings:
+        context = self._terrain_context()
+        if context is None:
             return None
-        ledger = self._ensure_entity_ledger()
-        ego_ids = ledger.role_entities("EGO")
-        sightings = [ledger.entities[item].current for item in ego_ids if item in ledger.entities]
-        sightings = [item for item in sightings if item is not None and item.cells]
-        if not sightings:
-            return None
-        cells = tuple(sorted({cell for sighting in sightings for cell in sighting.cells}))
-        anchor = min(cells)
-        shape = frozenset((r-anchor[0], c-anchor[1]) for r, c in cells)
-        stands = set()
-        for entity_id in ego_ids:
-            for sighting in ledger.entities[entity_id].sightings:
-                if sighting.cells:
-                    stands.add(min(sighting.cells))
-        grid = ledger._grid
+        control = context["control"]
+        bearings = context["bearings"]
+        ledger = context["ledger"]
+        anchor = context["anchor"]
+        shape = context["shape"]
+        stands = context["stands"]
+        grid = context["grid"]
+        palette = context["palette"]
         lattice = NavLattice(anchor, shape, bearings, frozenset(stands),
                              frozenset(self._nav_refused), (len(grid), len(grid[0])))
         target_entity = str(target.get("entity_id") or "")
         target_cells = target.get("cells") or ()
-        hypothesis = ledger.entities.get(target_entity)
-        if hypothesis is not None and hypothesis.current is not None:
-            target_cells = hypothesis.current.cells
-        self._last_nav_plan = plan_contact(lattice, target_entity, target_cells)
-        if self._last_nav_plan is None:
+        target_hypothesis = ledger.entities.get(target_entity)
+        if target_hypothesis is not None and target_hypothesis.current is not None:
+            target_cells = target_hypothesis.current.cells
+
+        terrain_hypothesis = None
+        if palette.floor_integers:
+            terrain_hypothesis = analyze_terrain_reachability(
+                grid=grid,
+                anchor=anchor,
+                shape=shape,
+                bearings=bearings,
+                palette=palette,
+                demonstrated_stands=stands,
+                refused=self._nav_refused,
+                target_entity_id=target_entity,
+                target_cells=target_cells,
+            )
+            self._terrain_hypotheses[target_entity] = terrain_hypothesis.snapshot()
+            falsifier_ref = self._terrain_falsification_refs.get(target_entity)
+            if (
+                terrain_hypothesis.status == "PREDICTED_UNREACHABLE"
+                and falsifier_ref
+                and self._pending_reachability is None
+            ):
+                evidence_refs = tuple(dict.fromkeys(
+                    list(palette.floor_refs())
+                    + list(palette.wall_refs())
+                    + [falsifier_ref]
+                    + [ref for _action, ref in control.evidence_refs]
+                ))
+                self._pending_reachability = {
+                    "schema": "virelai-nav-reachability-certificate-v2",
+                    "hypothesis_id": terrain_hypothesis.hypothesis_id,
+                    "target_entity_id": target_entity,
+                    "target_member_id": str(target.get("member_id") or ""),
+                    "target_version": (
+                        target_hypothesis.version if target_hypothesis is not None else None
+                    ),
+                    "status": "PRESUMED_UNREACHABLE",
+                    "reachable_stands": [list(item) for item in terrain_hypothesis.reachable_stands],
+                    "refused_edges": [
+                        [list(stand), action] for stand, action in sorted(self._nav_refused)
+                    ],
+                    "closest_stand": list(terrain_hypothesis.closest_stand),
+                    "remaining_gap": terrain_hypothesis.remaining_gap,
+                    "contact_surface_count": len(terrain_hypothesis.contact_edges),
+                    "open_frontier_edge_count": len(terrain_hypothesis.bridge_edges),
+                    "falsification_attempt_evidence_ref": falsifier_ref,
+                    "palette_id": palette.palette_id,
+                    "inertness_claim_permitted": False,
+                    "reopen_conditions": [
+                        "new stood anchor",
+                        "previously refused edge yields",
+                        "target geometry or identity changes",
+                        "ego footprint, bearing map, or action surface changes",
+                        "terrain or level state changes",
+                    ],
+                    "evidence_refs": [ref for ref in evidence_refs if ref],
+                    "world_state_address": self._nav_world_address,
+                    "level": self.machine.lives.level,
+                    "life": self.machine.lives.life,
+                }
+                self._last_nav_plan = None
+                self.revision += 1
+                return None
+            self._last_nav_plan = plan_hypothesis_test(
+                terrain_hypothesis,
+                bearings=bearings,
+                refused=self._nav_refused,
+            )
+        else:
+            # Until G1 supplies a usable floor exchange, retain the older
+            # evidence-only frontier learner instead of inventing terrain.
+            self._last_nav_plan = plan_contact(lattice, target_entity, target_cells)
+        if self._last_nav_plan is None and not palette.floor_integers:
             certificate = certify_unreachable(lattice, target_entity, target_cells)
             if certificate is not None and self._pending_reachability is None:
                 member_id = str(target.get("member_id") or "")
@@ -3171,7 +3394,7 @@ class _LeverTarget:
                     snapshot.update({
                         "target_member_id": member_id,
                         "target_version": (
-                            hypothesis.version if hypothesis is not None else None
+                            target_hypothesis.version if target_hypothesis is not None else None
                         ),
                         "evidence_refs": list(evidence_refs),
                         "world_state_address": self._nav_world_address,
@@ -3307,6 +3530,12 @@ class _LeverTarget:
                 "action": action_name,
                 "evidence_ref": evidence_id,
             }
+            if getattr(plan, "experiment_kind", None) == "FALSIFIER":
+                self._terrain_falsification_refs.pop(entity_id, None)
+                event["nav_terrain"]["hypothesis_test"] = "PREDICTED_LIMIT_FALSIFIED"
+                event["nav_terrain"]["hypothesis_id"] = getattr(
+                    plan, "hypothesis_id", None
+                )
             self._reopen_reachability(
                 evidence_ref=evidence_id,
                 reason="a new demonstrated floor stand expanded the reachable component",
@@ -3327,6 +3556,12 @@ class _LeverTarget:
                 "target_member_id": target_member_id,
                 "inertness_claim_permitted": False,
             }
+            if getattr(plan, "experiment_kind", None) == "FALSIFIER" and entity_id:
+                self._terrain_falsification_refs[entity_id] = evidence_id
+                event["nav_terrain"]["hypothesis_test"] = "PREDICTED_LIMIT_SURVIVED"
+                event["nav_terrain"]["hypothesis_id"] = getattr(
+                    plan, "hypothesis_id", None
+                )
         pending = self._pending_confirmation
         if is_confirmation and pending is not None:
             frozen_cells = tuple(
@@ -3571,7 +3806,7 @@ class _LeverTarget:
                 })
             elif (
                 entity_id and self._phase == "NAV"
-                and probe.pilot_intent == "APPROACH" and not target_changed
+                and probe.pilot_intent == "APPROACH"
             ):
                 # Route cost is terrain evidence, not a target activation.
                 # Counter-only or ego-only approach frames must not turn the
@@ -3596,6 +3831,10 @@ class _LeverTarget:
                 "SCOPED_NULL_RESPONSE", COUNTER_ONLY_DISPOSITION
             }:
                 journal.response(entity_id, positive=False, evidence_ref=evidence_id)
+                # The target-specific contact has completed.  Close this row
+                # now; waiting for the whole roster made finished targets look
+                # perpetually in progress and blocked reliable handoff.
+                journal.close(entity_id, evidence_ref=evidence_id)
             elif entity_id and attribution.disposition in {"AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"}:
                 journal.transition(
                     entity_id,
@@ -3623,7 +3862,11 @@ class _LeverTarget:
             self._nav_route_evidence.append(evidence_id)
             if boundary_interrupted:
                 self._navigation_steps = 0
-            elif target_changed and self._pending_confirmation is None:
+            elif (
+                target_changed
+                and probe.pilot_intent == "CONTACT_ATTEMPT"
+                and self._pending_confirmation is None
+            ):
                 if attribution.disposition in {
                     "AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"
                 }:
@@ -4101,6 +4344,21 @@ class _LeverTarget:
                     dict(self._pending_reachability)
                     if self._pending_reachability is not None else None
                 ),
+                "terrain_palette": (
+                    self._terrain_palette.snapshot()
+                    if self._terrain_palette is not None else None
+                ),
+                "terrain_roles": {
+                    entity_id: dict(role)
+                    for entity_id, role in sorted(self._terrain_roles.items())
+                },
+                "terrain_hypotheses": {
+                    entity_id: dict(hypothesis)
+                    for entity_id, hypothesis in sorted(self._terrain_hypotheses.items())
+                },
+                "terrain_falsification_refs": dict(
+                    sorted(self._terrain_falsification_refs.items())
+                ),
             },
             "deferred_observations": self._deferred_observations + ([{
                 "target_gate": "G4-REACTIONS",
@@ -4336,6 +4594,38 @@ class _LeverTarget:
                 "inertness_claim_permitted": False,
                 "detail_delivery": "FULL_SNAPSHOT_OR_EVIDENCE_QUERY",
             }
+        palette = scheduler.get("terrain_palette")
+        if isinstance(palette, Mapping):
+            scheduler["terrain_palette"] = {
+                "schema": palette.get("schema"),
+                "palette_id": palette.get("palette_id"),
+                "floor_integers": palette.get("floor_integers"),
+                "wall_integers": palette.get("wall_integers"),
+                "floor_evidence": palette.get("floor_evidence"),
+                "wall_evidence": palette.get("wall_evidence"),
+                "action_coverage": palette.get("action_coverage"),
+                "limitations": palette.get("limitations"),
+                "geometry_delivery": "FULL_SNAPSHOT",
+            }
+        hypotheses = scheduler.get("terrain_hypotheses") or {}
+        scheduler["terrain_hypotheses"] = {
+            entity_id: {
+                "schema": item.get("schema"),
+                "hypothesis_id": item.get("hypothesis_id"),
+                "status": item.get("status"),
+                "valid_stand_count": len(item.get("valid_stands") or ()),
+                "reachable_stand_count": len(item.get("reachable_stands") or ()),
+                "contact_edge_count": len(item.get("contact_edges") or ()),
+                "bridge_edge_count": len(item.get("bridge_edges") or ()),
+                "closest_stand": item.get("closest_stand"),
+                "remaining_gap": item.get("remaining_gap"),
+                "palette_id": item.get("palette_id"),
+                "reason": item.get("reason"),
+                "geometry_delivery": "FULL_SNAPSHOT",
+            }
+            for entity_id, item in hypotheses.items()
+            if isinstance(item, Mapping)
+        }
         view["scheduler"] = scheduler
         view["inherited_frontier"] = self._compact_frontier_snapshot()
         view["attribution_contract"] = attribution
@@ -4628,6 +4918,7 @@ class _LeverTarget:
             lifecycle_state = None if lifecycle is None else lifecycle.state
             contact_records = contacts_by_entity.get(str(entity_id or ""), [])
             last_contact = contact_records[-1] if contact_records else None
+            terrain_role = self._terrain_roles.get(str(entity_id or ""))
             if lifecycle is not None and lifecycle.state == "G4-READY":
                 disposition = "CONFIRMED_LEVER"
             elif lifecycle is not None and lifecycle.state == "G3-CLOSED":
@@ -4636,7 +4927,12 @@ class _LeverTarget:
                 disposition = "BOUNDED_UNKNOWN"
             else:
                 disposition = "UNRESOLVED"
-            if lifecycle_state == "PRESUMED_UNREACHABLE":
+            if terrain_role is not None:
+                execution_status = "EXECUTED"
+                reachability = "REACHABLE"
+                reachability_basis = "OBSERVED_TERRAIN_INTERACTION"
+                physics_type = str(terrain_role["role"])
+            elif lifecycle_state == "PRESUMED_UNREACHABLE":
                 execution_status = "EXECUTED"
                 reachability = "UNREACHABLE_IN_CURRENT_WORLD_STATE"
                 reachability_basis = "EXHAUSTED_REACHABLE_COMPONENT"
@@ -4666,14 +4962,18 @@ class _LeverTarget:
                 reachability = "NOT_YET_DETERMINED"
                 reachability_basis = "CONTACT_OR_ROUTE_EXHAUSTION_NOT_YET_OBSERVED"
                 physics_type = "NOT_YET_TYPED"
-            if lifecycle is not None and lifecycle.witness_refs:
+            if terrain_role is not None:
+                physics_type = str(terrain_role["role"])
+            elif lifecycle is not None and lifecycle.witness_refs:
                 physics_type = "LEVER"
             elif lifecycle_state == "G3-CLOSED":
                 physics_type = "SCOPED_NONRESPONDER"
             elif lifecycle_state in {"AMBIGUOUS", "BUDGET_STOPPED"}:
                 physics_type = "UNRESOLVED_EFFECT"
             evidence_refs = []
-            if dossier is not None:
+            if terrain_role is not None:
+                evidence_refs.extend(terrain_role.get("evidence_refs") or ())
+            elif dossier is not None:
                 evidence_refs.extend(dossier.evidence_refs)
             elif ambiguity is not None and ambiguity.get("evidence_ref"):
                 evidence_refs.append(str(ambiguity["evidence_ref"]))
@@ -4698,7 +4998,8 @@ class _LeverTarget:
                 "reachability_basis": reachability_basis,
                 "physics_type": physics_type,
                 "contact_type": (
-                    None if last_contact is None else last_contact.get("outcome")
+                    terrain_role.get("interaction") if terrain_role is not None
+                    else None if last_contact is None else last_contact.get("outcome")
                 ),
                 "contact_evidence_refs": [
                     str(record.get("contact_evidence_ref") or "")
