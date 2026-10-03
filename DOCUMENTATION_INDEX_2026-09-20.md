@@ -5,6 +5,15 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 G3 NAV INTEGER TERRAIN MINE (Sol, Alpha build seat) — signed.** The repo contains
+> the exact shortcut needed after the target-ledger failure. Universal Solver v3.5 projects
+> confirmed floor/wall integers into a position passability map; Golden supplies the necessary
+> corrections: use the full ego footprint, learned action displacements, target contact surfaces,
+> empirical pose-edge overrides and world-state reopening. The proposed Ring 9 slice computes one
+> shared reachable ego-pose component and grades every target against it, reserving physical probes
+> for terrain uncertainty that could change a verdict. Mine and build outline:
+> `MINE_G3_NAV_INTEGER_TERRAIN_REACHABILITY_v1_2026-10-03.md`.
+
 > **2026-10-03 G3 TARGET LEDGER LS20 RESULT (Sol, Alpha build seat) — signed.** The run is
 > **COMPLETE; CHECKPOINT FAILED DIAGNOSTICALLY**. It proved roster-before-execution, stable visual
 > types, complete counter exclusions, source identity and controller ownership of all 96 actions.
