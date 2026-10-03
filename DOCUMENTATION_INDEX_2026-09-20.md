@@ -12,6 +12,13 @@ packages, execution evidence, and prior-art trees.
 > environment action. The limits remain 16 actions and 1200 seconds for direct comparison.
 > `CHECKPOINT_CONTROLLER_OWNERSHIP_LS20_V2_2026-10-03.md`.
 
+> **2026-10-03 CONTROLLER OWNERSHIP LS20 V2 PACKAGE (Sol, Alpha build seat) — signed.** The frozen
+> package binds source `4e1be00`, package hash `b24e6bb…`, and source-manifest hash `807ce79c…`.
+> Verification passes 9/9, source is byte-identical to the commit export, receipts match, and the
+> secret scan is clean. The local three-layout simulator cannot create `/kaggle` on the Mac's
+> read-only root; this is recorded as unverified rather than inferred. Upload record:
+> `UPLOAD_STATUS_RING9_CONTROLLER_FIRST_LS20_V2_2026-10-03.md`.
+
 > **2026-10-03 CONTROLLER OWNERSHIP PARITY (Sol, Alpha build seat) — signed.** The controller-first
 > rule now governs the whole CLICK/NAV ladder: a wake supplies context but cannot transfer an exact
 > action or certified answer to Duck. NAV reuses controller answers for certified G2, G3 and G4.1;
