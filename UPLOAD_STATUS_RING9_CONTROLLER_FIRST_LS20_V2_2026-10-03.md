@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** VERIFIED LOCALLY; upload blocked before transfer by automatic approval review
+**Status:** PRIVATE DATASET CREATED; NOTEBOOK VERSION 1 QUEUED
 
 ## Frozen identities
 
@@ -51,5 +51,15 @@ The private-dataset creation command was submitted for the exact destination lis
 automatic approval reviewer rejected it before execution because uploading the source package to
 an external Kaggle destination required more explicit authorization for this exact payload. No v2
 dataset or notebook was created by this attempt, and no package bytes were transferred.
+
+The user then explicitly approved this exact package, private dataset, and private notebook.
+Terminal upload with directory mode `skip` succeeded, including the root-level
+`dataset-metadata.json` and verified `src.zip`; the redundant expanded `src/` tree was intentionally
+omitted. Kaggle accepted:
+
+- dataset: <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-controller-first-ls20-v2>
+- notebook version 1: <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-controller-first-ls20-v2>
+
+Initial status after the terminal push: `KernelWorkerStatus.QUEUED`.
 
 — Sol

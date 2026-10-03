@@ -16,7 +16,8 @@ packages, execution evidence, and prior-art trees.
 > package binds source `4e1be00`, package hash `b24e6bb…`, and source-manifest hash `807ce79c…`.
 > Verification passes 9/9, source is byte-identical to the commit export, receipts match, and the
 > secret scan is clean. The local three-layout simulator cannot create `/kaggle` on the Mac's
-> read-only root; this is recorded as unverified rather than inferred. Upload record:
+> read-only root; this is recorded as unverified rather than inferred. The private dataset and
+> notebook version 1 were accepted through the terminal path; initial state is **QUEUED**. Upload record:
 > `UPLOAD_STATUS_RING9_CONTROLLER_FIRST_LS20_V2_2026-10-03.md`.
 
 > **2026-10-03 CONTROLLER OWNERSHIP PARITY (Sol, Alpha build seat) — signed.** The controller-first
