@@ -1,0 +1,44 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 200,
+    "max_output_tokens_per_turn": "server_default",
+    "max_runtime_seconds_per_world": 10800,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "stephenkaskin/virelai-qwen3-6-27b-fp8",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "vrfai/Qwen3.6-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_coder",
+    "wheelhouse": "stephenkaskin/virelai-vllm-wheelhouse-v3"
+  },
+  "environment": {
+    "docker_image": "gcr.io/kaggle-private-byod/python@sha256:37c64f7dd9c54116ecd1bcc88817c5469b88387388fade02bfa8bf3fc647d461",
+    "docker_image_pinning_type": "original",
+    "machine_shape": "NvidiaRtxPro6000",
+    "python": "3.12 (the wheelhouse's compiled wheels are cp312)",
+    "source": "ring9-carry-vc33-v2 kernel metadata, 2026-10-02"
+  },
+  "mode": "gated",
+  "model": {
+    "id": "vrfai/Qwen3.6-27B-FP8"
+  },
+  "package": {
+    "manifest_sha256": "1e99054c8a37de52a937d0718f40fa1347447d2fa3c3f64935f77865a52df359",
+    "name": "ring9-carry-vc33-v5",
+    "sha256": "24603b22eccbcc09dc6ee70e5a94290817770092f699ef8c48724245a1e03ec6"
+  },
+  "passes": 1,
+  "revisions": "R9-R06 to R9-R18, R9-R20, R9-R21",
+  "schema": "virelai-g4-ft09-guided-execution-receipt-v1",
+  "worlds": [
+    "vc33-5430563c"
+  ]
+}

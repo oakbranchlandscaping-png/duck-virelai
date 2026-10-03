@@ -1,0 +1,1 @@
+Ring 9 carry vc33 v5 exact-model checkpoint (self-hosted dependencies, R9-R20, R9-R21, pinned image): vc33-5430563c, one pass, 200 actions and 10800 seconds of behavior time per world after model setup. Source 623ad58 (R9-R06 to R9-R18, R9-R20, R9-R21). Human review required.
