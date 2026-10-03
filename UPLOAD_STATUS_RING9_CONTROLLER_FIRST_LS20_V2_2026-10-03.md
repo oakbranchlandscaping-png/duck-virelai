@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** VERIFIED LOCALLY; upload pending
+**Status:** VERIFIED LOCALLY; upload blocked before transfer by automatic approval review
 
 ## Frozen identities
 
@@ -44,5 +44,12 @@ The canonical criteria remain in
 `CHECKPOINT_CONTROLLER_OWNERSHIP_LS20_V2_2026-10-03.md`. In particular, notebook completion alone
 does not pass the checkpoint. Downloaded artifacts must prove G3 entry and zero Duck-selected
 environment actions.
+
+## Upload attempt
+
+The private-dataset creation command was submitted for the exact destination listed above. The
+automatic approval reviewer rejected it before execution because uploading the source package to
+an external Kaggle destination required more explicit authorization for this exact payload. No v2
+dataset or notebook was created by this attempt, and no package bytes were transferred.
 
 — Sol
