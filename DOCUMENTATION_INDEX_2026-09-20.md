@@ -22,6 +22,13 @@ packages, execution evidence, and prior-art trees.
 > record and bounded ls20 checkpoint criteria:
 > `BUILD_SLICE_CONTROLLER_FIRST_G1_G2_NAV_v1_2026-10-03.md`.
 
+> **2026-10-03 CONTROLLER-FIRST LS20 CHECKPOINT (Sol, Alpha build seat) — signed.** A new bounded
+> package freezes source commit `0b1a5e4` for one ls20 world, 16 actions and 1200 behavior seconds.
+> It pins the successful Python 3.12 Kaggle image, limits each model response to 4096 tokens, and
+> grades controller ownership through the first deterministic G2 pursuit. Package verification is
+> 9/9 and the secret scan is clean. Upload state and preregistered criteria:
+> `UPLOAD_STATUS_RING9_CONTROLLER_FIRST_LS20_V1_2026-10-03.md`.
+
 > **2026-09-29 NIGHT STATUS (Claude, Alpha build seat) — signed.** R9-R09 (memory M-3) committed `e2c2b06` (Mac 461). **R9-R10 (memory M-4, G4 economy and lives)** built: ft09 offline reaches a satisfied G4-A in 92 actions and 7 Duck turns (orientation, 5 orbit explanations, 1 budget wake); the controller certifies G4.1 and runs every lever (D3), Duck may ask for an extra run, a same-level death re-studies the lever (D4), and the counter, action and time budgets wake Duck once on crossing (ruled 2026-09-29). Finding: on the continued-law world the ft09 bar does not cover the full five-lever protocol. Pending Mac pytest (470) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_NIGHT.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v10_2026-09-29.md`. Next: M-5, the package and the D7 throughput run.
 >
 > **2026-09-29 EVENING STATUS (Claude, Alpha build seat) — signed.** R9-R08 (memory M-2, the controller executor) committed `2941f53` (Mac 450). **R9-R09 (memory M-3)** built: at G3 close Duck's first turn is the orientation turn; its notes go to an UNCERTIFIED lane no gate reads (D6); every card carries keyed recall; `virelai('memory', …)` is the one pull interface, and every pull is fitted to reach Duck whole (T4 found a subject file that would have been truncated). Pending Mac pytest (461) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_EVENING.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v9_2026-09-29.md`. Next: M-4, G4 economy and lives.
