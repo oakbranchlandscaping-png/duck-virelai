@@ -2501,6 +2501,14 @@ class _LeverTarget:
         self._bounded_ambiguities[entity_id] = record
         return record
 
+    def _bound_contradicted(self, member_id: str, entity_id: str, evidence_ref: str) -> dict[str, Any]:
+        """A repeat press that does not reproduce the witness is bounded like any CLICK ambiguity (R9-R21 D4)."""
+        return self._bound_ambiguity(
+            member_id=member_id, entity_id=entity_id, evidence_ref=evidence_ref,
+            disposition="CONFIRMATION_CONTRADICTED",
+            reason="The same click did not reproduce its witnessed effect; repeating it is no distinct probe.",
+        )
+
     def _ensure_frontier(self) -> tuple[dict[str, Any], ...]:
         """Compile G3's eligible roster from G2's frozen ranking and total mask."""
         mask = self.machine.counter.mask_law
@@ -3103,6 +3111,8 @@ class _LeverTarget:
                     entity_id, "AMBIGUOUS", evidence_ref=evidence_id,
                     actor="G3_CONFIRMATION", reason="prospective witness contradicted",
                 )
+                if self._phase == "CLICK":
+                    event["bounded_ambiguity"] = self._bound_contradicted(target_member_id, entity_id, evidence_id)
             self._pending_confirmation = None
             if advance_target:
                 self._target_index += 1
@@ -3143,17 +3153,11 @@ class _LeverTarget:
                 journal.response(entity_id, positive=False, evidence_ref=evidence_id)
             elif entity_id and attribution.disposition in {"AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"}:
                 journal.transition(
-                    entity_id,
-                    "AMBIGUOUS",
-                    evidence_ref=evidence_id,
-                    actor="G3_ATTRIBUTOR",
-                    reason=attribution.disposition,
+                    entity_id, "AMBIGUOUS", evidence_ref=evidence_id, actor="G3_ATTRIBUTOR", reason=attribution.disposition,
                 )
                 if self._phase == "CLICK":
                     event["bounded_ambiguity"] = self._bound_ambiguity(
-                        member_id=target_member_id,
-                        entity_id=entity_id,
-                        evidence_ref=evidence_id,
+                        member_id=target_member_id, entity_id=entity_id, evidence_ref=evidence_id,
                         disposition=attribution.disposition,
                         reason=(
                             "The metadata admits only the same direct coordinate click for this "
@@ -3168,13 +3172,9 @@ class _LeverTarget:
             if boundary_interrupted:
                 self._navigation_steps = 0
             elif target_changed and self._pending_confirmation is None:
-                if attribution.disposition in {
-                    "AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"
-                }:
+                if attribution.disposition in {"AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"}:
                     event["bounded_ambiguity"] = self._bound_ambiguity(
-                        member_id=target_member_id,
-                        entity_id=entity_id,
-                        evidence_ref=evidence_id,
+                        member_id=target_member_id, entity_id=entity_id, evidence_ref=evidence_id,
                         disposition=attribution.disposition,
                         reason=(
                             "The contact attempt changed the target state without resolving "
@@ -3184,13 +3184,9 @@ class _LeverTarget:
                 self._target_index += 1
                 self._navigation_steps = 0
             elif (terminal or self._navigation_steps >= self._navigation_limit) and self._pending_confirmation is None:
-                if attribution.disposition in {
-                    "AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"
-                }:
+                if attribution.disposition in {"AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"}:
                     event["bounded_ambiguity"] = self._bound_ambiguity(
-                        member_id=target_member_id,
-                        entity_id=entity_id,
-                        evidence_ref=evidence_id,
+                        member_id=target_member_id, entity_id=entity_id, evidence_ref=evidence_id,
                         disposition=attribution.disposition,
                         terminal_state="BUDGET_STOPPED",
                         reason="The bounded embodied contact pursuit exhausted its declared step limit.",
@@ -3265,6 +3261,28 @@ class _LeverTarget:
         self.revision += 1
         return answer
 
+    def _expected_entities(self) -> set[str]:
+        ledger = self._ensure_entity_ledger()
+        return {ledger.entity_for_member(str(item["member_id"])) for item in self._ensure_frontier()} - {None}
+
+    def _unbounded_entities(self) -> dict[str, str]:
+        """Roster entities whose G3 result no inventory may report (not closed, ready or bounded)."""
+        journal, settled, bounded = self.lifecycle_journal, {"G3-CLOSED", "G4-READY"}, {"AMBIGUOUS", "BUDGET_STOPPED"}
+        return {
+            entity_id: journal.entities[entity_id].state for entity_id in sorted(self._expected_entities())
+            if journal.entities[entity_id].state not in settled
+            and (journal.entities[entity_id].state not in bounded or entity_id not in self._bounded_ambiguities)
+        }
+
+    def answer_blocked(self) -> str | None:
+        """Axiom A2 (R9-R21 D5): an inventory is demanded that no answer can satisfy."""
+        if self._complete_reason is None or self._pending_confirmation is not None or self._pending_dossier:
+            return None
+        if self._inventory_answer is not None or self._bounded_coverage_answer is not None:
+            return None
+        unbounded = self._unbounded_entities()
+        return f"G3's inventory is demanded but these results are unbounded: {unbounded!r}" if unbounded else None
+
     def _submit_inventory(self, raw: Mapping[str, Any]) -> GateAnswer:
         if self._complete_reason is None or self._pending_confirmation is not None:
             raise GateContractError("G3 inventory requires a completed probe roster with no pending confirmation.")
@@ -3273,25 +3291,10 @@ class _LeverTarget:
                 "G3 aggregate answer is already accepted; do not resubmit it. "
                 "Follow the gate's next_operation."
             )
-        ledger = self._ensure_entity_ledger()
         journal = self.lifecycle_journal
         assert journal is not None
-        ranked = self._ensure_frontier()
-        expected_entities = {
-            ledger.entity_for_member(str(item["member_id"])) for item in ranked
-        }
-        expected_entities.discard(None)
-        unbounded = {
-            entity_id: journal.entities[entity_id].state
-            for entity_id in sorted(expected_entities)
-            if journal.entities[entity_id].state not in {
-                "G3-CLOSED", "G4-READY", "AMBIGUOUS", "BUDGET_STOPPED"
-            }
-            or (
-                journal.entities[entity_id].state in {"AMBIGUOUS", "BUDGET_STOPPED"}
-                and entity_id not in self._bounded_ambiguities
-            )
-        }
+        expected_entities = self._expected_entities()
+        unbounded = self._unbounded_entities()
         if unbounded:
             raise GateContractError(
                 f"G3 coverage cannot be reported with unbounded probe results: {unbounded!r}."
@@ -3404,7 +3407,7 @@ class _LeverTarget:
                 "lever_entities": list(lever_entities),
                 "clean_null_entities": list(clean_null_entities),
                 "ambiguous_entities": [],
-                "ranked_target_count": len(ranked),
+                "ranked_target_count": len(self._ensure_frontier()),
                 "frontier_accounting": self._frontier_snapshot(),
                 "lifecycle_journal": journal.snapshot(),
             },
@@ -5192,10 +5195,10 @@ class CyberneticGateMachine:
             return {**base, "legal": True, "move": "PROBE"}
         if operation == "SUBMIT_GATE_ANSWER":
             has_template = view.get("answer_template") is not None or bool(view.get("answer_templates"))
+            blocked = getattr(self._adapters.get(self.gate_id), "answer_blocked", lambda: None)()
             if "answer_template" in view and not has_template:
-                reason = "an answer is demanded but the card supplies no answer template"
-                return {**base, "legal": False, "reason": reason}
-            return {**base, "legal": True, "move": "ANSWER"}
+                blocked = "an answer is demanded but the card supplies no answer template"
+            return {**base, "legal": False, "reason": blocked} if blocked else {**base, "legal": True, "move": "ANSWER"}
         reason = NO_MOVE_OPERATIONS.get(operation)
         if reason is not None:
             return {**base, "legal": False, "reason": reason}

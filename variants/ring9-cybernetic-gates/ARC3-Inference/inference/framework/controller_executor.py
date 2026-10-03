@@ -342,13 +342,19 @@ def _crossed(before: Any, after: Any, threshold: float) -> bool:
     return after is not None and after <= threshold and (before is None or before > threshold)
 
 
+def _ladder_restarted(machine: Any, boundary: list[str]) -> bool:
+    """A level change that froze the level and restarted the ladder at G0: level entry is the controller's (R9-R21 D6)."""
+    return boundary == ["level_completed"] and bool(getattr(machine, "levels", None)) and machine.gate_id == "G0-ACTION-METADATA"
+
+
 def wake_reason(
     machine: Any, event: Mapping[str, Any] | None, result: Mapping[str, Any],
     before: Mapping[str, int] | None = None,
 ) -> str | None:
     """Why Duck must take the next step after a controller action, or None to continue."""
-    if any(result.get(key) for key in BOUNDARY_KEYS):
-        return "boundary event: " + ", ".join(key for key in BOUNDARY_KEYS if result.get(key))
+    boundary = [key for key in BOUNDARY_KEYS if result.get(key)]
+    if boundary and not _ladder_restarted(machine, boundary):
+        return "boundary event: " + ", ".join(boundary)
     event = event or {}
     comparison = event.get("counter_comparison") or {}
     if comparison.get("outcome") == "CONTRADICTED" and comparison.get("evidence_ref") == event.get("evidence_id"):
