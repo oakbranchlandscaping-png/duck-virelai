@@ -5,6 +5,14 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 G3 TARGET LEDGER LS20 PACKAGE (Sol, Alpha build seat) — signed.** The frozen package
+> binds source `8606448`, package hash `7af1c36a…`, and source-manifest hash `1e893d90…`. It runs
+> one ls20 world with a 96-action and 1200-second safety cap, preserving controller ownership while
+> grading complete visual-target accounting. Verification against the committed export passes 9/9,
+> the 553-test source suite is green, and the secret scan is clean. Status is **UPLOAD PENDING**.
+> Records: `CHECKPOINT_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md` and
+> `UPLOAD_STATUS_RING9_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md`.
+
 > **2026-10-03 G3 TARGET EXECUTION LEDGER (Sol, Alpha build seat) — signed.** G3 now emits one
 > complete `<world>_<pass>_g3_target_ledger.json`: the visual roster is populated before execution,
 > and every row carries visual type, execution status, reachability, contact result, physics type
