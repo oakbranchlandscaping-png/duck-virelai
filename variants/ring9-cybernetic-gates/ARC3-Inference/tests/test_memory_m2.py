@@ -160,16 +160,16 @@ def test_the_run_replays_offline_under_its_recorded_protocol(ft09_run, tmp_path)
     assert result.machine.gate_id == "G4.2-LEVER-ORBITS"  # the anatomy answers replay too
 
 
-def test_duck_is_handed_the_step_after_a_wake_and_the_controller_resumes(tmp_path, monkeypatch):
+def test_wake_does_not_transfer_a_computable_step_to_duck(tmp_path, monkeypatch):
     run = Run(tmp_path, monkeypatch)
     run.turn()
     run.agent._controller.wake = "a synthetic stop condition"
     run.turn()
-    assert len(run.model_prompts) == 1 and "a synthetic stop condition" in run.model_prompts[0]
+    assert run.model_prompts == []
+    assert len(run.env_calls) == 2
     assert run.agent._controller.wake is None
-    calls = len(run.env_calls)
-    run.turn()
-    assert len(run.env_calls) == calls + 1  # the controller took the next step again
+    log = run.state_path.with_name(f"{run.state_path.stem}_analyzer.txt").read_text()
+    assert "retaining controller ownership after wake: a synthetic stop condition" in log
 
 
 # ---- ownership and stop-and-wake, each in a synthetic case -------------------------------------

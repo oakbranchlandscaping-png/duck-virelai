@@ -339,10 +339,8 @@ def test_ft09_offline_follows_the_live_run_then_duck_studies_the_levers_together
     assert replayed_law["status"] == "COMPLETE"
 
 
-def test_a_wake_waits_while_the_controller_takes_ducks_own_frozen_prediction(g4b):
-    from inference.agent.controller_turn import _takes_duck_choice
-
+def test_frozen_prediction_changes_ownership_from_duck_to_controller(g4b):
     machine, _world = g4b
-    assert not _takes_duck_choice(machine)  # Duck's turn: nothing frozen
+    assert next_owned_step(machine).owner == "DUCK"  # semantic turn: nothing frozen
     _predict(machine, "E0053")
-    assert _takes_duck_choice(machine)  # a budget wake now would give Duck a turn with no move
+    assert next_owned_step(machine).owner == "CONTROLLER"  # the bound test action is now exact

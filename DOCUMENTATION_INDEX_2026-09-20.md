@@ -5,6 +5,16 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 CONTROLLER OWNERSHIP PARITY (Sol, Alpha build seat) — signed.** The controller-first
+> rule now governs the whole CLICK/NAV ladder: a wake supplies context but cannot transfer an exact
+> action or certified answer to Duck. NAV reuses controller answers for certified G2, G3 and G4.1;
+> receives the same one-time semantic G4 orientation as CLICK; and routes Duck-requested extra G4-A
+> runs without spending model turns on approach or contact actions. Duck remains responsible for
+> the embodied-ego explanation, confirmed-orbit explanations, uncertain trigger experiments, and
+> G4-B/C predictions and descriptions. Build record and checkpoint criteria:
+> `BUILD_SLICE_CONTROLLER_OWNERSHIP_PARITY_2026-10-03.md`. The complete source suite passes 549
+> tests; live confirmation remains pending.
+
 > **2026-10-03 CONTROLLER-FIRST LS20 RESULT (Sol, Alpha build seat) — signed.** The bounded live
 > checkpoint is a **PARTIAL PASS (5 pass, 2 partial, 1 fail)**. The controller closed G0, performed
 > seven of eight Delphi actions, demonstrated and closed G1, entered G2, and formed an 84-cell

@@ -24,12 +24,14 @@ What the controller owns:
 - G4.1 anatomy answers (M-4): the channels are certified; the prose is rendered from them.
 - G4-A lever runs (D3): each lever is pressed, one press per step, until its run is confirmed,
   diverged or ended; a same-level death returns it to the study (D4, in the gate).
-- An extra run Duck asks for (D3): up to 8 presses of one lever's click.
+- An extra run Duck asks for (D3): up to 8 CLICK activations or routed NAV contacts with one lever.
 
 Duck owns: the orientation turn (M-3; due once G4.1 is certified), every G4-A orbit explanation,
 an OPEN or IRREGULAR trigger record (the discriminating prediction is a choice, not a
-computation), ambiguity, unbound or multi-action probes, every gate past G4-A, and every
-stop-and-wake condition (``wake_reason``), including the counter, action and time budgets.
+computation), ambiguity, unbound or multi-action probes, and the predictions and descriptions past
+G4-A. Their bound test actions remain controller-owned. A semantic stop-and-wake condition
+(``wake_reason``) is delivered when the next step independently requires judgment; a wake never
+transfers a computable action or certified answer to Duck.
 
 The prose in a controller answer is rendered deterministically from the certified fields; the
 certified content is the structured part (M7). It is marked as controller-rendered.
@@ -109,15 +111,15 @@ def next_owned_step(
     # dispatcher returned Duck here and accidentally bypassed the generic controller answer.
     if machine.gate_id == "G0-ACTION-METADATA":
         return _ordinary_step(machine, refused=refused)
+    if orientation_due(machine):
+        return _duck(machine, "the orientation turn is due")
     world = control_archetype_prior(machine.ego.affordances)["world_type"]
     if world in {"NAVIGATION", "HYBRID"}:
-        return _nav_step(machine)
+        return _nav_step(machine, refused=refused, rerun=rerun)
     if world != "CLICK_GOD_MODE":
         return _duck(machine, f"unsupported controller world type {world}")
     if machine.gate_id not in CONTROLLER_GATES:
         return _duck(machine, f"{machine.gate_id} needs judgment")
-    if orientation_due(machine):
-        return _duck(machine, "the orientation turn is due")
     return _ordinary_step(machine, refused=refused, rerun=rerun)
 
 
@@ -132,14 +134,8 @@ def _ordinary_step(
     view = machine.gate_view()
     if machine.gate_id == ORBITS:
         return _orbit_step(machine, capability, view, rerun)
-    key = (machine.gate_id, int(view.get("revision") or 0), machine.lives.level)  # per level since R9-R17
-    if key in refused:
-        return _duck(machine, f"{machine.gate_id} refused the controller's answer at this revision")
     if _answer_due(view):
-        answer, reason = controller_answer(machine, view)
-        if answer is None:
-            return _duck(machine, reason)
-        return OwnedStep(CONTROLLER, machine.gate_id, reason, ANSWER, answer=answer, refusal_key=key)
+        return _certified_answer_step(machine, view, refused=refused)
     if capability is None:
         return _duck(machine, f"{machine.gate_id} offers no probe and no answer")
     action, reason = _bound_action(capability)
@@ -151,7 +147,10 @@ def _ordinary_step(
     )
 
 
-def _nav_step(machine: Any) -> OwnedStep:
+def _nav_step(
+    machine: Any, *, refused: frozenset | set = frozenset(),
+    rerun: Mapping[str, Any] | None = None,
+) -> OwnedStep:
     """Controller-owned deterministic movement; Duck still owns explanations."""
     if machine.gate_id == "G1-EGO":
         view = machine.gate_view()
@@ -170,7 +169,7 @@ def _nav_step(machine: Any) -> OwnedStep:
     if machine.gate_id == "G2-COUNTER":
         view = machine.gate_view()
         if _answer_due(view):
-            return _duck(machine, "the counter explanation and prospective prediction need judgment")
+            return _certified_answer_step(machine, view, refused=refused)
         capability = machine.next_probe_capability()
         if capability is None:
             return _duck(machine, "G2 offers no active target or exact counter probe")
@@ -194,6 +193,16 @@ def _nav_step(machine: Any) -> OwnedStep:
         )
     if machine.gate_id == ORBITS:
         capability = machine.next_probe_capability()
+        if capability is not None and rerun and int(rerun.get("left") or 0) > 0:
+            entity = str(rerun.get("entity_id") or "")
+            planned = machine._adapters[ORBITS].planned_nav_step(entity)
+            if planned is None:
+                return _duck(machine, f"no evidence-bounded route for the extra run of {entity}")
+            return OwnedStep(
+                CONTROLLER, ORBITS, f"G4-A NAV extra run {planned.intent.lower()} for {entity}",
+                ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+                decision={"intent": f"NAV:{planned.intent}:{entity}"},
+            )
         view = machine.gate_view()
         awaiting = [item for item in view.get("answer_templates") or () if isinstance(item, Mapping)]
         if awaiting:
@@ -214,6 +223,10 @@ def _nav_step(machine: Any) -> OwnedStep:
                 decision={"intent": f"NAV:{planned.intent}:{lever.get('entity_id')}"},
             )
         return _duck(machine, "G4-A NAV has no lever the controller can route to")
+    if machine.gate_id == "G4-REACTIONS":
+        # G4.1 consumes certified G3 channels.  Its answer is world-independent; NAV must reuse
+        # the same renderer as CLICK instead of waking Duck merely because contact is embodied.
+        return _ordinary_step(machine, refused=refused)
     if machine.gate_id in PREDICTION_GATES:
         capability = machine.next_probe_capability()
         if capability is None:
@@ -229,6 +242,9 @@ def _nav_step(machine: Any) -> OwnedStep:
         )
     if machine.gate_id != "G3-LEVERS":
         return _duck(machine, f"the NAV branch for {machine.gate_id} has no computable step yet")
+    view = machine.gate_view()
+    if _answer_due(view):
+        return _certified_answer_step(machine, view, refused=refused)
     capability = machine.next_probe_capability()
     if capability is None:
         return _duck(machine, "G3 NAV needs an answer or has no active target")
@@ -245,6 +261,19 @@ def _nav_step(machine: Any) -> OwnedStep:
         action={"action": planned.action}, probe_token=str(capability["probe_token"]),
         decision={"pilot_intent": planned.intent},
     )
+
+
+def _certified_answer_step(
+    machine: Any, view: Mapping[str, Any], *, refused: frozenset | set = frozenset(),
+) -> OwnedStep:
+    """Render a world-independent certified answer, or identify the judgment still missing."""
+    key = (machine.gate_id, int(view.get("revision") or 0), machine.lives.level)
+    if key in refused:
+        return _duck(machine, f"{machine.gate_id} refused the controller's answer at this revision")
+    answer, reason = controller_answer(machine, view)
+    if answer is None:
+        return _duck(machine, reason)
+    return OwnedStep(CONTROLLER, machine.gate_id, reason, ANSWER, answer=answer, refusal_key=key)
 
 
 def _relations_step(machine: Any, capability: Mapping[str, Any] | None) -> OwnedStep:

@@ -10,6 +10,7 @@ from inference.framework.nav_route import (
 from inference.framework.cybernetic_targeting import MemoryProduct
 from inference.framework.virelai_gates import CyberneticGateMachine
 from inference.framework.controller_executor import next_owned_step, wake_reason
+from inference.framework import controller_executor as executor
 from inference.framework.nav_route import NavStep
 
 
@@ -139,6 +140,59 @@ def _nav_g4_machine():
     for product in products:
         machine.target_journal.put(product)
     return machine
+
+
+def test_nav_g4_requires_one_semantic_orientation_before_mechanical_study():
+    step = next_owned_step(_nav_g4_machine())
+    assert step.owner == "DUCK"
+    assert step.reason == "the orientation turn is due"
+
+
+def test_nav_certified_answers_reuse_the_controller_renderer(monkeypatch):
+    class CertifiedAnswerMachine:
+        def __init__(self, gate_id):
+            self.gate_id = gate_id
+            self.lives = SimpleNamespace(level=1)
+
+        def gate_view(self):
+            return {"status": "ANSWER_REQUIRED", "revision": 7, "answer_template": {"gate": self.gate_id}}
+
+        def next_probe_capability(self):
+            return None
+
+    monkeypatch.setattr(
+        executor, "controller_answer",
+        lambda machine, view: ({"answer_id": f"CERTIFIED-{machine.gate_id}"}, "certified record"),
+    )
+    for gate_id in ("G2-COUNTER", "G3-LEVERS", "G4-REACTIONS"):
+        step = executor._nav_step(CertifiedAnswerMachine(gate_id))
+        assert (step.owner, step.kind, step.answer["answer_id"]) == (
+            "CONTROLLER", "ANSWER", f"CERTIFIED-{gate_id}",
+        )
+
+
+def test_nav_extra_run_is_routed_by_controller_before_duck_explains():
+    class ExtraRunMachine:
+        gate_id = "G4.2-LEVER-ORBITS"
+        _adapters = {
+            "G4.2-LEVER-ORBITS": SimpleNamespace(
+                planned_nav_step=lambda entity: NavStep(
+                    "ACTION1", "CONTACT_ATTEMPT", (0, 1), (0, 2), entity,
+                    "terminal contact for requested rerun",
+                ),
+            ),
+        }
+
+        def next_probe_capability(self):
+            return {"probe_token": "P-RERUN"}
+
+    step = executor._nav_step(
+        ExtraRunMachine(),
+        rerun={"entity_id": "E-T", "left": 2, "click": {"kind": "NAV"}},
+    )
+    assert step.owner == "CONTROLLER"
+    assert step.gate_id == "G4.2-LEVER-ORBITS"
+    assert step.decision["intent"].startswith("NAV:")
 
 
 def _nav_outcome(before, after, transition):

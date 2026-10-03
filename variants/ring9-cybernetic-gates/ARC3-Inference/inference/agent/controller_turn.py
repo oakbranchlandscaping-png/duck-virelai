@@ -62,12 +62,14 @@ def run_controller_turn(
     end = ladder_end(machine)
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
-    if session.wake is not None and not _takes_duck_choice(machine):
-        session.hand_to_duck(session.wake)
-        session.wake = None
-        return None
     for _ in range(MAX_ANSWERS_PER_TURN):
         step = next_owned_step(machine, refused=session.refused, rerun=session.rerun)
+        if session.wake is not None:
+            wake, session.wake = session.wake, None
+            if step.owner == DUCK:
+                session.hand_to_duck(f"{wake}; {step.reason}")
+                return None
+            _log(analyzer_log, f"retaining controller ownership after wake: {wake}; next: {step.reason}")
         if step.owner == DUCK:
             session.hand_to_duck(step.reason)
             return None
@@ -81,13 +83,6 @@ def run_controller_turn(
             agent._virelai_query_callback = None
             agent._current_valid_actions = []
     return None
-
-
-def _takes_duck_choice(machine: Any) -> bool:
-    """G4-B and G4-C: the next action is Duck's own frozen prediction, so a wake waits until it is taken."""
-    from inference.framework.controller_executor import PREDICTION_GATES
-
-    return machine.gate_id in PREDICTION_GATES and machine.next_probe_capability() is not None
 
 
 def _planned_stop(agent: Any, reason: str, analyzer_log: Path) -> Any:
@@ -136,7 +131,12 @@ def _controller_action(
         executor=CONTROLLER, gate_before=machine.gate_id, sections={},
     )
     before = wake_signals(machine, session.last_raw)
-    rerun_press = bool(session.rerun) and step.gate_id == "G4.2-LEVER-ORBITS"
+    rerun_intent = str((step.decision or {}).get("intent") or "")
+    rerun_press = (
+        bool(session.rerun)
+        and step.gate_id == "G4.2-LEVER-ORBITS"
+        and (not rerun_intent.startswith("NAV:") or rerun_intent.startswith("NAV:CONTACT_ATTEMPT:"))
+    )
     try:
         probe, before_frame, actions_before = agent._gate_probe_begin(
             state_path, machine, {"probe_token": step.probe_token, **(step.decision or {})},

@@ -119,4 +119,8 @@ Do not rerun the unchanged package. The next checkpoint should first prove that 
 reaches G3 on this same ls20 opening with no Duck-selected mechanical action. Duck should be called
 for the accepted G1 human explanation and only for semantics the certified record cannot supply.
 
+**Post-review active-source note:** the ownership repair is implemented in
+`BUILD_SLICE_CONTROLLER_OWNERSHIP_PARITY_2026-10-03.md`. This does not alter the frozen run or its
+grade; it defines the source that must pass local verification before a new package is created.
+
 — Sol

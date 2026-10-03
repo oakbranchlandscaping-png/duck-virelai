@@ -109,15 +109,14 @@ def _run(tmp_path, monkeypatch, **options):
 
 def test_ft09_reaches_a_satisfied_g4a_with_duck_orienting_and_explaining(tmp_path, monkeypatch):
     """D3 + the G4.1 split: the controller certifies anatomy and runs every lever; Duck orients once
-    and explains each of the five confirmed orbits. It is woken once more, when the counter bar
-    crosses two ticks left during the fifth lever: ft09's bar (32 ticks per life) does not cover
-    the full protocol for five levers, on this continued-law world."""
+    and explains each of the five confirmed orbits. The counter warning crosses two ticks left
+    during the fifth lever, but does not transfer the already-computable press to Duck."""
     run, duck, machine = _run(tmp_path, monkeypatch)
     orbits = machine.target_journal.active_product(ORBITS).payload
     assert orbits["phase1_status"] == "COMPLETE" and len(orbits["lever_entities"]) == 5
-    assert duck.calls == ["orient", *["explain"] * 4, "act", "explain"]
+    assert duck.calls == ["orient", *["explain"] * 5]
     log = run.state_path.with_name(f"{run.state_path.stem}_analyzer.txt").read_text()
-    assert "because the budget is nearly spent: 2 counter ticks left" in log
+    assert "retaining controller ownership after wake: the budget is nearly spent: 2 counter ticks left" in log
     assert len(run.env_calls) == 92  # G0-G3: 72 actions; G4-A: 20 presses (4 per lever), one Duck's
     answers = run.rows("_gate_answers.jsonl")
     anatomy = [row for row in answers if row["gate_id"] == "G4-REACTIONS"]
@@ -125,7 +124,7 @@ def test_ft09_reaches_a_satisfied_g4a_with_duck_orienting_and_explaining(tmp_pat
     orbit_answers = [row for row in answers if row["gate_id"] == ORBITS]
     assert len(orbit_answers) == 5 and {row["executor"] for row in orbit_answers} == {"DUCK"}
     envelopes = run.rows("_probe_envelopes.jsonl")
-    assert [row["executor"] for row in envelopes].count("DUCK") == 1  # the press after the budget wake
+    assert [row["executor"] for row in envelopes].count("DUCK") == 0
     assert len(envelopes) == len(run.env_calls)
 
 
@@ -152,7 +151,7 @@ def test_t8_a_death_mid_study_is_restudied_next_life_and_the_world_model_persist
     assert sum(orbits["life_restudies"].values()) == 1
     assert machine.target_journal.active_product("G3-LEVERS") is not None  # the world model persists
     assert machine.annotations.oriented and machine.annotations.notes  # so do Duck's notes
-    assert "act" in duck.calls  # Duck was woken once by the boundary (and took the step it owned)
+    assert duck.calls == ["orient", *["explain"] * 5]
 
 
 @pytest.mark.parametrize("before, result, expected", [
