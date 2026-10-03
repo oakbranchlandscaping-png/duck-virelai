@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** frozen and verified; upload pending
+**Status:** private dataset created; notebook version 1 queued
 
 ## Frozen identities
 
@@ -52,6 +52,18 @@ entry, or lever discovery.
 
 ## Launch record
 
-Pending.
+- The first dataset command used directory mode `zip`. Kaggle generated a second archive for the
+  expanded `src/` directory, which collided with the package's explicit verified `src.zip`; dataset
+  creation stopped with `Path must be unique`. No package bytes were changed.
+- The retry used directory mode `skip`, uploading the verified `src.zip` exactly once and omitting
+  the redundant expanded tree.
+- Private dataset creation accepted:
+  <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-controller-first-ls20-v1>
+- Private notebook version 1 pushed:
+  <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-controller-first-ls20-v1>
+- Immediate status: `KernelWorkerStatus.QUEUED`.
+
+Review after completion against only the preregistered criteria above. Do not infer behavior from
+the active source, package plan, or notebook status.
 
 — Sol
