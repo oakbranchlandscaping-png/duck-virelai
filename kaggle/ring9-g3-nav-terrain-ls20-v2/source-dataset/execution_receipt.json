@@ -1,0 +1,47 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 64,
+    "max_output_tokens_per_turn": 4096,
+    "max_runtime_seconds_per_world": 900,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "mikedan7/qwen3-8-27b-fp8-official",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "Qwen/Qwen3.8-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_xml",
+    "wheelhouse": "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  },
+  "inference_profile": {
+    "duplicate_read_only_limit": 2,
+    "enable_thinking": true,
+    "max_read_only_without_progress": 8,
+    "model_request_timeout_seconds": 600,
+    "temperature": 0.6
+  },
+  "mode": "gated",
+  "model": {
+    "id": "Qwen/Qwen3.8-27B-FP8",
+    "pinned_revision": "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+    "source": "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1"
+  },
+  "package": {
+    "manifest_sha256": "aa9c39f5c3aaa26b2ff1880daa3e3121a6194afffc374132c738b50f4c9d957e",
+    "name": "ring9-g3-nav-terrain-ls20-v2",
+    "sha256": "c79da8a9b7ef15965392baaf003c64e2717c9f85c705112f3cb7611f2f8cc007"
+  },
+  "passes": 1,
+  "revisions": "G3 NAV integer terrain and reachability at f985410",
+  "schema": "virelai-g3-nav-terrain-ls20-v2-execution-receipt-v1",
+  "source_commit": "f98541007b20a84f11a97154df9a5d22eff260b3",
+  "worlds": [
+    "ls20-9607627b"
+  ]
+}
