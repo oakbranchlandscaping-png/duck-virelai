@@ -5,6 +5,13 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 CONTROLLER OWNERSHIP LS20 V2 CHECKPOINT (Sol, Alpha build seat) — signed.** A bounded
+> successor to the partial-pass v1 run is preregistered against source `4e1be00`: all eight Delphi
+> actions, the G1 demonstration, G2 pursuit, certified G2 answer, and G2 demonstration must be
+> controller-owned; the complete counter mask must open G3; Duck may explain but may not select an
+> environment action. The limits remain 16 actions and 1200 seconds for direct comparison.
+> `CHECKPOINT_CONTROLLER_OWNERSHIP_LS20_V2_2026-10-03.md`.
+
 > **2026-10-03 CONTROLLER OWNERSHIP PARITY (Sol, Alpha build seat) — signed.** The controller-first
 > rule now governs the whole CLICK/NAV ladder: a wake supplies context but cannot transfer an exact
 > action or certified answer to Duck. NAV reuses controller answers for certified G2, G3 and G4.1;
