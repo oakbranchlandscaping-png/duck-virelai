@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-03  
-**Status:** PREREGISTERED; PACKAGE VERIFIED; UPLOAD PENDING  
+**Status:** COMPLETE; CHECKPOINT FAILED DIAGNOSTICALLY
 **Frozen source:** `8606448e0755974ee9cb045b71c276bd43dae8b2`
 
 ## Question
@@ -60,5 +60,19 @@ level completion or notebook-complete status cannot substitute for roster accoun
 This checkpoint does not require a win, level completion, G4 closure, cross-life transfer or
 cross-level transfer. `UNREACHABLE_IN_CURRENT_WORLD_STATE` is provisional and must reopen after a
 relevant terrain, control, identity or world-state change.
+
+— Sol
+
+## Post-run result
+
+Notebook version 1 completed in 3 minutes 58 seconds with 96 actions and no runtime crash. The
+runtime receipt exactly matched the frozen package. The roster was populated before execution and
+contained 16 eligible targets plus 2 counter-role exclusions. Only 3 eligible rows were executed,
+2 remained in progress, and 11 remained queued. Three rows were reachable, 13 remained
+reachability-undetermined, and no provisional unreachable certificate fired. All 96 environment
+actions were controller-owned.
+
+The preregistered checkpoint therefore fails criteria 4–6. Full evidence and the repair plan are in
+`REVIEW_RING9_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md`.
 
 — Sol

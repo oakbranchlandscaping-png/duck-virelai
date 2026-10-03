@@ -5,12 +5,15 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
-> **2026-10-03 G3 TARGET LEDGER LS20 PACKAGE (Sol, Alpha build seat) — signed.** The frozen package
-> binds source `8606448`, package hash `7af1c36a…`, and source-manifest hash `1e893d90…`. It runs
-> one ls20 world with a 96-action and 1200-second safety cap, preserving controller ownership while
-> grading complete visual-target accounting. Verification against the committed export passes 9/9,
-> the 553-test source suite is green, and the secret scan is clean. Status is **UPLOAD PENDING**.
-> Records: `CHECKPOINT_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md` and
+> **2026-10-03 G3 TARGET LEDGER LS20 RESULT (Sol, Alpha build seat) — signed.** The run is
+> **COMPLETE; CHECKPOINT FAILED DIAGNOSTICALLY**. It proved roster-before-execution, stable visual
+> types, complete counter exclusions, source identity and controller ownership of all 96 actions.
+> It did not complete the sweep: 3/16 eligible targets executed, 2 remained in progress, 11 were
+> queued, and no unreachable certificate fired. Rank 5 consumed 61 actions while the sound but
+> expensive reachability rule explored the shared floor component. The next slice must amortize
+> that map across targets, forbid advancement past nonterminal rows, and close scoped nulls at the
+> row boundary. Review: `REVIEW_RING9_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md`. Package and launch
+> records: `CHECKPOINT_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md` and
 > `UPLOAD_STATUS_RING9_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md`.
 
 > **2026-10-03 G3 TARGET EXECUTION LEDGER (Sol, Alpha build seat) — signed.** G3 now emits one
@@ -19,7 +22,7 @@ packages, execution evidence, and prior-art trees.
 > and evidence. NAV marks `REACHABLE` only after observed contact and
 > `UNREACHABLE_IN_CURRENT_WORLD_STATE` only after exhausting the demonstrated reachable component;
 > world changes reopen the latter. The full source suite passes 553 tests. Status is **BUILT, LIVE
-> UNCONFIRMED**. Build and live exit criteria:
+> PARTIALLY CONFIRMED; FULL ACCOUNTING FAILED**. Build and live exit criteria:
 > `BUILD_SLICE_G3_TARGET_EXECUTION_LEDGER_2026-10-03.md`.
 
 > **2026-10-03 CONTROLLER OWNERSHIP LS20 V2 RESULT (Sol, Alpha build seat) — signed.** The bounded

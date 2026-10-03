@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed  
 **Date:** 2026-10-03  
-**Status:** PACKAGE VERIFIED; UPLOAD PENDING
+**Status:** PRIVATE DATASET READY; NOTEBOOK VERSION 1 COMPLETE
 
 ## Frozen identities
 
@@ -36,6 +36,23 @@
 The package was derived from the successful controller-first v2 package. The run changes the action
 cap from 16 to 96 while retaining the 1200-second behavior cap and the same pinned runtime. Success
 is governed by the preregistered target-ledger criteria, not by consuming all 96 actions.
+
+## Upload and launch
+
+The verified source dataset was uploaded privately with directory mode `skip`. Kaggle accepted the
+top-level package files and the packager-created `src.zip`, while intentionally omitting the
+redundant expanded `src/` directory. Dataset status then reported `ready`.
+
+- Dataset: <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-g3-target-ledger-ls20-v1>
+- Notebook version 1: <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-g3-target-ledger-ls20-v1>
+
+Initial notebook status: `KernelWorkerStatus.QUEUED`.
+
+Final notebook status: `KernelWorkerStatus.COMPLETE`. Outputs were downloaded to
+`runs/kaggle-ring9-g3-target-ledger-ls20-v1/`. The runtime receipt exactly matches the frozen
+package receipt. The run completed in 3 minutes 58 seconds at the 96-action cap. Its target ledger
+contains 16 eligible rows and 2 counter exclusions; only 3 eligible rows reached `EXECUTED`, so the
+checkpoint failed diagnostically. See `REVIEW_RING9_G3_TARGET_LEDGER_LS20_V1_2026-10-03.md`.
 
 ## Canonical grading contract
 
