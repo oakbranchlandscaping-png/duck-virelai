@@ -88,6 +88,12 @@ lever while preserving these invariants:
 4. a target can be abandoned after the controller exhausts its reachable contact plan;
 5. Duck wakes only when a positive or structurally ambiguous effect needs a human-readable account.
 
+The Director subsequently tightened this exit criterion: the next run must expose the complete
+prepopulated visual-object roster and execute every row. Each eligible object must end as
+`REACHABLE`, with contact evidence and a physics type, or
+`UNREACHABLE_IN_CURRENT_WORLD_STATE`, with an exhausted-route certificate and explicit reopen
+conditions. Build record: `BUILD_SLICE_G3_TARGET_EXECUTION_LEDGER_2026-10-03.md`.
+
 After a lever is confirmed, the following checkpoint should exercise the G4 NAV study cycle: repeat
 activation until null or a proven cycle, then ask Duck to describe the lever's trigger,
 transformation and consequences in the project's physics grammar.

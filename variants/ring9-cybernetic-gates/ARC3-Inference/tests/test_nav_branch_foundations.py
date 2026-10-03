@@ -514,3 +514,111 @@ def test_reachability_answer_explains_limit_releases_target_and_stays_bounded():
     assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
     assert target["entity_id"] not in adapter._bounded_ambiguities
     assert adapter._reachability_records[-1]["reopened_by_evidence_ref"] == "E-NEW-FLOOR"
+
+
+def test_g3_inventory_is_a_prepopulated_visual_target_execution_ledger():
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    inventory = machine.inventory_view(offset=0, limit=1)
+    row = inventory["items"][0]
+
+    assert inventory["roster_populated_before_execution"] is True
+    assert inventory["world_type"] == "NAVIGATION"
+    assert row["kind"] == "ELIGIBLE_TARGET"
+    assert row["eligible_rank"] == 1
+    assert row["visual_type"] == {
+        "integer": 2,
+        "shape_family": "POINT",
+        "cell_count": 1,
+        "anchor": [1, 1],
+        "bbox": [1, 1, 1, 1],
+        "mask_relation": "DISJOINT_FROM_COUNTER",
+    }
+    assert row["execution_status"] == "QUEUED"
+    assert row["reachability"] == "NOT_YET_DETERMINED"
+    assert row["physics_type"] == "NOT_YET_TYPED"
+
+
+def test_g3_inventory_labels_observed_contact_reachable_with_contact_type():
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((1, 2),))
+    adapter._target_index = 1
+    capability = machine.next_probe_capability()
+    entity_id = capability["target"]["entity_id"]
+    adapter._last_nav_plan = NavStep(
+        "ACTION1", "CONTACT_ATTEMPT", (1, 2), (1, 3), entity_id,
+        "predicted footprint intersects target",
+    )
+    probe = machine.validate_probe(
+        {"probe_token": capability["probe_token"], "pilot_intent": "CONTACT_ATTEMPT"},
+        [{"action": "ACTION1"}],
+    )
+    machine.record_outcome(probe, _unchanged_outcome(GRID, 1))
+
+    row = next(
+        item for item in machine.inventory_view(offset=0, limit=25)["items"]
+        if item.get("entity_id") == entity_id
+    )
+    assert row["execution_status"] == "EXECUTED"
+    assert row["reachability"] == "REACHABLE"
+    assert row["reachability_basis"] == "OBSERVED_CONTACT_ATTEMPT"
+    assert row["contact_type"] in {"REFUSED", "ENTERED", "DISPLACED", "TRANSFORMED"}
+    assert row["contact_evidence_refs"]
+
+
+def test_g3_inventory_labels_certified_route_exhaustion_unreachable():
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    target = machine.next_probe_capability()["target"]
+    journal = adapter.lifecycle_journal
+    journal.transition(
+        target["entity_id"], "PRESUMED_UNREACHABLE",
+        evidence_ref="E-ROUTE-EXHAUSTED", actor="TEST",
+        reason="reachable component exhausted",
+    )
+    adapter._bounded_ambiguities[target["entity_id"]] = {
+        "evidence_ref": "E-ROUTE-EXHAUSTED",
+        "retry_condition": "terrain or world state changes",
+        "disposition": "PRESUMED_UNREACHABLE",
+        "terminal_state": "PRESUMED_UNREACHABLE",
+    }
+
+    row = machine.inventory_view(offset=0, limit=1)["items"][0]
+    assert row["execution_status"] == "EXECUTED"
+    assert row["reachability"] == "UNREACHABLE_IN_CURRENT_WORLD_STATE"
+    assert row["reachability_basis"] == "EXHAUSTED_REACHABLE_COMPONENT"
+    assert row["physics_type"] == "UNTESTED_BEYOND_REACH"
+
+
+def test_g3_target_ledger_artifact_contains_the_complete_current_roster(tmp_path):
+    from inference.agent.gate_artifacts import _write_g3_target_ledger
+    from inference.agent.runtime_state import RUNTIME_STATE_FILENAME
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    state_path = tmp_path / f"ls20_p0_{RUNTIME_STATE_FILENAME}"
+    _write_g3_target_ledger(state_path, machine)
+    artifact = json.loads(
+        (tmp_path / "ls20_p0_g3_target_ledger.json").read_text()
+    )
+
+    assert artifact["schema"] == "virelai-g3-target-execution-ledger-v1"
+    assert artifact["world_type"] == "NAVIGATION"
+    assert artifact["roster_populated_before_execution"] is True
+    assert artifact["item_count"] == len(artifact["items"])
+    assert [row["eligible_rank"] for row in artifact["items"]] == [1, 2]

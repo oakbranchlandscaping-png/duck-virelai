@@ -2,6 +2,8 @@
 
 Author: Claude (Alpha build seat), 2026-09-29. R9-R08: moved out of ``tool_agent.py`` unchanged, so
 Duck's path and the controller executor (``controller_turn.py``) share one recording path.
+
+G3 target-ledger extension: Sol (Alpha build seat), 2026-10-03.
 """
 from __future__ import annotations
 
@@ -11,6 +13,34 @@ from pathlib import Path
 from typing import Any
 
 from inference.agent.runtime_state import RUNTIME_STATE_FILENAME, load_runtime_state
+
+
+def _write_g3_target_ledger(state_path: Path, gate_machine: Any) -> None:
+    """Write one current, complete object roster instead of requiring trace reconstruction."""
+    items: list[dict[str, Any]] = []
+    offset = 0
+    world_type = None
+    while True:
+        page = gate_machine.inventory_view(offset=offset, limit=25)
+        world_type = world_type or page.get("world_type")
+        items.extend(page.get("items") or ())
+        next_offset = (page.get("page") or {}).get("next_offset")
+        if next_offset is None:
+            break
+        offset = int(next_offset)
+    ledger_path = state_path.with_name(
+        state_path.name.replace(
+            f"_{RUNTIME_STATE_FILENAME}", "_g3_target_ledger.json"
+        )
+    )
+    ledger_path.write_text(json.dumps({
+        "schema": "virelai-g3-target-execution-ledger-v1",
+        "gate_id": "G3-LEVERS",
+        "world_type": world_type,
+        "roster_populated_before_execution": True,
+        "item_count": len(items),
+        "items": items,
+    }, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
 def record_probe_outcome(
@@ -55,6 +85,8 @@ def record_probe_outcome(
     )
     with event_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(gate_event, sort_keys=True) + "\n")
+    if gate_event.get("gate_id") == "G3-LEVERS":
+        _write_g3_target_ledger(state_path, gate_machine)
     outcome_path = state_path.with_name(
         state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_outcomes.jsonl")
     )
@@ -109,6 +141,8 @@ def record_gate_answer(
         })
     with answer_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(answer_record, sort_keys=True) + "\n")
+    if answering_gate_id == "G3-LEVERS":
+        _write_g3_target_ledger(state_path, gate_machine)
 
 
 __all__ = ["record_gate_answer", "record_probe_outcome"]

@@ -5,6 +5,15 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 G3 TARGET EXECUTION LEDGER (Sol, Alpha build seat) — signed.** G3 now emits one
+> complete `<world>_<pass>_g3_target_ledger.json`: the visual roster is populated before execution,
+> and every row carries visual type, execution status, reachability, contact result, physics type
+> and evidence. NAV marks `REACHABLE` only after observed contact and
+> `UNREACHABLE_IN_CURRENT_WORLD_STATE` only after exhausting the demonstrated reachable component;
+> world changes reopen the latter. The full source suite passes 553 tests. Status is **BUILT, LIVE
+> UNCONFIRMED**. Build and live exit criteria:
+> `BUILD_SLICE_G3_TARGET_EXECUTION_LEDGER_2026-10-03.md`.
+
 > **2026-10-03 CONTROLLER OWNERSHIP LS20 V2 RESULT (Sol, Alpha build seat) — signed.** The bounded
 > live checkpoint is a **FULL PASS (9/9)**. All 16 environment actions were controller-owned. Duck
 > supplied the accepted G1 embodied-ego explanation; the controller demonstrated and closed G1,

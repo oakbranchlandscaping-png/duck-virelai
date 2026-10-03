@@ -2508,6 +2508,8 @@ class _LeverTarget:
         self._confirmation_records: list[dict[str, Any]] = []
         self._reachability_records: list[dict[str, Any]] = []
         self._reachability_answers: dict[str, GateAnswer] = {}
+        # Sol, 2026-10-03: durable evidence for the explicit G3 target-execution ledger.
+        self._nav_contact_records: list[dict[str, Any]] = []
         self._reopened_reachability_indices: set[int] = set()
         self._deferred_observations: list[dict[str, Any]] = []
         self.entity_ledger: EntityLedger | None = None
@@ -3401,6 +3403,11 @@ class _LeverTarget:
                 stand=stand, outcome=contact_outcome,
             )
             event["contact_epoch"] = epoch.snapshot()
+            if not any(
+                item.get("contact_evidence_ref") == evidence_id
+                for item in self._nav_contact_records
+            ):
+                self._nav_contact_records.append(epoch.snapshot())
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         event["counter_baseline"] = counter_baseline
         ambiguity_bounded = False
@@ -4594,12 +4601,23 @@ class _LeverTarget:
         return card
 
     def inventory_view(self, *, offset: int = 0, limit: int = 10) -> dict[str, Any]:
-        """Return one bounded page of the complete G3 roster partition."""
+        """Return one bounded page of the complete G3 target-execution ledger.
+
+        The roster is populated from G2 before its first G3 action.  These rows then make the
+        execution contract explicit: every eligible visual object stays visible until it is
+        contacted and typed, or receives a provisional certificate that it lies outside the
+        avatar's currently demonstrated reachable field.
+        """
         offset = max(0, int(offset))
         limit = max(1, min(25, int(limit)))
         ledger = self._ensure_entity_ledger()
         journal = self.lifecycle_journal
         assert journal is not None
+        contacts_by_entity: dict[str, list[dict[str, Any]]] = {}
+        for record in self._nav_contact_records:
+            contacts_by_entity.setdefault(
+                str(record.get("target_entity_id") or ""), []
+            ).append(record)
         rows: list[dict[str, Any]] = []
         for item in self._ensure_frontier():
             member_id = str(item["member_id"])
@@ -4607,6 +4625,9 @@ class _LeverTarget:
             lifecycle = journal.entities.get(str(entity_id or ""))
             dossier = self._dossier_answers.get(member_id)
             ambiguity = self._bounded_ambiguities.get(str(entity_id or ""))
+            lifecycle_state = None if lifecycle is None else lifecycle.state
+            contact_records = contacts_by_entity.get(str(entity_id or ""), [])
+            last_contact = contact_records[-1] if contact_records else None
             if lifecycle is not None and lifecycle.state == "G4-READY":
                 disposition = "CONFIRMED_LEVER"
             elif lifecycle is not None and lifecycle.state == "G3-CLOSED":
@@ -4615,6 +4636,42 @@ class _LeverTarget:
                 disposition = "BOUNDED_UNKNOWN"
             else:
                 disposition = "UNRESOLVED"
+            if lifecycle_state == "PRESUMED_UNREACHABLE":
+                execution_status = "EXECUTED"
+                reachability = "UNREACHABLE_IN_CURRENT_WORLD_STATE"
+                reachability_basis = "EXHAUSTED_REACHABLE_COMPONENT"
+                physics_type = "UNTESTED_BEYOND_REACH"
+            elif self._world_type == "CLICK_GOD_MODE":
+                execution_status = (
+                    "QUEUED" if lifecycle_state == "UNTOUCHED"
+                    else "EXECUTED" if lifecycle_state in {
+                        "G3-CLOSED", "G4-READY", "AMBIGUOUS", "BUDGET_STOPPED"
+                    }
+                    else "IN_PROGRESS"
+                )
+                reachability = "REACHABLE"
+                reachability_basis = "POINTER_DIRECT_ADDRESS"
+                physics_type = "NOT_YET_TYPED"
+            elif last_contact is not None:
+                execution_status = "EXECUTED"
+                reachability = "REACHABLE"
+                reachability_basis = "OBSERVED_CONTACT_ATTEMPT"
+                physics_type = "NOT_YET_TYPED"
+            else:
+                execution_status = (
+                    "QUEUED" if lifecycle_state == "UNTOUCHED"
+                    else "REOPENED" if lifecycle_state == "REOPENED"
+                    else "IN_PROGRESS"
+                )
+                reachability = "NOT_YET_DETERMINED"
+                reachability_basis = "CONTACT_OR_ROUTE_EXHAUSTION_NOT_YET_OBSERVED"
+                physics_type = "NOT_YET_TYPED"
+            if lifecycle is not None and lifecycle.witness_refs:
+                physics_type = "LEVER"
+            elif lifecycle_state == "G3-CLOSED":
+                physics_type = "SCOPED_NONRESPONDER"
+            elif lifecycle_state in {"AMBIGUOUS", "BUDGET_STOPPED"}:
+                physics_type = "UNRESOLVED_EFFECT"
             evidence_refs = []
             if dossier is not None:
                 evidence_refs.extend(dossier.evidence_refs)
@@ -4628,8 +4685,28 @@ class _LeverTarget:
                 "source_rank": int(item["source_rank"]),
                 "target_member_id": member_id,
                 "entity_id": entity_id,
+                "visual_type": {
+                    "integer": int(item["integer"]),
+                    "shape_family": str(item["shape_family"]),
+                    "cell_count": int(item["cell_count"]),
+                    "anchor": list(item["anchor"]),
+                    "bbox": list(item["bbox"]),
+                    "mask_relation": str(item["mask_relation"]),
+                },
+                "execution_status": execution_status,
+                "reachability": reachability,
+                "reachability_basis": reachability_basis,
+                "physics_type": physics_type,
+                "contact_type": (
+                    None if last_contact is None else last_contact.get("outcome")
+                ),
+                "contact_evidence_refs": [
+                    str(record.get("contact_evidence_ref") or "")
+                    for record in contact_records
+                    if record.get("contact_evidence_ref")
+                ],
                 "disposition": disposition,
-                "lifecycle_state": None if lifecycle is None else lifecycle.state,
+                "lifecycle_state": lifecycle_state,
                 "evidence_refs": list(dict.fromkeys(evidence_refs)),
                 "retry_condition": (
                     None if ambiguity is None else ambiguity.get("retry_condition")
@@ -4646,6 +4723,9 @@ class _LeverTarget:
                 "source_rank": int(item["source_rank"]),
                 "target_member_id": str(item["member_id"]),
                 "disposition": str(item["disposition"]),
+                "execution_status": "EXCLUDED_BEFORE_EXECUTION",
+                "reachability": "NOT_APPLICABLE",
+                "physics_type": "COUNTER_MASK",
                 "mask_law_version_id": item.get("mask_law_version_id"),
                 "evidence_refs": list(item.get("evidence_refs") or ()),
             })
@@ -4654,6 +4734,8 @@ class _LeverTarget:
         return {
             "schema": "virelai-g3-inventory-view-v1",
             "gate_id": LEVER_GATE_ID,
+            "world_type": self._world_type,
+            "roster_populated_before_execution": True,
             "page": {
                 "offset": offset,
                 "limit": limit,

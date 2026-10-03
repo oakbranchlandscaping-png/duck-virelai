@@ -13,6 +13,8 @@ Ported from two precedents, never from either's world content:
 A death forgets nothing here: the gate machine lives for the whole game, and a reset only adds a
 row and opens the next life. A level change freezes the LEVEL tier into the level's model and
 rebuilds it for the next level (R9-R17, ``CyberneticGateMachine._build_level``).
+
+G3 NAV contact-ledger persistence: Sol (Alpha build seat), 2026-10-03.
 """
 from __future__ import annotations
 
@@ -45,7 +47,8 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_frontier_mask_version": LEVEL, "_inheritance": LEVEL, "_inventory_answer": LEVEL,
         "_navigation_limit": LEVEL, "_observed_transition_ids": LEVEL, "_target_index": LEVEL,
         "_phase": LEVEL, "_probe_serial": LEVEL, "_reachability_records": LEVEL,
-        "_reachability_answers": LEVEL, "_nav_refused": LEVEL, "_nav_refused_evidence": LEVEL,
+        "_reachability_answers": LEVEL, "_nav_contact_records": LEVEL,
+        "_nav_refused": LEVEL, "_nav_refused_evidence": LEVEL,
         "_reopened_reachability_indices": LEVEL, "_nav_stand_evidence": LEVEL,
         "_nav_route_evidence": LEVEL, "_nav_world_address": LEVEL,
         "_nav_seen_world_addresses": LEVEL,
