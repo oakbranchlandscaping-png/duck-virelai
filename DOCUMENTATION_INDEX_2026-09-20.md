@@ -5,6 +5,17 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 PROJECT DIRECTIVES: THE COMPETITION ENDGAME (Claude, Alpha build seat; RATIFIED by
+> the Director) — signed.** Binding on every seat. The paper is the goal through 8 November, and it
+> requires a linked, scored Kaggle submission, so a submission track runs in parallel with the
+> evidence work: first scored ARC-AGI-3 submission by about 12 October; code freeze and final
+> submission 27–30 October (deadline 2 November); paper 31 October–8 November. R2: the model stays
+> Qwen3.6-27B-FP8. R3: about 30 GPU-hours a week, **shared by all seats**; state each run's expected
+> GPU-hours in its upload record; submissions take priority when quota runs short. Run windows stay
+> at 3 hours, since R9-R22's general A2 rule ends stalls. One run is one sample. Four Kaggle facts
+> are still to verify (deadline time, submissions per day, RTX PRO 6000 quota, whether reruns count).
+> `DIRECTIVE_COMPETITION_ENDGAME_v1_2026-10-03.md`.
+
 > **2026-10-03 G3 NAV INTEGER TERRAIN MINE (Sol, Alpha build seat) — signed.** The repo contains
 > the exact shortcut needed after the target-ledger failure. Universal Solver v3.5 projects
 > confirmed floor/wall integers into a position passability map; Golden supplies the necessary

@@ -2,6 +2,13 @@
 
 ## Current project direction
 
+> **Project directives, 2026-10-03 (Director-ratified): `DIRECTIVE_COMPETITION_ENDGAME_v1_2026-10-03.md`.**
+> The goal through 8 November is a paper, and the ARC Prize Paper Prize requires a linked, scored
+> Kaggle submission. So: first scored ARC-AGI-3 submission by about 12 October; code freeze and final
+> submission 27–30 October (the deadline is 2 November); paper by 8 November. The model stays
+> Qwen3.6-27B-FP8 (self-hosted). Run windows stay at 3 hours. The GPU quota is shared by every
+> seat. Read the directive before planning any run or submission.
+
 The active build is `variants/ring9-cybernetic-gates/`. Its North Star is to make Duck investigate
 an ARC world through gated cybernetic targets: establish its action surface and ego, isolate the
 counter, discover levers and reactions, test environmental forces and scoped inertness, and then
@@ -16,7 +23,7 @@ The current implementation and execution state is maintained in
 The original competition structure below remains useful repository history. Where it conflicts
 with the current Ring 9 direction, the documentation index and current status document govern.
 
-A competition entry for **ARC Prize 2026 — ARC-AGI-3, Milestone #2** (deadline 2026-09-30).
+Originally a competition entry for **ARC Prize 2026 — ARC-AGI-3, Milestone #2** (deadline 2026-09-30); the lab did not submit to Milestone #2. The current target is the final ARC-AGI-3 submission (2 November 2026) and the Paper Prize (8 November 2026); see the directive above.
 
 The shape: Tufa Labs' open-source **Duck harness** (Milestone #1 winner), cloned whole and
 frozen, plus a fast deterministic library (the *Virelai insert*) that runs before the LLM
