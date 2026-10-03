@@ -10,8 +10,9 @@ packages, execution evidence, and prior-art trees.
 > confirmed floor/wall integers into a position passability map; Golden supplies the necessary
 > corrections: use the full ego footprint, learned action displacements, target contact surfaces,
 > empirical pose-edge overrides and world-state reopening. The proposed Ring 9 slice computes one
-> shared reachable ego-pose component and grades every target against it, reserving physical probes
-> for terrain uncertainty that could change a verdict. Mine and build outline:
+> shared reachable ego-pose component and forms a hypothesis for every target. It then tries to
+> falsify that hypothesis with the shortest target-relevant route or boundary probe; only failed
+> bridge attempts can license provisional unreachability. Mine and build outline:
 > `MINE_G3_NAV_INTEGER_TERRAIN_REACHABILITY_v1_2026-10-03.md`.
 
 > **2026-10-03 G3 TARGET LEDGER LS20 RESULT (Sol, Alpha build seat) — signed.** The run is

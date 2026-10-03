@@ -12,11 +12,16 @@ of play?
 
 ## Answer
 
-Yes, with one necessary refinement. Integer terrain identity can pre-fill most of a navigation map
-and replace a long physical wall crawl with a configuration-space calculation. The final query must
-still be over the ego's full footprint, learned action displacements, current world state and the
-target's contact surface. A raw pixel flood or an unconditional rule that every occurrence of one
-integer has one role is insufficient.
+Yes, with two necessary refinements. Integer terrain identity can pre-fill most of a navigation map
+and replace a long physical wall crawl with a configuration-space calculation. That calculation
+proposes a reachability or unreachability **hypothesis**; it does not close the row. The controller
+must try to reach the object and give the hypothesis a direct chance to fail. Only after the
+target-relevant attempt refuses and no remaining mapped route could reach a contact surface may it
+accept `UNREACHABLE_IN_CURRENT_WORLD_STATE` and move on.
+
+The calculation must also use the ego's full footprint, learned action displacements, current
+world state and the target's contact surface. A raw pixel flood or an unconditional rule that every
+occurrence of one integer has one role is insufficient.
 
 The repo already contains both halves of this design:
 
@@ -169,20 +174,39 @@ The result is the current reachable ego-pose component. It belongs to the world 
 target.
 
 For every ledger target, compute the source stands from which one available action would make the
-ego footprint overlap that target. Then:
+ego footprint overlap that target. This first pass produces hypotheses:
 
-- at least one source stand in the reachable component → `REACHABLE`, with a shortest route and
-  contact action;
-- source stands exist but none lie in the component →
-  `UNREACHABLE_IN_CURRENT_WORLD_STATE`;
-- no geometrically valid contact stand exists → `OUTSIDE_CURRENT_FIELD_OF_PLAY` or the same
-  provisional unreachable class with that more specific basis;
+- at least one source stand in the reachable component → `PREDICTED_REACHABLE`, with a shortest
+  route and contact action;
+- source stands exist but none lie in the component → `PREDICTED_UNREACHABLE`;
+- no geometrically valid contact stand exists → `PREDICTED_OUTSIDE_CURRENT_FIELD_OF_PLAY`;
 - terrain identity or passability is unresolved → keep the row open and select the smallest
   discriminating frontier probe.
 
-One calculation can classify the whole target roster. This is the main efficiency gain.
+One calculation can prepare the whole target roster and the shortest experiment for each row. It
+does not convert predictions into verdicts. This is the main efficiency gain.
 
-### 4. Preserve empirical overrides and reopening
+### 4. Falsify each target's reachability hypothesis
+
+For a `PREDICTED_REACHABLE` target, execute the shortest mapped route and its contact action. An
+observed contact accepts reachability. A refusal corrects the pose-action map and triggers a new
+plan.
+
+For a `PREDICTED_UNREACHABLE` or `PREDICTED_OUTSIDE_CURRENT_FIELD_OF_PLAY` target, choose the
+shortest target-relevant falsifier:
+
+1. route over known floor to the closest stand on the target side of the current component;
+2. try the unverified boundary edge whose success would most reduce or eliminate the separation;
+3. if it yields, reject the hypothesis, expand the component and continue toward contact;
+4. if it refuses, retain that wall/edge evidence and recompute;
+5. accept `UNREACHABLE_IN_CURRENT_WORLD_STATE` only when no untested boundary edge remains that
+   could connect the current component to any contact surface for that target.
+
+This is a target-conditioned wall crawl. It tests possible bridges to the object instead of every
+frontier edge surrounding the entire reachable component. The acceptance is evidence-bearing and
+provisional; it is never an assumption based on appearance.
+
+### 5. Preserve empirical overrides and reopening
 
 The integer projection is a current-state hypothesis. Runtime evidence has priority:
 
@@ -221,16 +245,20 @@ Build **G3 NAV integer-seeded configuration reachability**:
    transitions.
 3. Port the v3.5 integer-to-position seeding mechanism into a footprint-aware Ring 9 map.
 4. Compile all valid ego anchors and the shared reachable component from the current frame.
-5. Classify every target's contact surface in one batch and populate the target ledger before
-   target-by-target execution.
-6. Use physical frontier probes only where unresolved terrain could change a target's verdict.
-7. Make empirical pose-edge observations override palette seeds.
-8. Reopen affected rows after relevant world deltas.
-9. Preserve the existing rule that unreachable does not mean inert.
+5. Generate a reachability hypothesis and shortest falsifying experiment for every target in one
+   batch; do not treat either prediction as a verdict.
+6. Execute a real reach/contact attempt for every target. A predicted-unreachable row must receive
+   a target-conditioned boundary probe before it can close.
+7. Accept provisional unreachability only after all target-relevant bridge edges have refused or
+   are ruled out by the body/action geometry.
+8. Make empirical pose-edge observations override palette seeds.
+9. Reopen affected rows after relevant world deltas.
+10. Preserve the existing rule that unreachable does not mean inert.
 
-The new checkpoint should prove that the ls20 bottom-row objects receive a grounded current-state
-unreachable/outside-field judgment without a 61-action crawl, while reachable targets still receive
-real contact attempts.
+The new checkpoint should prove that the ls20 bottom-row objects first receive an explicit
+unreachable/outside-field hypothesis, then a concrete falsification attempt, and only then a
+grounded current-state judgment without a 61-action whole-component crawl. Reachable targets must
+still receive real contact attempts.
 
 ## Claim boundary
 
