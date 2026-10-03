@@ -123,16 +123,9 @@ def _rewrite_setup(bundle: Path) -> None:
     if len(setup) != 1:
         raise RuntimeError("Expected one setup command.")
     command = setup[0]
-    command = _replace_once(
-        command,
-        "'LOCAL_ANALYZER_MAX_OUTPUT': '0'",
-        (
-            f"'LOCAL_ANALYZER_MAX_OUTPUT': '{MAX_OUTPUT_TOKENS}',\n"
-            f"    'LOCAL_ANALYZER_TIMEOUT': '{MODEL_REQUEST_TIMEOUT_SECONDS}'"
-        ),
-        "model output cap",
-    )
     required = (
+        f"'LOCAL_ANALYZER_MAX_OUTPUT': '{MAX_OUTPUT_TOKENS}'",
+        f"'LOCAL_ANALYZER_TIMEOUT': '{MODEL_REQUEST_TIMEOUT_SECONDS}'",
         f"'LOCAL_ANALYZER_ENABLE_THINKING': '{ENABLE_THINKING}'",
         f"'LOCAL_ANALYZER_TEMPERATURE': '{TEMPERATURE}'",
         f"'LOCAL_ANALYZER_DUPLICATE_READ_ONLY_LIMIT': '{DUPLICATE_READ_ONLY_LIMIT}'",
