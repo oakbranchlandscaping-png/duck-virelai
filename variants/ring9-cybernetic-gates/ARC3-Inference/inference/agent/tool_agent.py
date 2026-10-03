@@ -2945,11 +2945,27 @@ class ToolAgent:
                     function = tool_call.get("function", {}) if isinstance(tool_call, dict) else {}
                     tool_name = str(function.get("name", "")).strip() or "unknown"
                     raw_arguments = function.get("arguments", "{}")
-                    if isinstance(raw_arguments, str):
-                        try:
+                    try:
+                        parsed_arguments = (
                             json.loads(raw_arguments)
-                        except json.JSONDecodeError as exc:
-                            malformed_argument_errors.append(f"{tool_name}: invalid JSON arguments ({exc})")
+                            if isinstance(raw_arguments, str) else raw_arguments
+                        )
+                        if not isinstance(parsed_arguments, dict):
+                            raise ValueError("arguments did not decode to an object")
+                    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                        malformed_argument_errors.append(
+                            f"{tool_name}: invalid JSON arguments ({exc})"
+                        )
+                        # Sol, 2026-10-03: never persist a provider's truncated
+                        # native tool call into chat history. vLLM reparses all
+                        # prior assistant calls before generating the retry; one
+                        # malformed arguments string otherwise poisons every
+                        # subsequent request. Preserve the diagnostic above but
+                        # give history a protocol-valid empty object. Dispatch
+                        # returns the ordinary missing-argument error, allowing
+                        # the model to issue a complete replacement call.
+                        if isinstance(function, dict):
+                            function["arguments"] = "{}"
                 response_meta = _format_model_response_meta(
                     finish_reason=result.finish_reason,
                     reasoning=reasoning,

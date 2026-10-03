@@ -190,6 +190,54 @@ def test_real_action_after_duplicate_correction_resets_guard(tmp_path, monkeypat
     assert agent._no_progress_correction_issued is False
 
 
+def test_malformed_native_tool_arguments_do_not_poison_retry_history(tmp_path, monkeypatch):
+    agent, state_path, requests = _guard_agent(
+        tmp_path, monkeypatch, ["action([{'action': 'ACTION1'}])"]
+    )
+
+    def scripted(messages, **_kwargs):
+        requests.append(json.loads(json.dumps(messages)))
+        if len(requests) == 1:
+            return _ChatCompletionResult(
+                message={
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{
+                        "id": "call-truncated",
+                        "type": "function",
+                        "function": {
+                            "name": "python",
+                            "arguments": '{"code": "for',
+                        },
+                    }],
+                },
+                finish_reason="tool_calls",
+                model_id="fixture-model",
+            )
+        return _tool_call("action([{'action': 'ACTION1'}])", 2)
+
+    def dispatch(_path, _name, arguments):
+        return _ToolDispatchResult(
+            '{"returncode": 0}',
+            step_executed="action(" in arguments.get("code", ""),
+        )
+
+    monkeypatch.setattr(agent, "_chat_completion", scripted)
+    monkeypatch.setattr(agent, "_dispatch_tool", dispatch)
+    result = agent.analyze(state_path, 0, valid_actions=["ACTION1"])
+
+    assert result is not None and result.step_executed
+    assert len(requests) == 2
+    prior_call = next(
+        message for message in requests[1]
+        if message.get("role") == "assistant" and message.get("tool_calls")
+    )["tool_calls"][0]
+    assert json.loads(prior_call["function"]["arguments"]) == {}
+    assert "invalid JSON arguments" in (
+        tmp_path / "tool_runtime_state_analyzer.txt"
+    ).read_text(encoding="utf-8")
+
+
 def test_later_action_in_same_multi_tool_response_is_not_skipped(tmp_path, monkeypatch):
     inspect = "print(current_frame.step)"
     act = "action([{'action': 'ACTION1'}])"
