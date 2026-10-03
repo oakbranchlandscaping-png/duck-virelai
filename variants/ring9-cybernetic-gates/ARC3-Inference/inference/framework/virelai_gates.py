@@ -949,6 +949,7 @@ class CounterGateMachine:
         observed_through_step: int,
         excluded_ego_cells: Sequence[tuple[int, int]] = (),
         ego_binding_source: str = "NOT_APPLICABLE",
+        nav_bearings: Mapping[str, tuple[int, int]] | None = None,
     ) -> None:
         self.affordances = tuple(affordances)
         self.initial_grid = tuple(tuple(int(cell) for cell in row) for row in initial_grid)
@@ -981,6 +982,31 @@ class CounterGateMachine:
         self._navigation_steps_for_target = 0
         self._navigation_step_limit = 24
         self._navigation_results: list[dict[str, Any]] = []
+        # G2 keeps a transient pursuit lattice separate from G3. Initializing G3 before the
+        # counter mask is sealed would freeze the next gate's object frontier too early.
+        self._nav_bearings = {
+            str(action): (int(delta[0]), int(delta[1]))
+            for action, delta in (nav_bearings or {}).items()
+        }
+        self._nav_refused: set[tuple[tuple[int, int], str]] = set()
+        self._nav_stands: set[tuple[int, int]] = set()
+        self._nav_last_plan: Any | None = None
+        self._nav_last_movement_refused = False
+        self._nav_anchor: tuple[int, int] | None = None
+        self._nav_shape: frozenset[tuple[int, int]] = frozenset()
+        self._nav_pattern: tuple[tuple[int, int, int], ...] = ()
+        if self._excluded_ego_cells:
+            anchor = min(self._excluded_ego_cells)
+            self._nav_anchor = anchor
+            self._nav_stands.add(anchor)
+            self._nav_shape = frozenset(
+                (row - anchor[0], col - anchor[1])
+                for row, col in self._excluded_ego_cells
+            )
+            self._nav_pattern = tuple(sorted(
+                (row - anchor[0], col - anchor[1], self.initial_grid[row][col])
+                for row, col in self._excluded_ego_cells
+            ))
         self._probe_actions = self._build_probe_actions()
         self._probe_index = 0
         self._probe_serial = 0
@@ -1014,8 +1040,8 @@ class CounterGateMachine:
             )
 
         if self._world_type in {"NAVIGATION", "HYBRID"} and self._movement_actions:
-            # Duck chooses individual piloting actions while the controller
-            # binds the next ranked target and owns completion of the list.
+            # The gate binds the ranked target; the controller compiles each route step from
+            # the demonstrated G1 bearing map. Duck is woken only if that evidence is insufficient.
             return ()
         self.status = "UNRESOLVED"
         self.stop_reason = "EMBODIED_PILOT_ACTION_UNAVAILABLE"
@@ -1026,6 +1052,64 @@ class CounterGateMachine:
         if self._probe_index >= len(ranked):
             return None
         return ranked[self._probe_index]
+
+    def planned_nav_step(self, target: Mapping[str, Any]) -> Any | None:
+        """Choose G2's next route/contact action from demonstrated G1 bearings only."""
+        if self._world_type not in {"NAVIGATION", "HYBRID"}:
+            return None
+        if self._nav_anchor is None or not self._nav_shape or not self._nav_bearings:
+            return None
+        from inference.framework.nav_route import NavLattice, plan_contact
+
+        lattice = NavLattice(
+            anchor=self._nav_anchor,
+            shape=self._nav_shape,
+            bearings=self._nav_bearings,
+            stands=frozenset(self._nav_stands),
+            refused=frozenset(self._nav_refused),
+            bounds=(len(self.initial_grid), len(self.initial_grid[0])),
+        )
+        self._nav_last_plan = plan_contact(
+            lattice,
+            str(target.get("member_id") or ""),
+            target.get("cells") or (),
+        )
+        return self._nav_last_plan
+
+    def _pattern_at(
+        self, grid: Sequence[Sequence[int]], anchor: tuple[int, int]
+    ) -> bool:
+        return bool(self._nav_pattern) and all(
+            0 <= anchor[0] + row < len(grid)
+            and 0 <= anchor[1] + col < len(grid[0])
+            and int(grid[anchor[0] + row][anchor[1] + col]) == value
+            for row, col, value in self._nav_pattern
+        )
+
+    def _observe_planned_navigation(
+        self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
+    ) -> None:
+        """Record floor or wall evidence for the exact deterministic G2 route step."""
+        plan = self._nav_last_plan
+        self._nav_last_movement_refused = False
+        if plan is None or not probe.actions:
+            return
+        action = str(probe.actions[0].get("action") or "")
+        if action != getattr(plan, "action", None):
+            return
+        grids = grids_from_probe_outcome(outcome)
+        if grids is None:
+            return
+        _before, after = grids
+        stand = tuple(getattr(plan, "stand"))
+        landing = tuple(getattr(plan, "landing"))
+        if self._pattern_at(after, landing):
+            self._nav_anchor = landing
+            self._nav_stands.add(landing)
+            self._nav_refused.discard((stand, action))
+        elif self._pattern_at(after, stand):
+            self._nav_refused.add((stand, action))
+            self._nav_last_movement_refused = True
 
     @staticmethod
     def _target_payload(candidate: CoordinateCandidate) -> dict[str, Any]:
@@ -1366,6 +1450,7 @@ class CounterGateMachine:
         candidate = self._ranked_target()
         if candidate is None:
             return None
+        self._observe_planned_navigation(probe, outcome)
         self._navigation_steps_for_target += 1
         target_cells = set(candidate.cells)
         changed_target_cells = sorted(
@@ -1387,9 +1472,15 @@ class CounterGateMachine:
         elif terminal:
             disposition = "BOUNDARY_DURING_TARGET_PURSUIT"
             attribution = "OBSERVED_BOUNDARY"
-        elif probe.pilot_intent == "CONTACT_ATTEMPT" and not bool(outcome.get("board_changed")):
+        elif probe.pilot_intent == "CONTACT_ATTEMPT" and (
+            self._nav_last_movement_refused or not bool(outcome.get("board_changed"))
+        ):
             disposition = "REFUSED_CONTACT_REPORTED"
-            attribution = "DUCK_DECLARED_CONTACT_WITH_NO_VISIBLE_DELTA"
+            attribution = (
+                "CONTROLLER_OBSERVED_EGO_REFUSAL_WITHOUT_TARGET_DELTA"
+                if self._nav_last_movement_refused
+                else "DUCK_DECLARED_CONTACT_WITH_NO_VISIBLE_DELTA"
+            )
         elif self._navigation_steps_for_target >= self._navigation_step_limit:
             disposition = "PILOT_BUDGET_EXHAUSTED"
             attribution = "BOUNDED_WITHOUT_CONTACT_EVIDENCE"
@@ -5511,13 +5602,17 @@ class CyberneticGateMachine:
         """Start G2 from Duck's demonstrated post-G1 world and ego binding."""
         if self._counter_prepared_from_ego:
             return
+        from inference.framework.nav_control import compile_nav_control_map
+
         ego_cells, binding_source = self.ego.embodied_ego_binding()
+        nav_control = compile_nav_control_map(self.ego)
         self.counter = CounterGateMachine(
             affordances=self.ego.affordances,
             initial_grid=self.ego.current_grid(),
             observed_through_step=self.ego.observed_through_step,
             excluded_ego_cells=ego_cells,
             ego_binding_source=binding_source,
+            nav_bearings=nav_control.bearing_map(),
         )
         self._counter_prepared_from_ego = True
 
@@ -5971,6 +6066,34 @@ class CyberneticGateMachine:
                 "law_id": self.ego.ego_law.law_id,
                 "law_version_id": self.ego.ego_law.law_version_id,
                 "revision": self.ego.ego_law.revision,
+            }
+        if self.ego.answer is not None and self.ego.pending_prediction is not None:
+            answer = self.ego.answer
+            prediction = self.ego.pending_prediction
+            view["accepted_model"] = {
+                "answer_id": answer.answer_id,
+                "answer_kind": answer.answer_kind,
+                "subjects": list(answer.subjects),
+                "mechanism": answer.mechanism,
+                "action_laws": dict(answer.action_laws),
+                "falsifier": answer.falsifier,
+                "limitations": list(answer.limitations),
+            }
+            view["frozen_prediction"] = {
+                "prediction_id": prediction.prediction_id,
+                "declared_at_transition": prediction.declared_at_transition,
+                "action": {
+                    "action": prediction.action.action,
+                    **dict(prediction.action.parameters),
+                },
+                "predicate": prediction.predicate,
+                "scope": {
+                    "representation": prediction.scope.representation,
+                    "cell_count": len(prediction.scope.cells),
+                    "bbox": cell_bbox(prediction.scope.cells),
+                },
+                "expected_parameters": dict(prediction.expected_parameters),
+                "falsifier": prediction.falsifier,
             }
         if next_operation == "SUBMIT_GATE_ANSWER":
             pointer_exit = (

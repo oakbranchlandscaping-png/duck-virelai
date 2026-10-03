@@ -195,6 +195,9 @@ def _subject_slot(gate_id: str, view: Mapping[str, Any]) -> dict[str, Any]:
     candidates: list[tuple[str, Any]] = []
     if gate_id == "G0-ACTION-METADATA":
         candidates.append(("action_metadata", view.get("action_metadata")))
+    elif gate_id == "G1-EGO":
+        candidates.append(("accepted_model", windowed(view.get("accepted_model"))))
+        candidates.append(("frozen_prediction", windowed(view.get("frozen_prediction"))))
     elif gate_id == "G2-COUNTER":
         candidate = view.get("candidate")
         if isinstance(candidate, Mapping):

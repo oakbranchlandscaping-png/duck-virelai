@@ -11,8 +11,11 @@ the new frame is read and the question is asked again. Duck is woken for everyth
 This module is pure: it reads the machine and returns a decision. The agent executes it through the
 same recording path Duck's actions use (``controller_turn.py``).
 
-What the controller owns (D2, CLICK worlds only; NAV is shelved):
+What the controller owns:
 - G0 action metadata and G1 pointer ego: the templates are derived from metadata.
+- Every exact G1 probe and prospective demonstration in NAV and HYBRID worlds. Duck explains the
+  embodied ego after the controller has collected the Delphi record; it does not spend a turn on
+  an action the gate already selected.
 - G2 search: the first untried ranked object (Duck followed this order exactly, live, twice).
 - G2 label and frozen prediction, when the record's trigger class is EVERY_TRANSITION or
   EFFECTIVE_TRANSITIONS_ONLY: a COUNTER_REWRITE on the template's certified action.
@@ -102,6 +105,10 @@ def next_owned_step(
 
     ``rerun`` is an extra run Duck asked for (D3): ``{"entity_id", "click", "left"}``.
     """
+    # G0 is metadata-derived in every world.  Test it before the world branch: the earlier NAV
+    # dispatcher returned Duck here and accidentally bypassed the generic controller answer.
+    if machine.gate_id == "G0-ACTION-METADATA":
+        return _ordinary_step(machine, refused=refused)
     world = control_archetype_prior(machine.ego.affordances)["world_type"]
     if world in {"NAVIGATION", "HYBRID"}:
         return _nav_step(machine)
@@ -111,6 +118,14 @@ def next_owned_step(
         return _duck(machine, f"{machine.gate_id} needs judgment")
     if orientation_due(machine):
         return _duck(machine, "the orientation turn is due")
+    return _ordinary_step(machine, refused=refused, rerun=rerun)
+
+
+def _ordinary_step(
+    machine: Any, *, refused: frozenset | set = frozenset(),
+    rerun: Mapping[str, Any] | None = None,
+) -> OwnedStep:
+    """Controller ownership shared by CLICK and world-independent exact capabilities."""
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
     if machine.gate_id in PREDICTION_GATES:
         return _relations_step(machine, capability)
@@ -138,6 +153,45 @@ def next_owned_step(
 
 def _nav_step(machine: Any) -> OwnedStep:
     """Controller-owned deterministic movement; Duck still owns explanations."""
+    if machine.gate_id == "G1-EGO":
+        view = machine.gate_view()
+        if _answer_due(view):
+            return _duck(machine, "the embodied ego explanation and prospective prediction need judgment")
+        capability = machine.next_probe_capability()
+        if capability is None:
+            return _duck(machine, "G1 offers no exact probe and no answer")
+        action, reason = _bound_action(capability)
+        if action is None:
+            return _duck(machine, reason)
+        return OwnedStep(
+            CONTROLLER, machine.gate_id, reason, ACTION, action=action,
+            probe_token=str(capability["probe_token"]),
+        )
+    if machine.gate_id == "G2-COUNTER":
+        view = machine.gate_view()
+        if _answer_due(view):
+            return _duck(machine, "the counter explanation and prospective prediction need judgment")
+        capability = machine.next_probe_capability()
+        if capability is None:
+            return _duck(machine, "G2 offers no active target or exact counter probe")
+        if capability.get("purpose") != "PILOT_TO_CONTACT":
+            action, reason = _bound_action(capability)
+            if action is None:
+                return _duck(machine, reason)
+            return OwnedStep(
+                CONTROLLER, machine.gate_id, reason, ACTION, action=action,
+                probe_token=str(capability["probe_token"]),
+            )
+        target = capability.get("target") or {}
+        planned = machine.counter.planned_nav_step(target)
+        if planned is None:
+            return _duck(machine, "G1 evidence does not support another deterministic G2 route step")
+        return OwnedStep(
+            CONTROLLER, machine.gate_id,
+            f"G2 NAV {planned.intent.lower()}: {planned.reason}", ACTION,
+            action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+            decision={"pilot_intent": planned.intent},
+        )
     if machine.gate_id == ORBITS:
         capability = machine.next_probe_capability()
         view = machine.gate_view()

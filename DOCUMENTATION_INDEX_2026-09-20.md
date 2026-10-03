@@ -1,7 +1,7 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-09-29 (night)  
-**Active source:** `variants/ring9-cybernetic-gates/`  
+**Updated:** 2026-10-03
+**Active source:** `variants/ring9-cybernetic-gates/`
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
@@ -11,6 +11,16 @@ packages, execution evidence, and prior-art trees.
 > controller by default and Duck only when code cannot compute the lawful next action. The repo mine,
 > superseded-document analysis and four-slice repair plan are in
 > `MINE_CONTROLLER_FIRST_ACTION_BOUNDARY_v1_2026-10-02.md`.
+
+> **2026-10-03 CONTROLLER-FIRST G1/G2 NAV SLICE (Sol, Alpha build seat) — signed.** G0 now
+> closes through the controller in every world; all exact NAV/HYBRID G1 Delphi probes and the
+> prospective demonstration are controller actions; the accepted ego model remains visible in the
+> compact card; and G2 begins deterministic ranked-object pursuit using only G1-demonstrated
+> bearings, floor stands and refused edges. G2 pursuit state is isolated from the post-mask G3
+> frontier, and a remote counter tick cannot hide an observed ego refusal at the target. The
+> complete local suite passes 546 tests. Status is **BUILT, LIVE UNCONFIRMED**. Build
+> record and bounded ls20 checkpoint criteria:
+> `BUILD_SLICE_CONTROLLER_FIRST_G1_G2_NAV_v1_2026-10-03.md`.
 
 > **2026-09-29 NIGHT STATUS (Claude, Alpha build seat) — signed.** R9-R09 (memory M-3) committed `e2c2b06` (Mac 461). **R9-R10 (memory M-4, G4 economy and lives)** built: ft09 offline reaches a satisfied G4-A in 92 actions and 7 Duck turns (orientation, 5 orbit explanations, 1 budget wake); the controller certifies G4.1 and runs every lever (D3), Duck may ask for an extra run, a same-level death re-studies the lever (D4), and the counter, action and time budgets wake Duck once on crossing (ruled 2026-09-29). Finding: on the continued-law world the ft09 bar does not cover the full five-lever protocol. Pending Mac pytest (470) and commit. State: `handoff/TECHNICAL_INSTITUTIONAL_MEMORY_2026-09-29_NIGHT.md`; plan: `BUILD_PLAN_G4_CLICK_COMPLETION_v10_2026-09-29.md`. Next: M-5, the package and the D7 throughput run.
 >

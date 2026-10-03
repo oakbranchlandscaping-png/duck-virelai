@@ -188,9 +188,71 @@ def _ft09_machine_at(gate_id: str) -> tuple[CyberneticGateMachine, Ft09World]:
     return machine, world
 
 
-def test_navigation_worlds_and_the_orientation_turn_belong_to_duck():
+def test_navigation_g0_and_exact_g1_probes_belong_to_controller_but_explanation_is_ducks():
     nav = CyberneticGateMachine(valid_actions=["ACTION1", "ACTION2", "ACTION3", "ACTION4"], initial_grid=[[0, 1], [1, 0]])
-    assert next_owned_step(nav).owner == DUCK
+    g0 = next_owned_step(nav)
+    assert (g0.owner, g0.kind, g0.gate_id) == (CONTROLLER, executor.ANSWER, "G0-ACTION-METADATA")
+    nav.submit_answer(g0.answer)
+    expected = ["ACTION1", "ACTION1", "ACTION2", "ACTION2", "ACTION3", "ACTION3", "ACTION4", "ACTION4"]
+    observed = []
+    for transition, action_name in enumerate(expected, 1):
+        step = next_owned_step(nav)
+        assert (step.owner, step.kind, step.action) == (
+            CONTROLLER, executor.ACTION, {"action": action_name},
+        )
+        probe = nav.validate_probe({"probe_token": step.probe_token}, [step.action])
+        nav.record_outcome(probe, {
+            "transition_id": transition, "board_changed": True,
+            "changed_cell_count": 1, "changed_cells": [],
+        })
+        observed.append(step.action["action"])
+    assert observed == expected
+    answer_step = next_owned_step(nav)
+    assert answer_step.owner == DUCK
+    assert "explanation" in answer_step.reason
+
+
+def test_navigation_g1_demonstration_returns_to_controller_and_card_retains_the_model():
+    from inference.framework.card_builder import build_card
+
+    nav = CyberneticGateMachine(valid_actions=["ACTION1"], initial_grid=[[0, 1], [1, 0]])
+    nav.submit_answer(next_owned_step(nav).answer)
+    for transition in (1, 2):
+        step = next_owned_step(nav)
+        probe = nav.validate_probe({"probe_token": step.probe_token}, [step.action])
+        nav.record_outcome(probe, {
+            "transition_id": transition, "board_changed": True,
+            "changed_cell_count": 1, "changed_cells": [],
+        })
+    evidence = [item["evidence_id"] for item in nav.ego.evidence]
+    nav.submit_answer({
+        "answer_id": "A-nav-controller-first", "answer_kind": "embodied ego",
+        "subjects": ["the directly controlled visible component"],
+        "mechanism": "ACTION1 directly changes the same candidate ego while the surrounding field remains fixed",
+        "action_laws": {"ACTION1": "repeats the observed candidate transformation"},
+        "conditions": [], "constraints": [], "evidence_refs": evidence,
+        "competing_models": ["the same component changes autonomously"],
+        "falsifier": "the candidate fails to change on the next legal ACTION1",
+        "novel_prediction": {
+            "action": {"action": "ACTION1"}, "predicate": "ANY_CHANGE",
+            "scope": {"representation": "CELLS", "cells": [[0, 1]]},
+            "because": "the observed direct action law repeated twice",
+            "novelty": "this test begins after the completed Delphi pair",
+        },
+        "limitations": ["collision behavior remains untested"],
+    })
+    card = build_card(nav).payload
+    assert card["subject"]["accepted_model"]["action_laws"] == {
+        "ACTION1": "repeats the observed candidate transformation",
+    }
+    assert card["subject"]["frozen_prediction"]["action"] == {"action": "ACTION1"}
+    demonstration = next_owned_step(nav)
+    assert (demonstration.owner, demonstration.kind, demonstration.action) == (
+        CONTROLLER, executor.ACTION, {"action": "ACTION1"},
+    )
+
+
+def test_orientation_turn_belongs_to_duck():
     machine, _world = _ft09_machine_at("G4.2-LEVER-ORBITS")
     step = next_owned_step(machine)
     assert (step.owner, step.gate_id, step.reason) == (DUCK, "G4.2-LEVER-ORBITS", "the orientation turn is due")

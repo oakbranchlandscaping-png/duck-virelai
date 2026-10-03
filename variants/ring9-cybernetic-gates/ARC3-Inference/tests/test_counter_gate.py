@@ -1,5 +1,6 @@
 import pytest
 
+from inference.framework.controller_executor import CONTROLLER, next_owned_step
 from inference.framework.virelai_gates import CyberneticGateMachine, GateContractError
 
 
@@ -51,7 +52,7 @@ def test_click_counter_hunt_uses_exhaustive_strict_visual_object_order():
     assert protocol["rank_is_semantics"] is False
 
 
-def test_nav_counter_hunt_binds_ranked_target_while_duck_pilots_to_contact():
+def test_nav_counter_hunt_binds_ranked_target_and_validates_each_pilot_step():
     from inference.framework.virelai_gates import CounterGateMachine, action_affordances
 
     counter = CounterGateMachine(
@@ -101,6 +102,126 @@ def test_nav_counter_hunt_binds_ranked_target_while_duck_pilots_to_contact():
     assert result["attribution"] == "DIRECT_TARGET_FOOTPRINT_DELTA"
     assert counter.sweep_frontier()["observed_count"] == 1
     assert counter.next_probe().target["rank"] == 2
+
+
+def test_g2_controller_uses_the_demonstrated_route_planner(monkeypatch):
+    from inference.framework.nav_route import NavStep
+    from inference.framework.virelai_gates import CounterGateMachine, action_affordances
+    from types import SimpleNamespace
+
+    counter = CounterGateMachine(
+        affordances=action_affordances(["ACTION1", "ACTION2"]),
+        initial_grid=GRID,
+        observed_through_step=8,
+    )
+    target = counter.next_probe()
+    assert target is not None
+    monkeypatch.setattr(counter, "planned_nav_step", lambda _target: NavStep(
+        "ACTION2", "CONTACT_ATTEMPT", (2, 2), (2, 3), "target",
+        "predicted footprint intersects target",
+    ))
+    capability = {
+        "purpose": "PILOT_TO_CONTACT",
+        "probe_token": "P1-test",
+        "target": dict(target.target or {}),
+    }
+    machine = SimpleNamespace(
+        gate_id="G2-COUNTER",
+        ego=SimpleNamespace(affordances=counter.affordances),
+        counter=counter,
+        gate_view=lambda: {"status": "ACTIVE", "next_operation": "QUERY_NEXT_PROBE"},
+        next_probe_capability=lambda: capability,
+    )
+    step = next_owned_step(machine)
+    assert (step.owner, step.action) == (CONTROLLER, {"action": "ACTION2"})
+    assert step.decision == {"pilot_intent": "CONTACT_ATTEMPT"}
+
+
+def test_g2_route_lattice_learns_floor_before_attempting_contact():
+    from dataclasses import replace
+    from inference.framework.virelai_gates import CounterGateMachine, action_affordances
+
+    grid = (
+        (0, 0, 0, 0, 0),
+        (0, 0, 0, 0, 0),
+        (0, 0, 2, 0, 3),
+        (0, 0, 0, 0, 0),
+    )
+    counter = CounterGateMachine(
+        affordances=action_affordances(["ACTION1"]),
+        initial_grid=grid,
+        observed_through_step=2,
+        excluded_ego_cells=((2, 2),),
+        ego_binding_source="DEMONSTRATED_AFTER_FOOTPRINT",
+        nav_bearings={"ACTION1": (0, 1)},
+    )
+    target = {"member_id": "target", "cells": [[2, 4]]}
+    first = counter.planned_nav_step(target)
+    assert (first.intent, first.stand, first.landing) == ("APPROACH", (2, 2), (2, 3))
+
+    after = tuple(
+        tuple(2 if (row, col) == (2, 3) else 0 if (row, col) == (2, 2) else value
+              for col, value in enumerate(values))
+        for row, values in enumerate(grid)
+    )
+    probe = replace(
+        counter.next_probe(), actions=({"action": "ACTION1"},), pilot_intent="APPROACH"
+    )
+    outcome = {
+        "transition_id": 3,
+        "action": {"action": "ACTION1"},
+        "board_changed": True,
+        "changed_cell_count": 2,
+        "changed_cells": [
+            {"row": 2, "col": 2, "before": 2, "after": 0},
+            {"row": 2, "col": 3, "before": 0, "after": 2},
+        ],
+        "site_transitions": [
+            {"row": row, "col": col, "before": grid[row][col], "after": after[row][col]}
+            for row in range(len(grid)) for col in range(len(grid[0]))
+        ],
+        "shape_before": [len(grid), len(grid[0])],
+        "shape_after": [len(after), len(after[0])],
+        "boundary_event": {},
+    }
+    counter.record_outcome(probe, outcome)
+    second = counter.planned_nav_step(target)
+    assert (second.intent, second.stand, second.landing) == (
+        "CONTACT_ATTEMPT", (2, 3), (2, 4),
+    )
+
+    # A remote bookkeeping tick must not hide the visible contact refusal. The ego remains on its
+    # predicted stand and the target footprint is unchanged, so this ranked target is complete.
+    after_contact = tuple(
+        tuple(7 if (row, col) == (0, 0) else value for col, value in enumerate(values))
+        for row, values in enumerate(after)
+    )
+    contact = replace(
+        counter.next_probe(), actions=({"action": "ACTION1"},),
+        pilot_intent="CONTACT_ATTEMPT",
+    )
+    contact_outcome = {
+        "transition_id": 4,
+        "action": {"action": "ACTION1"},
+        "board_changed": True,
+        "changed_cell_count": 1,
+        "changed_cells": [
+            {"row": 0, "col": 0, "before": 0, "after": 7},
+        ],
+        "site_transitions": [
+            {"row": row, "col": col, "before": after[row][col],
+             "after": after_contact[row][col]}
+            for row in range(len(after)) for col in range(len(after[0]))
+        ],
+        "shape_before": [len(after), len(after[0])],
+        "shape_after": [len(after_contact), len(after_contact[0])],
+        "boundary_event": {},
+    }
+    event = counter.record_outcome(contact, contact_outcome)
+    assert event["navigation_target_result"]["attribution"] == (
+        "CONTROLLER_OBSERVED_EGO_REFUSAL_WITHOUT_TARGET_DELTA"
+    )
+    assert counter.sweep_frontier()["observed_count"] == 1
 
 
 def test_nav_roster_excludes_duck_identified_ego_and_structural_fields():
