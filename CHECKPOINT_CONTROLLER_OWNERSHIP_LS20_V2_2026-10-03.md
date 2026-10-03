@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** PACKAGE VERIFIED; PRIVATE NOTEBOOK VERSION 1 QUEUED
+**Status:** COMPLETE — FULL PASS (9/9)
 **Frozen source:** `4e1be00f59c1c430391603c572bfd1dcaa4f87cb`
 
 ## Question
@@ -44,6 +44,17 @@ checkpoint limits, not estimates of what the complete solver should need.
 
 The checkpoint does not require competition score, level completion, G3 closure, lever discovery,
 G4 entry, or a win.
+
+## Executed result
+
+Notebook version 1 completed on Kaggle. The downloaded artifacts satisfy all nine preregistered
+criteria. Every one of the 16 environment actions was controller-owned; Duck was confined to the
+accepted G1 embodied-ego explanation. The controller then closed G1, formed and demonstrated the
+G2 counter law, installed the complete 84-cell mask, and executed four G3 actions before the
+explicit action cap. Runtime was 3 minutes 33 seconds, with 8,514 ledger tokens and no crash.
+
+Canonical evidence review:
+`REVIEW_RING9_CONTROLLER_FIRST_LS20_V2_2026-10-03.md`.
 
 ## Required evidence
 

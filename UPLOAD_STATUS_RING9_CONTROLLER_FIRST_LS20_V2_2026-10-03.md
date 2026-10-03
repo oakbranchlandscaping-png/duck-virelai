@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat), signed
 **Date:** 2026-10-03
-**Status:** PRIVATE DATASET CREATED; NOTEBOOK VERSION 1 QUEUED
+**Status:** NOTEBOOK VERSION 1 COMPLETE; CHECKPOINT FULL PASS
 
 ## Frozen identities
 
@@ -61,5 +61,18 @@ omitted. Kaggle accepted:
 - notebook version 1: <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-controller-first-ls20-v2>
 
 Initial status after the terminal push: `KernelWorkerStatus.QUEUED`.
+
+## Completed run
+
+Notebook version 1 subsequently completed. Its artifacts were downloaded to
+`runs/kaggle-ring9-controller-first-ls20-v2/`; the downloaded execution receipt is byte-identical
+to the packaged receipt.
+
+The run lasted 3 minutes 33 seconds and stopped cleanly at its explicit 16-action cap. All 16
+environment actions were controller-owned. G1 closed after Duck supplied the embodied-ego
+explanation and the controller demonstrated its movement law. G2 then closed through a certified
+controller answer and supported demonstration, installed the full 84-cell counter mask, and opened
+G3. Four G3 controller actions followed. The checkpoint therefore passes all 9 preregistered
+criteria. Full review: `REVIEW_RING9_CONTROLLER_FIRST_LS20_V2_2026-10-03.md`.
 
 — Sol

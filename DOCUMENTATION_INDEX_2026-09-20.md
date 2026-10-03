@@ -5,6 +5,15 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 CONTROLLER OWNERSHIP LS20 V2 RESULT (Sol, Alpha build seat) — signed.** The bounded
+> live checkpoint is a **FULL PASS (9/9)**. All 16 environment actions were controller-owned. Duck
+> supplied the accepted G1 embodied-ego explanation; the controller demonstrated and closed G1,
+> formed and demonstrated the recurrent 84-cell counter law, installed the complete mask, closed
+> G2, and performed four G3 actions. Runtime fell from v1's roughly 20 minutes to 3 minutes 33
+> seconds and ledger tokens from 44,370 to 8,514. This closes the ownership checkpoint through G2;
+> it does not yet prove G3 closure, lever discovery or G4 NAV. Evidence review:
+> `REVIEW_RING9_CONTROLLER_FIRST_LS20_V2_2026-10-03.md`.
+
 > **2026-10-03 CONTROLLER OWNERSHIP LS20 V2 CHECKPOINT (Sol, Alpha build seat) — signed.** A bounded
 > successor to the partial-pass v1 run is preregistered against source `4e1be00`: all eight Delphi
 > actions, the G1 demonstration, G2 pursuit, certified G2 answer, and G2 demonstration must be
@@ -17,7 +26,7 @@ packages, execution evidence, and prior-art trees.
 > Verification passes 9/9, source is byte-identical to the commit export, receipts match, and the
 > secret scan is clean. The local three-layout simulator cannot create `/kaggle` on the Mac's
 > read-only root; this is recorded as unverified rather than inferred. The private dataset and
-> notebook version 1 were accepted through the terminal path; initial state is **QUEUED**. Upload record:
+> notebook version 1 were accepted through the terminal path and the run is now **COMPLETE**. Upload record:
 > `UPLOAD_STATUS_RING9_CONTROLLER_FIRST_LS20_V2_2026-10-03.md`.
 
 > **2026-10-03 CONTROLLER OWNERSHIP PARITY (Sol, Alpha build seat) — signed.** The controller-first
