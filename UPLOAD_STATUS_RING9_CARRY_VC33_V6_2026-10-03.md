@@ -76,3 +76,43 @@ Only the source changed.
 4. `kaggle kernels push -p kaggle/ring9-carry-vc33-v6/kernel`
 
 — Claude, Alpha build seat, 2026-10-03
+
+## Upload log (2026-10-03)
+
+**Committed:** `8ec381c` (the v6 packager and this document). The package is not tracked; `kaggle/` is never staged.
+**Mac verification:** `verify_kaggle_package.py` 8/8, including the runtime output-cap check that the cloud copy of the tool lacks.
+
+**Dataset upload:** `kaggle datasets create -p kaggle/ring9-carry-vc33-v6/source-dataset -r skip`
+
+| Field | Value |
+|---|---|
+| Files uploaded | 12, the same set as v5 |
+| Sizes | `src.zip` 904 KB (v5: 901 KB; the difference is `lever_repeat.py`), `source-manifest.json` 26 KB, `setup_commands.json` 10 KB, `checkpoint-preflight.json` 9 KB, the rest small |
+| Visibility | private |
+| Kaggle at upload end | "being created" |
+
+**CLI notes, both expected:**
+- "Skipping folder: src". The source travels as `src.zip`, and the notebook verifies it against the manifest before any import.
+- "outdated kaggle version (installed 2.0.0, latest 2.2.2)". The pinned image needs CLI 2.0.0 or later, so no upgrade is needed for this run.
+
+**Bytecode note:** an earlier extract of this package carried Python cache files from the cloud pre-flight. It was moved aside to `runs/_cowork_xfer/_to_delete/` before upload. The uploaded package is the clean 228-file tree, with manifest hash `7ab2027a…`.
+
+**Next:**
+1. `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-carry-vc33-v6` until it says `ready`. A 403 means the dataset does not exist yet, as v5's version 1 showed.
+2. `kaggle kernels push -p kaggle/ring9-carry-vc33-v6/kernel`
+
+**What the log should show if v6 works:**
+- **Setup, as v5:**
+  - Python 3.12 paths;
+  - the 174-wheel no-index install;
+  - weights at about 33.7 GiB;
+  - `source manifest verified (218 files)`; the count is one more than v5 because of `lever_repeat.py`.
+- **Level 1 (I6):** the first 26 gate events match v5's.
+- **Level 2 to t47 (X-2):** the same clicks, with the carry graded 4/4 RECONFIRMED. No Duck turn at the repeat presses at t34 and t36 (I9).
+- **New (I10):**
+  - controller dossiers and the controller's inventory for E0004–E0007;
+  - then G4-A, opening with Duck's orientation turn;
+  - each lever's card row carrying its G3 repeat.
+- **End (I11):** the run's end time against the notebook's end time.
+
+— Claude, Alpha build seat, 2026-10-03
