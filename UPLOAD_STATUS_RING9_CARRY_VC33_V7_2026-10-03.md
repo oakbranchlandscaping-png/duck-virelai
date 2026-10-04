@@ -66,6 +66,7 @@ Only the source changed.
 | Check | Result |
 |---|---|
 | `verify_kaggle_package.py --source-export` (`ec8554d`) | **8/8**; the bundled source matches the commit export exactly (0 differences) |
+| The same check on the Mac with `main`'s verifier, which carries one extra check (the runtime output cap against the receipt, added in Sol's `a68043e`), using the export extracted to `runs/_cowork_xfer/r9r23/export_ec8554d` | **9/9** (run by Claude on the device; the Director repeats it at step 1) |
 | Export against the cloud R9-R23 tree | Identical |
 | Mount simulation in three layouts (nested, zip, direct), with both dependency datasets mounted | **All pass**: 200 actions, 10,800 s, gated, `vrfai/Qwen3.6-27B-FP8` |
 | Pre-flight `check_mu_partial_close_from_record.py`, on the **packaged** source with the v6 live record (run on a copy, so the package stays free of bytecode) | Rests at level 3, **G4.2-LEVER-ORBITS**, legal (PROBE). Duck's orientation turn is due. G3 closed **PARTIAL** with E0010–E0013 and E0015–E0017; E0028 is OPEN in mu (1 try, clicked owner E0071). Exit 0 |
@@ -109,3 +110,31 @@ Only the source changed.
 4. Run `kaggle kernels push -p kaggle/ring9-carry-vc33-v7/kernel`.
 
 — Claude, Alpha build seat, 2026-10-03
+
+## Upload log (2026-10-03, Director's terminal)
+
+| Step | Result |
+|---|---|
+| Mac verify (`main`'s verifier, `--source-export runs/_cowork_xfer/r9r23/export_ec8554d`) | **9/9**: source manifest 221 files, package manifest 228 files, `src.zip` 212 files, output-cap encoding `server_default` on both sides, secret scan clean, 0 diffs against the commit export |
+| Commit on `main` | `aaa4a91`: packager and this record, explicit paths, `kaggle/` not staged |
+| `kaggle datasets create -p kaggle/ring9-carry-vc33-v7/source-dataset -r skip` | 12 files uploaded, the same set as v6 |
+| Sizes | `src.zip` 910 KB (v6: 904 KB; the difference is the 3 new modules), `source-manifest.json` 27 KB, `setup_commands.json` 10 KB, `checkpoint-preflight.json` 10 KB, the rest small |
+| Visibility | private |
+| Kaggle at upload end | "being created" |
+
+**CLI notes, both expected, as in v6:**
+- "Skipping folder: src". The source travels as `src.zip`, which the notebook checks against the manifest before importing anything.
+- "outdated kaggle version (installed 2.0.0, latest 2.2.2)". No upgrade is needed.
+
+**Next:**
+1. `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-carry-vc33-v7` until it says `ready`.
+2. `kaggle kernels push -p kaggle/ring9-carry-vc33-v7/kernel`
+
+**What the log should show if v7 works:**
+- **Setup:** `source manifest verified (221 files)`. That is 3 more than v6, from the 3 new modules.
+- **Levels 1 and 2:** as in v6 (I6).
+- **Level 3 (I12):**
+  - after G3's sweep, the controller writes a PARTIAL inventory, with no Duck turn: 7 levers, and E0028 in mu;
+  - then G4-A, with Duck's orientation turn.
+- **End (I13):** before any stop on level 3, a mu return. E0028 should settle ABSENT.
+- **End time:** the run's end time against the notebook's end time (I11).
