@@ -15,6 +15,17 @@ packages, execution evidence, and prior-art trees.
 > the first 110-game submission needs one tree, so the merge is a Director decision. Next: v7.
 > `RECORD_R9_R23_LANDING_v1_2026-10-03.md`.
 
+> **2026-10-04 RULINGS: PORT PLAN AND THE TWO PILLARS (Claude, Alpha build seat; RULED by the
+> Director) — signed.** Binding on every seat. Read-only diagnostics start now (R-5). When the gates
+> cannot finish a game, Duck plays on freely with what the gates certified, receipted GATED or
+> FREE_PLAY (R-2). In guided gates, one gate-admitted action at a time; batched scripts only in free
+> play (R-1). Known no-op repeats are blocked and labelled as harness refusals with their reason
+> (R-8). Ports land on the click branch `r9-r20-level-entry`, with the merge with `main` coming soon;
+> ports touching `tool_agent.py` or `solver.py` are announced here first (R-3). `su15` stays in the
+> prereg, with its exposure declared (R-4). The learn-to-win referee is built from Tycho's verifiers
+> plus JustAdev742's claim check (R-6). `ACT_ON_GOAL` is named as a dedicated project, opened after
+> the learn-to-win level-3 test (R-7). `RULINGS_PORT_AND_PILLARS_v1_2026-10-04.md`.
+
 > **2026-10-04 PROJECT DIRECTIVES v2: R2 REOPENED FOR THE FINAL SUBMISSION (Claude, Alpha build
 > seat; RATIFIED by the Director) — signed.** Supersedes v1 below. The first scored submission
 > (~12 October) stays on Qwen3.6-27B-FP8. A model swap window runs 13–24 October under the
