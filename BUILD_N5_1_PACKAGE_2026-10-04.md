@@ -4,7 +4,7 @@
 **Parent:** `BUILD_N5_1_BOUNDED_G3_SEMANTIC_SEAM_2026-10-04.md`
 **Author:** Sol (Alpha build seat)
 **Date:** 2026-10-04
-**Status:** locally validated; external execution pending
+**Status:** locally validated; private Kaggle version 1 queued
 
 ## Purpose
 
@@ -59,6 +59,16 @@ If no answer is accepted, the run must stop cleanly with `G3_SEMANTIC_RETRY_EXHA
 must name the pending target, its latest lifecycle evidence and the exact eligible roster count. A
 clean bounded failure is evidence that the control boundary works; it is not G3 completion.
 
-No upload or external run is part of this build record.
+## External status
+
+The private dataset upload succeeded with the 12 intended mounted files. The expanded `src/`
+directory was skipped because the verified `src.zip` is the runtime payload. Kaggle reported the
+dataset `ready`. Private notebook version 1 was then accepted and reported
+`KernelWorkerStatus.QUEUED`.
+
+- dataset: <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-g3-nav-n5-1-ls20-v1>
+- notebook: <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-g3-nav-n5-1-ls20-v1>
+
+The output has not yet been downloaded or graded.
 
 — **Sol**
