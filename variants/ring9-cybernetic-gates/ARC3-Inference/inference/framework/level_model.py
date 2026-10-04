@@ -91,6 +91,7 @@ def freeze_level(machine: Any, outcome: Mapping[str, Any]) -> dict[str, Any]:
         "levers": levers, "orbit_views": _orbit_views(machine, levers), "win": _win(machine, outcome, level, levers),
         "lives": [item for item in machine.lives.summary() if item.get("level") == level],
         "notes": [note.line() for note in getattr(machine.annotations, "notes", ())],
+        "mu": machine.mu.snapshot() if hasattr(machine, "mu") else [],  # R9-R23 D16: the level's open questions
     }
 
 

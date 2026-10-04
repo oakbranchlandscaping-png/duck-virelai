@@ -69,6 +69,9 @@ from inference.framework.lever_attribution import (
 from inference.framework.entity_observation import EntityLedger, EntityTransition, ObservationScope
 from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
+from inference.framework.mu_bucket import MuBucket
+from inference.framework.g3_inventory import check_inventory_claims
+from inference.framework import mu_return
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
@@ -2418,6 +2421,7 @@ class _LeverTarget:
         self._pending_dossier: dict[str, str] | None = None
         self._confirmation_records: list[dict[str, Any]] = []
         self._repeat_readings: dict[str, dict[str, Any]] = {}  # R9-R22 D7: entity -> its witness's repeat press
+        self._mu_revisit: list[str] = []  # R9-R23 D14: mystery objects G3 retries on a changed board
         self._deferred_observations: list[dict[str, Any]] = []
         self.entity_ledger: EntityLedger | None = None
         self.lifecycle_journal: LifecycleJournal | None = None
@@ -2849,6 +2853,8 @@ class _LeverTarget:
                 ),
                 target=target,
             )
+        if self._mu_revisit:
+            return mu_return.revisit_probe(self, ledger, self._mu_revisit[0])
         if self._phase == "CLICK" and self._target_index >= len(candidates):
             if self._world_type == "HYBRID":
                 self._phase = "NAV"
@@ -2947,7 +2953,7 @@ class _LeverTarget:
         assert journal is not None
         entity_id = entity_id or str((probe.target or {}).get("entity_id") or "")
         if entity_id and not is_confirmation and journal.entities[entity_id].state in {
-            "UNTOUCHED", "AMBIGUOUS", "NO_RESPONSE_YET"
+            "UNTOUCHED", "AMBIGUOUS", "NO_RESPONSE_YET", "REOPENED"
         }:
             journal.attempt(entity_id, evidence_ref=evidence_id)
         changed = {
@@ -3181,6 +3187,7 @@ class _LeverTarget:
             )
         ):
             self._target_index += 1
+        mu_return.after_g3_outcome(self, probe, event, lossless, scope.pre_action_owner_entity_id)
         event["scheduler"] = {
             "phase": self._phase,
             "target_index": self._target_index,
@@ -3276,83 +3283,24 @@ class _LeverTarget:
             raise GateContractError(
                 f"G3 coverage cannot be reported with unbounded probe results: {unbounded!r}."
             )
-        lever_entities = _strings(raw.get("lever_entities", []), "lever_entities", required=False)
-        clean_null_entities = _strings(
-            raw.get("clean_null_entities", []), "clean_null_entities", required=False
-        )
-        ambiguous_entities = _strings(
-            raw.get("ambiguous_entities", []), "ambiguous_entities", required=False
-        )
-        witnessed = {
-            entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state == "G4-READY"
-        }
-        clean_null = {
-            entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state == "G3-CLOSED"
-            and not journal.entities[entity_id].witness_refs
-        }
-        ambiguous = {
-            entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state in {"AMBIGUOUS", "BUDGET_STOPPED"}
-        }
-        if set(lever_entities) != witnessed:
-            raise GateContractError(
-                "lever_entities must exactly match the witnessed, explained G4-ready entities."
-            )
-        if set(clean_null_entities) != clean_null:
-            raise GateContractError(
-                "clean_null_entities must exactly match entities closed by scoped null evidence."
-            )
-        if set(ambiguous_entities) != ambiguous:
-            raise GateContractError(
-                "ambiguous_entities must exactly match explicitly bounded unresolved entities."
-            )
-        if not witnessed and not ambiguous:
-            raise GateContractError(
-                "The completed interaction record contains no witnessed lever; G3 remains unanswered "
-                "and the probe roster, contact execution, or attribution must be repaired."
-            )
+        known = {item.evidence_ref for items in self.evidence._attributions.values() for item in items}
+        (lever_entities, clean_null_entities, ambiguous_entities, witnessed, clean_null, ambiguous,
+         evidence_refs) = check_inventory_claims(
+            raw, journal, expected_entities, self._bounded_ambiguities, known, _strings, GateContractError)
         explanation = str(raw.get("explanation") or raw.get("mechanism") or "").strip()
-        evidence_refs = _strings(raw.get("evidence_refs"), "evidence_refs")
         competing = _strings(raw.get("competing_models"), "competing_models")
         falsifier = str(raw.get("falsifier") or "").strip()
-        if not explanation or not evidence_refs or not competing or not falsifier:
-            raise GateContractError(
-                "LeverInventory requires explanation, evidence_refs, competing_models, and falsifier."
-            )
-        required_refs = {
-            ref
-            for entity_id in witnessed
-            for ref in journal.entities[entity_id].witness_refs
-        } | {
-            journal.entities[entity_id].events[-1].evidence_ref
-            for entity_id in clean_null
-            if journal.entities[entity_id].events
-        } | {
-            self._bounded_ambiguities[entity_id]["evidence_ref"]
-            for entity_id in ambiguous
-        }
-        known_refs = {
-            item.evidence_ref
-            for member_id in self.evidence._attributions
-            for item in self.evidence._attributions[member_id]
-        } | required_refs
-        if set(evidence_refs) != required_refs or not set(evidence_refs) <= known_refs:
-            raise GateContractError(
-                "G3 inventory evidence_refs must exactly cover positive witnesses, scoped nulls, "
-                "and bounded ambiguities."
-            )
         answer_id = str(raw.get("answer_id") or "G3-INVENTORY-" + hashlib.sha256(
             _canonical({"entities": lever_entities, "evidence": evidence_refs}).encode()
         ).hexdigest()[:16])
-        answer_kind = "G3_BOUNDED_COVERAGE_REPORT" if ambiguous else "LEVER_INVENTORY"
+        partial = bool(ambiguous and witnessed)  # R9-R23 D13: mystery objects never block (M-2)
+        answer_kind = "G3_BOUNDED_COVERAGE_REPORT" if ambiguous and not partial else "LEVER_INVENTORY"
         answer = GateAnswer(
             answer_id=answer_id,
             answer_kind=answer_kind,
             subjects=(
                 tuple(lever_entities + clean_null_entities + ambiguous_entities)
-                if ambiguous else lever_entities
+                if ambiguous and not partial else lever_entities
             ),
             mechanism=explanation,
             action_laws={"probe_protocol": str(self._complete_reason)},
@@ -3368,11 +3316,12 @@ class _LeverTarget:
             },
             limitations=_strings(raw.get("limitations", []), "limitations", required=False),
         )
-        if ambiguous:
+        if ambiguous and not partial:
             self._bounded_coverage_answer = answer
             self.revision += 1
             return answer
         self._inventory_answer = answer
+        mu_return.settle_after_inventory(self)
         self.machine.target_journal.put(MemoryProduct(
             product_id=answer_id,
             product_type="LeverInventory",
@@ -3383,7 +3332,8 @@ class _LeverTarget:
                 "probe_protocol": self._complete_reason,
                 "lever_entities": list(lever_entities),
                 "clean_null_entities": list(clean_null_entities),
-                "ambiguous_entities": [],
+                "ambiguous_entities": sorted(ambiguous),
+                "closure": "PARTIAL" if partial else "COMPLETE",
                 "ranked_target_count": len(self._ensure_frontier()),
                 "frontier_accounting": self._frontier_snapshot(),
                 "lifecycle_journal": journal.snapshot(),
@@ -4034,6 +3984,7 @@ class _ReactionTarget:
         self._anatomies: dict[str, LeverEffectAnatomy] = {}
         self._answers: dict[str, LeverReactionAnswer] = {}
         self._ordered_entities: tuple[str, ...] = ()
+        self._seeded_from: str | None = None  # R9-R23 D15: a revised G3 inventory adds late levers
 
     def _lever_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(LEVER_GATE_ID)
@@ -4042,7 +3993,7 @@ class _ReactionTarget:
         return product
 
     def _seed(self) -> None:
-        if self._ordered_entities:
+        if mu_return.seeded(self, LEVER_GATE_ID):
             return
         product = self._lever_product()
         entities = tuple(str(item) for item in product.payload.get("lever_entities") or ())
@@ -4058,6 +4009,9 @@ class _ReactionTarget:
         mask = self.machine.counter.mask_law
         anatomies: dict[str, LeverEffectAnatomy] = {}
         for entity_id in entities:
+            if entity_id in self._anatomies:  # kept across a revised inventory (R9-R23 D15)
+                anatomies[entity_id] = self._anatomies[entity_id]
+                continue
             lifecycle = journal.entities.get(entity_id)
             if lifecycle is None or lifecycle.state != "G4-READY":
                 raise GateContractError(f"G4 subject {entity_id!r} is not G4-ready in the G3 lifecycle.")
@@ -4099,8 +4053,7 @@ class _ReactionTarget:
                 )
             except G4ReactionError as exc:
                 raise GateContractError(f"G4 anatomy rejected for {entity_id}: {exc}") from exc
-        self._ordered_entities = entities
-        self._anatomies = anatomies
+        self._ordered_entities, self._anatomies, self._seeded_from = entities, anatomies, product.product_id
 
     def _current_entity(self) -> str | None:
         self._seed()
@@ -4108,8 +4061,10 @@ class _ReactionTarget:
 
     def assess(self) -> GateAssessment:
         self._seed()
-        product = self.machine.target_journal.active_product(REACTION_GATE_ID)
         current = self._current_entity()
+        if current is None and self._answers and self.machine.target_journal.active_product(REACTION_GATE_ID) is None:
+            self._emit_anatomy_product()  # every lever explained, the product invalidated upstream (D15)
+        product = self.machine.target_journal.active_product(REACTION_GATE_ID)
         if product is not None:
             disposition = "SATISFIED"
             unmet: tuple[str, ...] = ()
@@ -4157,25 +4112,28 @@ class _ReactionTarget:
         self._answers[current] = answer
         self.revision += 1
         if len(self._answers) == len(self._ordered_entities):
-            product_id = "G4-ANATOMY-" + hashlib.sha256(_canonical({
-                "entities": self._ordered_entities,
-                "answers": [self._answers[item].answer_id for item in self._ordered_entities],
-            }).encode()).hexdigest()[:16]
-            self.machine.target_journal.put(MemoryProduct(
-                product_id=product_id,
-                product_type="LeverEffectAnatomySet",
-                target_id=REACTION_GATE_ID,
-                revision=self.revision,
-                payload={
-                    "scope": "G4.0_BINDING_AND_G4.1_EFFECT_ANATOMY",
-                    "lever_entities": list(self._ordered_entities),
-                    "anatomies": [anatomy_payload(self._anatomies[item]) for item in self._ordered_entities],
-                    "answers": [asdict(self._answers[item]) for item in self._ordered_entities],
-                    "open_questions": list(self._anatomies[self._ordered_entities[0]].open_questions),
-                },
-                dependencies=(LEVER_GATE_ID,),
-            ))
+            self._emit_anatomy_product()
         return answer
+
+    def _emit_anatomy_product(self) -> None:
+        product_id = "G4-ANATOMY-" + hashlib.sha256(_canonical({
+            "entities": self._ordered_entities,
+            "answers": [self._answers[item].answer_id for item in self._ordered_entities],
+        }).encode()).hexdigest()[:16]
+        self.machine.target_journal.put(MemoryProduct(
+            product_id=product_id,
+            product_type="LeverEffectAnatomySet",
+            target_id=REACTION_GATE_ID,
+            revision=self.revision,
+            payload={
+                "scope": "G4.0_BINDING_AND_G4.1_EFFECT_ANATOMY",
+                "lever_entities": list(self._ordered_entities),
+                "anatomies": [anatomy_payload(self._anatomies[item]) for item in self._ordered_entities],
+                "answers": [asdict(self._answers[item]) for item in self._ordered_entities],
+                "open_questions": list(self._anatomies[self._ordered_entities[0]].open_questions),
+            },
+            dependencies=(LEVER_GATE_ID,),
+        ))
 
     def reaction_view(self, entity_id: str) -> dict[str, Any]:
         self._seed()
@@ -4322,6 +4280,7 @@ class _LeverStudyTarget:
         # Set once a level transition occurs; closes this level's G4 study (G9 owns transfer).
         self._level_closed: dict[str, Any] | None = None
         self._life_restudies: dict[str, int] = {}  # D4: same-level deaths per lever
+        self._seeded_from: str | None = None  # R9-R23 D15: a revised G4.1 product adds late levers
 
     def _reaction_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
@@ -4330,7 +4289,7 @@ class _LeverStudyTarget:
         return product
 
     def _seed(self) -> None:
-        if self._ordered_entities:
+        if mu_return.seeded(self, REACTION_GATE_ID):
             return
         product = self._reaction_product()
         interventions: dict[str, dict[str, Any]] = {}
@@ -4346,8 +4305,10 @@ class _LeverStudyTarget:
             interventions[entity_id] = _normalize_action_payload(intervention)
         if not order:
             raise GateContractError("G4-A requires at least one confirmed lever.")
-        self._ordered_entities = tuple(order)
-        self._interventions = interventions
+        # Studied levers keep their runs; a late lever joins the queue (R9-R23 D15).
+        self._ordered_entities = (*self._ordered_entities, *(item for item in order if item not in self._ordered_entities))
+        self._interventions.update(interventions)
+        self._seeded_from = product.product_id
 
     # ---- state -------------------------------------------------------------------------
 
@@ -4401,8 +4362,10 @@ class _LeverStudyTarget:
 
     def assess(self) -> GateAssessment:
         self._seed()
-        product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         pending = self._pending()
+        if not pending and self._answers and self.machine.target_journal.active_product(ORBIT_GATE_ID) is None:
+            self._emit_orbit_product()  # every lever studied, the product invalidated upstream (D15)
+        product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         awaiting = self._awaiting_answer()
         if not pending:
             disposition = "SATISFIED" if product is not None else "ANSWER_REQUIRED"
@@ -4847,6 +4810,7 @@ class CyberneticGateMachine:
     def _build_level(self, valid_actions: Iterable[Any], grid: Sequence[Sequence[int]], step: int, prior: Any = None) -> None:
         """Every LEVEL-tier field, fresh (R9-R17); ``prior``'s levers become this level's carry predictions (R9-R18)."""
         self.carry = CarryLedger(prior, grid, step)
+        self.mu = MuBucket()  # R9-R23: this level's mystery objects (RULING_MU_BUCKET_v1)
         self.annotations = AnnotationLane()  # Duck's UNCERTIFIED notes (D6); never read by a gate
         self.ego = EgoGateMachine(valid_actions=valid_actions, initial_grid=grid, observed_through_step=step)
         self.counter = CounterGateMachine(affordances=self.ego.affordances, initial_grid=grid, observed_through_step=step)

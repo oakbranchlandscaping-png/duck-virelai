@@ -95,6 +95,15 @@ def ladder_end(machine: Any) -> str | None:
     return None
 
 
+def return_to_mu_if_stuck(machine: Any) -> str | None:
+    """M-4 (RULING_MU_BUCKET_v1): before a planned stop or a dead state, retry mu on a changed board."""
+    from inference.framework.mu_return import return_to_mu
+
+    stuck = machine.target_router.current() is None or not machine.legal_move_status().get("legal", True)
+    retry = return_to_mu(machine) if stuck else []
+    return f"mu return on a changed board: retrying {', '.join(retry)}" if retry else None
+
+
 def next_owned_step(
     machine: Any, *, refused: frozenset | set = frozenset(), rerun: Mapping[str, Any] | None = None,
 ) -> OwnedStep:
@@ -314,15 +323,18 @@ def _anatomy_answer(template: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _inventory_answer(template: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:
-    if template.get("ambiguous_entities"):
-        return None, "G3 has bounded ambiguity: the coverage report is Duck's"
     levers, nulls = list(template["lever_entities"]), list(template.get("clean_null_entities") or ())
+    mu = list(template.get("ambiguous_entities") or ())
+    if mu and not levers:
+        return None, "G3 has bounded ambiguity and no certified lever: the coverage report is Duck's"
     return {
         **template,
-        "explanation": (
-            f"The complete click roster found {len(levers)} levers that rewrite their own cells when "
-            f"clicked ({', '.join(levers)}), and {len(nulls)} objects closed with scoped null "
-            "evidence; counter changes were excluded by the mask as bookkeeping."
+        "explanation": (  # R9-R23 D17: levers here may act locally or remotely
+            f"The complete click roster found {len(levers)} levers whose clicks produce attributed "
+            f"changes ({', '.join(levers)}) and {len(nulls)} objects closed with scoped null evidence"
+            + (f"; {len(mu)} mystery objects ({', '.join(mu)}) are set aside in the mu bucket, to retry "
+               "when the board has changed (G3 closes PARTIAL)" if mu else "")
+            + "; counter changes were excluded by the mask as bookkeeping."
         ),
         "competing_models": ["An object closed as null may respond from a different world state."],
         "falsifier": "A clean-null object responds to the same click from the same masked state.",

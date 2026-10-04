@@ -56,9 +56,12 @@ def run_controller_turn(
     session: ControllerSession = agent._controller
     if not session.enabled or agent._step_env_callback is None:
         return None
-    from inference.framework.controller_executor import ANSWER, DUCK, ladder_end, next_owned_step
+    from inference.framework.controller_executor import ANSWER, DUCK, ladder_end, next_owned_step, return_to_mu_if_stuck
 
     machine = agent._ensure_gate_machine(state_path)
+    retried = return_to_mu_if_stuck(machine)  # R9-R23 D14: the mu bucket before any stop
+    if retried is not None:
+        _log(analyzer_log, retried)
     end = ladder_end(machine)
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
