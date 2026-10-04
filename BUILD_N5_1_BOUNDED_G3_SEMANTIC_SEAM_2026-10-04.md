@@ -4,7 +4,7 @@
 **Parent:** `REVIEW_RING9_G3_NAV_N5_LS20_V1_2026-10-04.md`
 **Author:** Sol (Alpha build seat)
 **Date:** 2026-10-04
-**Status:** built and locally validated; commit, packaging and live confirmation pending
+**Status:** source committed and package locally validated; live confirmation pending
 
 ## Purpose
 
@@ -75,10 +75,12 @@ with 14 existing dependency deprecation warnings. The complete Ring 9 source sui
 tests** in 551.07 seconds with the same 14 warnings. A final seven-test seam check passes after the
 image-omission refinement. Ruff passes on every changed source and test file.
 
-No package has been built and no external run has been started. The shared repository's Git index
-lock is held open by the Claude VM, so this work remains uncommitted to avoid disturbing the other
-alpha builder. Once the lock clears, commit only the N5/N5.1 source, tests and signed records before
-freezing a package.
+The source and signed records are committed as `14f6459`. The frozen package is
+`kaggle/ring9-g3-nav-n5-1-ls20-v1`, built from that exact commit with a 60-action and 700-second
+boundary. Its 223-entry source manifest and 230-entry package manifest verify cleanly; the four
+changed runtime files are byte-identical to the committed source. The packaged runtime passes the
+59 tests that directly exercise the semantic seam and its surrounding NAV behavior. No external
+run has been started.
 
 The next live checkpoint should reuse ls20 with a short boundary. It passes when Duck accepts E0005
 and the controller reuses that understanding for a sibling; if Duck cannot answer, it must stop
