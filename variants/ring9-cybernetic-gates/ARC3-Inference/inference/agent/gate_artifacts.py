@@ -207,7 +207,7 @@ def record_g3_run_outcome(
     product = str(product_type or "").strip().upper()
     allowed = {
         "G3_COMPLETE", "G3_BUDGET_STOPPED", "G3_SEMANTIC_RETRY_EXHAUSTED",
-        "G3_BOUNDARY_DEFERRED",
+        "G3_ROUTE_RETRY_EXHAUSTED", "G3_BOUNDARY_DEFERRED",
     }
     if product not in allowed:
         raise ValueError(f"unknown G3 run product: {product_type!r}")

@@ -59,6 +59,16 @@ def test_semantic_retry_exhaustion_is_not_completion(tmp_path):
     assert record["g4_legal_open"] is False
 
 
+def test_route_retry_exhaustion_is_not_completion(tmp_path):
+    machine = _machine()
+    record = record_g3_run_outcome(
+        _state_path(tmp_path), machine, "G3_ROUTE_RETRY_EXHAUSTED",
+        detail="bounded route choice did not produce an action",
+    )
+    assert record["product"] == "G3_ROUTE_RETRY_EXHAUSTED"
+    assert record["g4_legal_open"] is False
+
+
 def test_answer_required_stop_recovers_target_and_latest_full_snapshot_event(tmp_path):
     snapshot = {
         "lifecycle_journal": {

@@ -552,8 +552,10 @@ class _HarnessGameSession:
                     # product. Finalization must not replace it with a generic budget stop.
                     continue_record = not (
                         isinstance(existing_product, dict)
-                        and existing_product.get("product")
-                        == "G3_SEMANTIC_RETRY_EXHAUSTED"
+                        and existing_product.get("product") in {
+                            "G3_SEMANTIC_RETRY_EXHAUSTED",
+                            "G3_ROUTE_RETRY_EXHAUSTED",
+                        }
                     )
 
                     boundary = _is_engine_game_over(self.game) or bool(
