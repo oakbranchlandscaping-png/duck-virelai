@@ -81,6 +81,22 @@ version 1 was then accepted and initially reported `KernelWorkerStatus.QUEUED`.
 - dataset: <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-g3-nav-n5-ls20-v1>
 - notebook: <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-g3-nav-n5-ls20-v1>
 
-Behavior remains ungraded until the completed notebook artifacts are downloaded and reviewed.
+## Live result
+
+Notebook version 1 completed and its artifacts were downloaded to
+`runs/kaggle-ring9-g3-nav-n5-ls20-v1`. The downloaded execution receipt is byte-identical to the
+packaged receipt.
+
+The run is a partial N5 pass. It validated deterministic action ownership, G0-G2 closure and the
+84-cell counter mask, pre-execution roster accounting, physical NAV contact, direct floor evidence,
+and an explicit `G3_BUDGET_STOPPED` product with G4 closed. It did not accept the first compact G3
+reachability explanation, so terminal unreachable persistence, sibling semantic reuse, complete
+roster disposition, and G4 opening remain unproven.
+
+The live run exposed two repair classes. First, the two-request semantic allowance resets across
+outer solver turns, allowing the same 40-word checkpoint to consume the rest of the 1,200-second
+budget. Second, the controlled-stop artifact loses the pending target and latest evidence and
+mislabels the lifecycle entity count as the eligible roster count. The complete evidence and N5.1
+repair plan are recorded in `REVIEW_RING9_G3_NAV_N5_LS20_V1_2026-10-04.md`.
 
 — **Sol**

@@ -17,17 +17,7 @@ from inference.agent.runtime_state import RUNTIME_STATE_FILENAME, load_runtime_s
 
 def _write_g3_target_ledger(state_path: Path, gate_machine: Any) -> None:
     """Write one current, complete object roster instead of requiring trace reconstruction."""
-    items: list[dict[str, Any]] = []
-    offset = 0
-    world_type = None
-    while True:
-        page = gate_machine.inventory_view(offset=offset, limit=25)
-        world_type = world_type or page.get("world_type")
-        items.extend(page.get("items") or ())
-        next_offset = (page.get("page") or {}).get("next_offset")
-        if next_offset is None:
-            break
-        offset = int(next_offset)
+    items, world_type = _g3_target_items(gate_machine)
     ledger_path = state_path.with_name(
         state_path.name.replace(
             f"_{RUNTIME_STATE_FILENAME}", "_g3_target_ledger.json"
@@ -41,6 +31,22 @@ def _write_g3_target_ledger(state_path: Path, gate_machine: Any) -> None:
         "item_count": len(items),
         "items": items,
     }, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _g3_target_items(gate_machine: Any) -> tuple[list[dict[str, Any]], Any]:
+    """Return the exported roster used by both the ledger and bounded-run audit."""
+    items: list[dict[str, Any]] = []
+    offset = 0
+    world_type = None
+    while True:
+        page = gate_machine.inventory_view(offset=offset, limit=25)
+        world_type = world_type or page.get("world_type")
+        items.extend(page.get("items") or ())
+        next_offset = (page.get("page") or {}).get("next_offset")
+        if next_offset is None:
+            break
+        offset = int(next_offset)
+    return items, world_type
 
 
 def record_probe_outcome(
@@ -173,6 +179,18 @@ def _g3_outcome_path(state_path: Path) -> Path:
     )
 
 
+def load_g3_run_outcome(state_path: Path) -> dict[str, Any] | None:
+    """Load the current explicit G3 product without reconstructing trace state."""
+    path = _g3_outcome_path(state_path)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    return dict(payload) if isinstance(payload, Mapping) else None
+
+
 def record_g3_run_outcome(
     state_path: Path,
     gate_machine: Any,
@@ -200,6 +218,14 @@ def record_g3_run_outcome(
     entities = entities if isinstance(entities, Mapping) else {}
     state_counts = journal.get("state_counts") if isinstance(journal, Mapping) else {}
     state_counts = state_counts if isinstance(state_counts, Mapping) else {}
+    try:
+        roster_items, _world_type = _g3_target_items(gate_machine)
+    except Exception:
+        roster_items = []
+    eligible_items = [
+        item for item in roster_items
+        if isinstance(item, Mapping) and item.get("kind") == "ELIGIBLE_TARGET"
+    ]
     pending_target: dict[str, Any] | None = None
     try:
         capability = gate_machine.next_probe_capability()
@@ -213,12 +239,57 @@ def record_g3_run_outcome(
                     "rank", "entity_id", "member_id", "integer", "shape_family",
                 ) if key in target
             }
+    scheduler = snapshot.get("scheduler") if isinstance(snapshot, Mapping) else {}
+    scheduler = scheduler if isinstance(scheduler, Mapping) else {}
+    if pending_target is None:
+        pending = next(
+            (
+                scheduler.get(name)
+                for name in ("pending_reachability", "pending_dossier", "pending_confirmation")
+                if isinstance(scheduler.get(name), Mapping)
+            ),
+            None,
+        )
+        if isinstance(pending, Mapping):
+            pending_target = {
+                "entity_id": pending.get("target_entity_id"),
+                "member_id": pending.get("target_member_id"),
+            }
+            matched = next(
+                (
+                    item for item in eligible_items
+                    if (
+                        not pending_target.get("entity_id")
+                        or item.get("entity_id") == pending_target["entity_id"]
+                    )
+                    and (
+                        not pending_target.get("member_id")
+                        or item.get("target_member_id") == pending_target["member_id"]
+                    )
+                ),
+                None,
+            )
+            if isinstance(matched, Mapping):
+                visual = matched.get("visual_type")
+                visual = visual if isinstance(visual, Mapping) else {}
+                pending_target.update({
+                    "rank": matched.get("eligible_rank"),
+                    "integer": visual.get("integer"),
+                    "shape_family": visual.get("shape_family"),
+                })
+            pending_target = {
+                key: value for key, value in pending_target.items() if value is not None
+            } or None
     last_evidence: dict[str, Any] | None = None
     last_event_serial = -1
     for entity_id, row in sorted(entities.items()):
         if not isinstance(row, Mapping):
             continue
         event = row.get("last_event")
+        if not isinstance(event, Mapping):
+            events = row.get("events")
+            if isinstance(events, (list, tuple)) and events:
+                event = events[-1]
         if isinstance(event, Mapping):
             event_id = str(event.get("event_id") or "")
             try:
@@ -248,8 +319,8 @@ def record_g3_run_outcome(
             str(key): int(value) for key, value in sorted(state_counts.items())
             if isinstance(value, (int, float))
         },
-        "eligible_roster_count": int(journal.get("entity_count") or 0),
-        "scheduler": dict(snapshot.get("scheduler") or {}),
+        "eligible_roster_count": len(eligible_items),
+        "scheduler": dict(scheduler),
     }
     path = _g3_outcome_path(state_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -262,4 +333,7 @@ def record_g3_run_outcome(
     return record
 
 
-__all__ = ["record_gate_answer", "record_g3_run_outcome", "record_probe_outcome"]
+__all__ = [
+    "load_g3_run_outcome", "record_gate_answer", "record_g3_run_outcome",
+    "record_probe_outcome",
+]

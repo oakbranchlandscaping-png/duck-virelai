@@ -154,3 +154,43 @@ def test_openrouter_request_and_response_bind_serving_identity(monkeypatch):
     assert result.model_id == "qwen/qwen3.6-27b"
     assert result.routed_provider == "DeepInfra"
     assert result.response_id == "gen-fixture"
+
+
+def test_semantic_checkpoint_request_overrides_disable_thinking_and_require_tool(monkeypatch):
+    response = _response(
+        200,
+        {
+            "choices": [{
+                "message": {"role": "assistant", "content": "ready"},
+                "finish_reason": "stop",
+            }],
+            "usage": {"total_tokens": 12},
+        },
+    )
+    calls = []
+    monkeypatch.setattr(
+        "inference.agent.tool_agent.requests.post",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or response,
+    )
+    agent = ToolAgent(
+        model="fixture-model", provider="vllm",
+        base_url="http://127.0.0.1:8000/v1", api_key="fixture",
+    )
+    agent._chat_completion(
+        [{"role": "user", "content": "answer the certified checkpoint"}],
+        tools=[{
+            "type": "function",
+            "function": {
+                "name": "python", "description": "fixture",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }],
+        tool_choice_override="required",
+        max_output_tokens_override=256,
+        thinking_override=False,
+    )
+
+    payload = calls[0][1]["json"]
+    assert payload["tool_choice"] == "required"
+    assert payload["max_tokens"] == 256
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}

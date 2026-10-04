@@ -2,7 +2,7 @@
 
 **Author:** Sol (Alpha build seat)
 **Date:** 2026-10-04
-**Status:** private notebook version 1 queued
+**Status:** private notebook version 1 completed and reviewed; partial checkpoint pass
 
 - Source commit: `c636ba7`
 - Package commit before upload record: `a54e0c6`
@@ -24,5 +24,14 @@ Notebook completion is not a behavioral pass. On completion, download artifacts 
 N5 criteria: G0-G2 closure and mask, roster accounting, controller ownership, target dispositions,
 terrain evidence, stable unreachable rows, and the explicit G3 completion or bounded-stop product.
 Do not grade G4 comprehension, score, or win discovery.
+
+## Completion update
+
+The notebook completed in 20m 2s with 49 controller-owned environment actions and stopped at the
+1,200-second behavior boundary. The run passed G0-G2 closure and masking, roster creation,
+controller ownership, physical-contact initiation, floor evidence, and explicit bounded-stop
+reporting. It did not complete the roster or accept the first semantic reachability checkpoint.
+
+Review: `REVIEW_RING9_G3_NAV_N5_LS20_V1_2026-10-04.md`.
 
 — **Sol**

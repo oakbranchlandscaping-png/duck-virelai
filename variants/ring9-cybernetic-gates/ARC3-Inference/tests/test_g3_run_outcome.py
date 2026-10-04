@@ -25,6 +25,7 @@ def test_bounded_stop_is_explicit_and_reloadable(tmp_path):
     assert record["product"] == "G3_BUDGET_STOPPED"
     assert record["g4_legal_open"] is False
     assert record["pending_target"]["entity_id"]
+    assert record["eligible_roster_count"] == 3
     assert record["remaining_roster_counts"]["UNTOUCHED"] == 3
     reloaded = json.loads((tmp_path / "game_g3_run_outcome.json").read_text())
     assert reloaded == record
@@ -56,3 +57,58 @@ def test_semantic_retry_exhaustion_is_not_completion(tmp_path):
     )
     assert record["product"] == "G3_SEMANTIC_RETRY_EXHAUSTED"
     assert record["g4_legal_open"] is False
+
+
+def test_answer_required_stop_recovers_target_and_latest_full_snapshot_event(tmp_path):
+    snapshot = {
+        "lifecycle_journal": {
+            "entity_count": 2,
+            "state_counts": {"ATTEMPTED": 1, "UNTOUCHED": 1},
+            "entities": {
+                "E0005": {
+                    "state": "ATTEMPTED",
+                    "events": [{
+                        "event_id": "LC-00007", "entity_id": "E0005",
+                        "from_state": "UNTOUCHED", "to_state": "ATTEMPTED",
+                        "evidence_ref": "E-latest", "actor": "G3_ROUTER",
+                        "reason": "authorized target attempt",
+                    }],
+                },
+                "E0006": {"state": "UNTOUCHED", "events": []},
+            },
+        },
+        "scheduler": {
+            "pending_reachability": {
+                "target_entity_id": "E0005", "target_member_id": "M0019",
+            },
+        },
+    }
+    rows = [{
+        "kind": "ELIGIBLE_TARGET", "eligible_rank": 5,
+        "entity_id": "E0005", "target_member_id": "M0019",
+        "visual_type": {"integer": 8, "shape_family": "SOLID_RECTANGLE"},
+    }]
+    machine = SimpleNamespace(
+        _adapters={"G3-LEVERS": SimpleNamespace(snapshot=lambda: snapshot)},
+        gate_id="G3-LEVERS",
+        next_probe_capability=lambda: None,
+        inventory_view=lambda **_kwargs: {
+            "world_type": "NAVIGATION", "items": rows,
+            "page": {"next_offset": None},
+        },
+    )
+
+    record = record_g3_run_outcome(
+        _state_path(tmp_path), machine, "G3_SEMANTIC_RETRY_EXHAUSTED",
+    )
+
+    assert record["pending_target"] == {
+        "entity_id": "E0005", "member_id": "M0019", "rank": 5,
+        "integer": 8, "shape_family": "SOLID_RECTANGLE",
+    }
+    assert record["last_accepted_evidence"] == {
+        "entity_id": "E0005", "event_id": "LC-00007",
+        "to_state": "ATTEMPTED", "evidence_ref": "E-latest",
+        "reason": "authorized target attempt",
+    }
+    assert record["eligible_roster_count"] == 1

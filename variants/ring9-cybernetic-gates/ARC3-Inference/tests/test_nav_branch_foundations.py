@@ -932,6 +932,11 @@ def test_n3_one_shared_boundary_refusal_closes_sibling_targets_individually(monk
     assert first_template["semantic_reuse"] is False
     assert first_template["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL"
     assert first_template["shared_refused_edge_count"] == 1
+    from inference.framework.card_builder import build_card
+    shown_target = build_card(machine).payload["subject"]["certified_reachability_target"]
+    assert shown_target["target_entity_id"] == first["entity_id"]
+    assert shown_target["target_member_id"] == first["member_id"]
+    assert shown_target["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL"
     assert adapter._pending_reachability["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL"
     machine.submit_answer({
         **first_template,

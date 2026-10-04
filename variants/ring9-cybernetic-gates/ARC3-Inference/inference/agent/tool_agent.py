@@ -246,6 +246,8 @@ _REQUEST_SAFETY_MARGIN_TOKENS = 512
 _CONTEXT_OVERFLOW_RETRY_TRIM_TOKENS = 512
 _PERSISTENT_HISTORY_ASSISTANT_TURNS = 30
 _RESPONSE_META_MAX_CHARS = 4000
+_G3_SEMANTIC_CHECKPOINT_REQUEST_LIMIT = 2
+_G3_SEMANTIC_CHECKPOINT_MAX_OUTPUT_TOKENS = 256
 
 
 def _openrouter_provider_preferences() -> dict[str, Any]:
@@ -936,6 +938,81 @@ def _resolve_request_log_path(state_path: Path) -> Path:
         state_path,
         default_name="requests.jsonl",
         per_game_suffix="_requests.jsonl",
+    )
+
+
+def _semantic_checkpoint_path(state_path: Path) -> Path:
+    return state_path.with_name(
+        state_path.name.replace(
+            f"_{RUNTIME_STATE_FILENAME}", "_g3_semantic_checkpoint.json"
+        )
+    )
+
+
+def _semantic_checkpoint_identity(view: Mapping[str, Any]) -> dict[str, Any] | None:
+    template = view.get("answer_template")
+    if not isinstance(template, Mapping) or template.get("answer_kind") != "TARGET_REACHABILITY":
+        return None
+    payload = {
+        "gate_id": "G3-LEVERS",
+        "semantic_key": str(template.get("semantic_key") or ""),
+        "target_entity_id": str(template.get("target_entity_id") or ""),
+        "target_member_id": str(template.get("target_member_id") or ""),
+    }
+    payload["checkpoint_id"] = "SC-" + hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:16]
+    return payload
+
+
+def _semantic_checkpoint_record(
+    state_path: Path,
+    identity: Mapping[str, Any],
+    *,
+    increment: bool = False,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """Persist the request allowance across outer solver turns.
+
+    One analyzer invocation is not one semantic checkpoint: the solver may yield and invoke the
+    same action/gate state again.  This sidecar makes the allowance belong to the bound semantic
+    key and target instead of to a Python call stack.
+    """
+    path = _semantic_checkpoint_path(state_path)
+    existing: dict[str, Any] = {}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if (
+                isinstance(loaded, Mapping)
+                and loaded.get("checkpoint_id") == identity.get("checkpoint_id")
+            ):
+                existing = dict(loaded)
+        except (OSError, ValueError, TypeError):
+            existing = {}
+    attempts = int(existing.get("completed_model_requests") or 0) + (1 if increment else 0)
+    record = {
+        "schema": "virelai-g3-semantic-checkpoint-v1",
+        **dict(identity),
+        "completed_model_requests": attempts,
+        "request_limit": _G3_SEMANTIC_CHECKPOINT_REQUEST_LIMIT,
+        "remaining_requests": max(0, _G3_SEMANTIC_CHECKPOINT_REQUEST_LIMIT - attempts),
+        "status": str(status or existing.get("status") or "PENDING"),
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return record
+
+
+def _semantic_checkpoint_instruction(identity: Mapping[str, Any]) -> str:
+    return (
+        "G3 SEMANTIC CHECKPOINT — ANSWER ONLY\n"
+        f"Bound target: {identity.get('target_entity_id')}/{identity.get('target_member_id')}.\n"
+        "The controller has certified all physical and evidential fields. Do not inspect the "
+        "board, inventory, entity, or evidence. Use one python tool call only to submit "
+        "virelai('gate_answer', answer={...}). Supply answer_kind, meaning, not_proven, "
+        "reopen_if, and a causal explanation of at most 40 words; omit every CERTIFIED field."
     )
 
 
@@ -1921,6 +1998,9 @@ class ToolAgent:
         *,
         tools: list[dict[str, Any]] | None,
         request_timeout_seconds: float | None = None,
+        tool_choice_override: str | None = None,
+        max_output_tokens_override: int | None = None,
+        thinking_override: bool | None = None,
     ) -> _ChatCompletionResult:
         provider_preferences = (
             _openrouter_provider_preferences()
@@ -1931,15 +2011,27 @@ class ToolAgent:
             provider=self._model.provider,
             model=self._model.model_id,
             messages=messages,
-            max_tokens=self._max_output_tokens,
+            max_tokens=(
+                max_output_tokens_override
+                if max_output_tokens_override is not None
+                else self._max_output_tokens
+            ),
             temperature=_LOCAL_ANALYZER_TEMPERATURE,
             top_p=_LOCAL_ANALYZER_TOP_P,
             top_k=_LOCAL_ANALYZER_TOP_K,
-            thinking=bool(_LOCAL_ANALYZER_ENABLE_THINKING),
+            thinking=(
+                bool(thinking_override)
+                if thinking_override is not None
+                else bool(_LOCAL_ANALYZER_ENABLE_THINKING)
+            ),
             reasoning_effort=_OPENROUTER_REASONING_EFFORT,
             provider_preferences=provider_preferences,
             tools=tools,
-            tool_choice=_request_tool_choice(tools),
+            tool_choice=(
+                tool_choice_override
+                if tool_choice_override is not None
+                else _request_tool_choice(tools)
+            ),
             seed=_LOCAL_ANALYZER_SEED,
         )
         def post_chat(request_payload: dict[str, Any]) -> requests.Response:
@@ -2783,6 +2875,25 @@ class ToolAgent:
         # instance for deciding whether this turn is the one-time compact
         # reachability-understanding checkpoint.
         gate_machine = self._gate_machine
+        semantic_checkpoint = False
+        semantic_checkpoint_identity: dict[str, Any] | None = None
+        semantic_checkpoint_record: dict[str, Any] | None = None
+        if self._virelai_gates_enabled and gate_machine is not None:
+            checkpoint_view = gate_machine.gate_view()
+            checkpoint_template = checkpoint_view.get("answer_template")
+            semantic_checkpoint = bool(
+                gate_machine.gate_id == "G3-LEVERS"
+                and checkpoint_view.get("status") == "ANSWER_REQUIRED"
+                and isinstance(checkpoint_template, Mapping)
+                and checkpoint_template.get("answer_kind") == "TARGET_REACHABILITY"
+                and checkpoint_template.get("semantic_reuse") is not True
+            )
+            if semantic_checkpoint:
+                semantic_checkpoint_identity = _semantic_checkpoint_identity(checkpoint_view)
+                if semantic_checkpoint_identity is not None:
+                    semantic_checkpoint_record = _semantic_checkpoint_record(
+                        state_path, semantic_checkpoint_identity,
+                    )
         self._sync_no_progress_tool_guard(state_path)
         controller_handoff = self._controller.take_handoff()
         user_prompt = self._build_user_prompt(
@@ -2802,6 +2913,11 @@ class ToolAgent:
         ):
             if section:
                 user_prompt = f"{user_prompt}\n\n{section}"
+        if semantic_checkpoint_identity is not None:
+            user_prompt = (
+                f"{user_prompt}\n\n"
+                f"{_semantic_checkpoint_instruction(semantic_checkpoint_identity)}"
+            )
         display_action_num = _display_action_number(action_num)
 
         with open(analyzer_log, "a", encoding="utf-8") as f:
@@ -2823,22 +2939,16 @@ class ToolAgent:
         append_transcript("USER PROMPT", user_prompt)
 
         previous_history_messages = list(self._history_messages)
-        semantic_checkpoint = False
-        if self._virelai_gates_enabled and gate_machine is not None:
-            checkpoint_view = gate_machine.gate_view()
-            checkpoint_template = checkpoint_view.get("answer_template")
-            semantic_checkpoint = bool(
-                gate_machine.gate_id == "G3-LEVERS"
-                and checkpoint_view.get("status") == "ANSWER_REQUIRED"
-                and isinstance(checkpoint_template, Mapping)
-                and checkpoint_template.get("answer_kind") == "TARGET_REACHABILITY"
-                and checkpoint_template.get("semantic_reuse") is not True
-            )
         self._gate_transitioned_this_turn = False
         preserve_history = True
         request_history = [] if semantic_checkpoint else self._history_messages
+        current_user_message = (
+            {"role": "user", "content": user_prompt}
+            if semantic_checkpoint
+            else self._build_user_message(user_prompt, current_frame)
+        )
         messages: list[dict[str, Any]] = self._trim_messages_for_context(
-            [{"role": "system", "content": self._system_prompt}, *request_history, self._build_user_message(user_prompt, current_frame)],
+            [{"role": "system", "content": self._system_prompt}, *request_history, current_user_message],
             tools=self._tools(state_path),
             preserve_recent=1,
         )
@@ -2866,20 +2976,33 @@ class ToolAgent:
 
         try:
             turn_count = 0
+            semantic_attempts_used = int(
+                (semantic_checkpoint_record or {}).get("completed_model_requests") or 0
+            )
+            semantic_attempts_remaining = max(
+                0, _G3_SEMANTIC_CHECKPOINT_REQUEST_LIMIT - semantic_attempts_used
+            )
             turn_limit = (
-                2
+                semantic_attempts_remaining
                 if semantic_checkpoint and self._tool_steps is None
-                else min(2, self._tool_steps)
+                else min(semantic_attempts_remaining, self._tool_steps)
                 if semantic_checkpoint
                 else self._tool_steps
             )
+            if semantic_checkpoint and semantic_attempts_remaining == 0:
+                controlled_stop_reason = (
+                    "g3_semantic_retry_exhausted: the bound reachability checkpoint already "
+                    f"used {_G3_SEMANTIC_CHECKPOINT_REQUEST_LIMIT} model requests without an "
+                    "accepted answer"
+                )
+                yielded_control_reason = "g3_semantic_retry_exhausted"
             while turn_limit is None or turn_count < turn_limit:
                 yielded_control_reason = control_yield_reason()
                 if yielded_control_reason is not None:
                     break
                 turn_count += 1
                 tools = self._tools(state_path)
-                tool_choice = _request_tool_choice(tools)
+                tool_choice = "required" if semantic_checkpoint else _request_tool_choice(tools)
                 messages = self._trim_messages_for_context(messages, tools=tools)
                 latest_request_messages = json.loads(json.dumps(messages))
                 latest_request_tools = json.loads(json.dumps(tools))
@@ -2902,6 +3025,12 @@ class ToolAgent:
                     request_kwargs: dict[str, Any] = {"tools": tools}
                     if request_timeout_seconds is not None:
                         request_kwargs["request_timeout_seconds"] = request_timeout_seconds
+                    if semantic_checkpoint:
+                        request_kwargs.update({
+                            "tool_choice_override": "required",
+                            "max_output_tokens_override": _G3_SEMANTIC_CHECKPOINT_MAX_OUTPUT_TOKENS,
+                            "thinking_override": False,
+                        })
                     if self._save_request_logs:
                         _append_request_snapshot(
                             _resolve_request_log_path(state_path),
@@ -2917,6 +3046,13 @@ class ToolAgent:
                     result = self._chat_completion(messages, **request_kwargs)
                     self._accumulate_usage_tokens(result.usage)
                     self._turn_ledger.request(result.usage)
+                    if semantic_checkpoint_identity is not None:
+                        semantic_checkpoint_record = _semantic_checkpoint_record(
+                            state_path, semantic_checkpoint_identity, increment=True,
+                        )
+                        semantic_attempts_used = int(
+                            semantic_checkpoint_record["completed_model_requests"]
+                        )
                     if self._save_request_logs:
                         _append_request_snapshot(
                             _resolve_request_log_path(state_path),
@@ -3031,6 +3167,12 @@ class ToolAgent:
                         )
                         append_transcript("ANALYZER STATUS", failure)
                         preserve_history = False
+                        if semantic_checkpoint:
+                            controlled_stop_reason = (
+                                "g3_semantic_retry_exhausted: " + failure
+                            )
+                            yielded_control_reason = "g3_semantic_retry_exhausted"
+                            break
                         return AnalyzerTurnResult(
                             step_executed=False,
                             fatal_failure=failure,
@@ -3168,6 +3310,22 @@ class ToolAgent:
                 if step_executed:
                     break
 
+            if semantic_checkpoint and self._gate_transitioned_this_turn:
+                if semantic_checkpoint_identity is not None:
+                    semantic_checkpoint_record = _semantic_checkpoint_record(
+                        state_path, semantic_checkpoint_identity, status="ACCEPTED",
+                    )
+            elif (
+                semantic_checkpoint
+                and controlled_stop_reason is None
+                and semantic_attempts_used >= _G3_SEMANTIC_CHECKPOINT_REQUEST_LIMIT
+            ):
+                controlled_stop_reason = (
+                    "g3_semantic_retry_exhausted: the bound reachability checkpoint used "
+                    f"{semantic_attempts_used} model requests without an accepted answer"
+                )
+                yielded_control_reason = "g3_semantic_retry_exhausted"
+
         except AnalyzerRequestTooLarge as exc:
             append_transcript("ANALYZER STATUS", f"fatal_request_error: {exc}")
             preserve_history = False
@@ -3273,6 +3431,11 @@ class ToolAgent:
             # allowance and still did not satisfy the contract.  Leave a
             # durable product for the solver; this is not G3 completion.
             from inference.agent.gate_artifacts import record_g3_run_outcome
+
+            if semantic_checkpoint_identity is not None:
+                semantic_checkpoint_record = _semantic_checkpoint_record(
+                    state_path, semantic_checkpoint_identity, status="EXHAUSTED",
+                )
 
             record_g3_run_outcome(
                 state_path,

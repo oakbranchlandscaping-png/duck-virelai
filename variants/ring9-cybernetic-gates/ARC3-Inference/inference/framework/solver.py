@@ -542,7 +542,19 @@ class _HarnessGameSession:
             gate_machine = getattr(self.analyzer, "_gate_machine", None)
             if gate_machine is not None and getattr(gate_machine, "gate_id", None) == "G3-LEVERS":
                 try:
-                    from inference.agent.gate_artifacts import record_g3_run_outcome
+                    from inference.agent.gate_artifacts import (
+                        load_g3_run_outcome,
+                        record_g3_run_outcome,
+                    )
+
+                    existing_product = load_g3_run_outcome(self.state_path)
+                    # The semantic seam may already have emitted the more precise bounded
+                    # product. Finalization must not replace it with a generic budget stop.
+                    continue_record = not (
+                        isinstance(existing_product, dict)
+                        and existing_product.get("product")
+                        == "G3_SEMANTIC_RETRY_EXHAUSTED"
+                    )
 
                     boundary = _is_engine_game_over(self.game) or bool(
                         getattr(run, "level_completed", False)
@@ -553,9 +565,10 @@ class _HarnessGameSession:
                     else:
                         product = "G3_BUDGET_STOPPED"
                         detail = "the solver action/time boundary stopped G3 before roster completion"
-                    record_g3_run_outcome(
-                        self.state_path, gate_machine, product, detail=detail,
-                    )
+                    if continue_record:
+                        record_g3_run_outcome(
+                            self.state_path, gate_machine, product, detail=detail,
+                        )
                 except Exception:
                     # Artifact emission must never turn a completed game into
                     # a harness crash; the existing run evidence remains valid.

@@ -465,3 +465,106 @@ def test_no_progress_guard_ends_harness_cleanly_with_diagnostic():
 
     assert _turn_ends_game(result, run)
     assert run.solver_note == "controlled_stop: no_progress_tool_loop: repeated read-only call"
+
+
+def test_g3_semantic_request_budget_persists_across_solver_turns(tmp_path, monkeypatch):
+    state_path = tmp_path / "game_tool_runtime_state.json"
+    write_runtime_state(
+        state_path,
+        current_frame=Frame(grid=((0, 0), (0, 0)), step=49, level=1),
+        history=[],
+    )
+    target_template = {
+        "answer_kind": "TARGET_REACHABILITY",
+        "target_entity_id": "E0005", "target_member_id": "M0019",
+        "semantic_key": "RU-fixture", "semantic_reuse": False,
+    }
+    snapshot = {
+        "lifecycle_journal": {
+            "entity_count": 1,
+            "state_counts": {"ATTEMPTED": 1},
+            "entities": {"E0005": {"state": "ATTEMPTED", "events": [{
+                "event_id": "LC-00001", "entity_id": "E0005",
+                "from_state": "UNTOUCHED", "to_state": "ATTEMPTED",
+                "evidence_ref": "E-fixture", "actor": "G3_ROUTER",
+                "reason": "authorized target attempt",
+            }]}},
+        },
+        "scheduler": {"pending_reachability": {
+            "target_entity_id": "E0005", "target_member_id": "M0019",
+        }},
+    }
+    machine = SimpleNamespace(
+        gate_id="G3-LEVERS",
+        gate_view=lambda: {
+            "status": "ANSWER_REQUIRED", "answer_template": target_template,
+        },
+        next_probe_capability=lambda: None,
+        _adapters={"G3-LEVERS": SimpleNamespace(snapshot=lambda: snapshot)},
+        inventory_view=lambda **_kwargs: {
+            "world_type": "NAVIGATION",
+            "items": [{
+                "kind": "ELIGIBLE_TARGET", "eligible_rank": 5,
+                "entity_id": "E0005", "target_member_id": "M0019",
+                "visual_type": {"integer": 8, "shape_family": "SOLID_RECTANGLE"},
+            }],
+            "page": {"next_offset": None},
+        },
+    )
+    agent = ToolAgent(
+        model="fixture-model", provider="openai",
+        base_url="https://fixture.invalid/v1", api_key="fixture",
+        virelai_gates_enabled=True,
+    )
+    agent._gate_machine = machine
+    agent._tool_steps = 1
+    tool = [{"type": "function", "function": {
+        "name": "python", "description": "fixture",
+        "parameters": {"type": "object", "properties": {}},
+    }}]
+    monkeypatch.setattr(agent, "_tools", lambda _path: tool)
+    monkeypatch.setattr(agent, "_automatic_virelai_update", lambda *args, **kwargs: "")
+    monkeypatch.setattr(agent, "_controller_focus_update", lambda: "")
+    monkeypatch.setattr(agent, "_gate_context_update", lambda _path: "GATE")
+    monkeypatch.setattr(agent, "_build_user_prompt", lambda *args, **kwargs: "probe")
+    monkeypatch.setattr(
+        agent, "_build_user_message",
+        lambda prompt, _frame: {"role": "user", "content": prompt},
+    )
+    monkeypatch.setattr(agent, "_controller_no_legal_move", lambda _path: "")
+    monkeypatch.setattr(agent, "_begin_turn_ledger", lambda *args, **kwargs: _Ledger())
+    monkeypatch.setattr(agent, "_finish_turn_ledger", lambda *args, **kwargs: None)
+    requests = []
+
+    def no_answer(_messages, **kwargs):
+        requests.append(kwargs)
+        return _ChatCompletionResult(
+            message={"role": "assistant", "content": "I should inspect the target first."},
+            finish_reason="stop", usage={"completion_tokens": 256},
+        )
+
+    monkeypatch.setattr(agent, "_chat_completion", no_answer)
+
+    first = agent.analyze(state_path, 49, valid_actions=["ACTION1"], analysis_step=50)
+    second = agent.analyze(state_path, 49, valid_actions=["ACTION1"], analysis_step=50)
+
+    assert first is not None and first.controlled_stop == ""
+    assert second is not None
+    assert second.controlled_stop.startswith("g3_semantic_retry_exhausted:")
+    assert len(requests) == 2
+    assert all(item["tool_choice_override"] == "required" for item in requests)
+    assert all(item["max_output_tokens_override"] == 256 for item in requests)
+    assert all(item["thinking_override"] is False for item in requests)
+    checkpoint = json.loads(
+        (tmp_path / "game_g3_semantic_checkpoint.json").read_text(encoding="utf-8")
+    )
+    assert checkpoint["completed_model_requests"] == 2
+    assert checkpoint["remaining_requests"] == 0
+    assert checkpoint["status"] == "EXHAUSTED"
+    outcome = json.loads(
+        (tmp_path / "game_g3_run_outcome.json").read_text(encoding="utf-8")
+    )
+    assert outcome["product"] == "G3_SEMANTIC_RETRY_EXHAUSTED"
+    assert outcome["pending_target"]["entity_id"] == "E0005"
+    assert outcome["last_accepted_evidence"]["evidence_ref"] == "E-fixture"
+    assert outcome["eligible_roster_count"] == 1

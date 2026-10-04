@@ -221,6 +221,23 @@ def _subject_slot(gate_id: str, view: Mapping[str, Any]) -> dict[str, Any]:
         pending = scheduler.get("pending_dossier")
         candidates.append(("pending_dossier", windowed(pending)))
         template = view.get("answer_template")
+        # Sol, 2026-10-04: certified fields are omitted from Duck's answer, but the live
+        # N5 checkpoint showed that hiding the bound target made a small model re-open the
+        # board and spend its turn asking which object the controller meant.  Expose one
+        # read-only subject card while keeping identity and geometry controller-owned.
+        if (
+            isinstance(template, Mapping)
+            and template.get("answer_kind") == "TARGET_REACHABILITY"
+        ):
+            candidates.append(("certified_reachability_target", windowed({
+                key: template.get(key)
+                for key in (
+                    "target_entity_id", "target_member_id", "conclusion",
+                    "reasoning_class", "route_exhaustion_basis", "closest_stand",
+                    "remaining_gap", "reachable_stand_count", "refused_edge_count",
+                    "shared_refused_edge_count", "reopen_conditions",
+                )
+            })))
         if isinstance(template, Mapping) and not isinstance(pending, Mapping):
             candidates.append(("effect_summary", template.get("effect_summary")))
         candidates.append(("completion", view.get("completion")))
