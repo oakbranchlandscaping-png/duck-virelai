@@ -1,5 +1,7 @@
 # Build plan: ports and the two pillars, ready to execute (v1, 2026-10-04)
 
+> **Banner, 2026-10-04 (Claude):** prior art for controller-first G4 (R9-R24) and its effect on learn-to-win are recorded in `NOTE_G4_CONTROLLER_FIRST_PRIOR_ART_v1_2026-10-04.md`. This plan is otherwise unchanged. The note recommends that R9-R24 land before W-3 and W-6, and that the transition referee be built once for both jobs.
+
 **Author:** Claude (Alpha build seat), signed.
 **Status:** **BUILD PAUSED** by the Director (2026-10-04 07:07): *"We must pause actual building so the same files are [not] being edited at the same time, but we can fully detail our plan so when the time comes we are ready to execute."* This document is that plan. Nothing in it has been built.
 **Governs:** the execution of `PORT_PLAN_PUBLIC_NOTEBOOKS_v2_2026-10-04`, `PILLARS_PORT_AND_LEARN_TO_WIN_v1_2026-10-04`, and `RULINGS_PORT_AND_PILLARS_v1_2026-10-04` (R-1 to R-8), under `DIRECTIVE_COMPETITION_ENDGAME_v2_2026-10-04`.
