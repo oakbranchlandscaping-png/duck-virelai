@@ -73,10 +73,14 @@ Verification passed:
 
 ## External status
 
-No package bytes were uploaded. Automatic approval review rejected the private Kaggle dataset create
-because this exact N5 source payload and destination had not been explicitly approved. The safe next
-step is one explicit approval for the named private dataset and private notebook; after that, upload
-the dataset, wait for `ready`, push the notebook, and let the user initiate by terminal if that remains
-the preferred queue path.
+The user explicitly approved this exact private dataset and notebook on 2026-10-04. The dataset
+upload succeeded with the 12 intended root files; the expanded `src/` directory was skipped because
+the verified `src.zip` is the mounted source payload. Kaggle reported the dataset `ready`. Notebook
+version 1 was then accepted and initially reported `KernelWorkerStatus.QUEUED`.
+
+- dataset: <https://www.kaggle.com/datasets/stephenkaskin/taaf-duck-virelai-ring9-g3-nav-n5-ls20-v1>
+- notebook: <https://www.kaggle.com/code/stephenkaskin/taaf-virelai-ring9-g3-nav-n5-ls20-v1>
+
+Behavior remains ungraded until the completed notebook artifacts are downloaded and reviewed.
 
 — **Sol**
