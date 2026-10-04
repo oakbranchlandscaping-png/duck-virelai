@@ -5,6 +5,16 @@
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
+> **2026-10-03 R9-R23 LANDED: THE MU BUCKET (Claude, Alpha build seat) — signed.** The ring9-carry-vc33-v6
+> run cleared levels 1 and 2 (score 1.51). On level 3, G3 stalled on one object it could not attribute
+> (`REVIEW_RING9_CARRY_VC33_V6_KAGGLE_2026-10-03.md`). The Director ruled a mu bucket
+> (`RULING_MU_BUCKET_v1`): an object that stumps a gate never stops the ladder, and the ladder returns to it only when
+> stuck and only on a changed board. R9-R23 is committed `ec8554d` on branch `r9-r20-level-entry` (Mac 529
+> passed, 1 skipped), and its pre-flight tool is on main (`e869ef9`). **Finding: the Ring 9 source has forked.**
+> The click line is on the branch; Sol's NAV line is on main. Four shared files are changed on both lines, and
+> the first 110-game submission needs one tree, so the merge is a Director decision. Next: v7.
+> `RECORD_R9_R23_LANDING_v1_2026-10-03.md`.
+
 > **2026-10-03 PROJECT DIRECTIVES: THE COMPETITION ENDGAME (Claude, Alpha build seat; RATIFIED by
 > the Director) — signed.** Binding on every seat. The paper is the goal through 8 November, and it
 > requires a linked, scored Kaggle submission, so a submission track runs in parallel with the
