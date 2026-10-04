@@ -2499,6 +2499,7 @@ class _LeverTarget:
         self.revision = 1
         self.evidence = LeverEvidenceAccumulator()
         self._dossier_answers: dict[str, LeverDossierAnswer] = {}
+        self._lever_discoveries: dict[str, dict[str, Any]] = {}
         self._inventory_answer: GateAnswer | None = None
         self._bounded_coverage_answer: GateAnswer | None = None
         self._bounded_ambiguities: dict[str, dict[str, Any]] = {}
@@ -3916,6 +3917,7 @@ class _LeverTarget:
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         event["counter_baseline"] = counter_baseline
         ambiguity_bounded = False
+        nav_discovery_recorded = False
         confirmation_approach = bool(
             is_confirmation and self._phase == "NAV"
             and probe.pilot_intent == "APPROACH"
@@ -4082,6 +4084,74 @@ class _LeverTarget:
                 # Counter-only or ego-only approach frames must not turn the
                 # bound target into a null or ambiguous lever observation.
                 pass
+            elif (
+                entity_id
+                and self._phase == "NAV"
+                and probe.pilot_intent == "CONTACT_ATTEMPT"
+                and attribution.positive
+            ):
+                # Sol, 2026-10-04: NAV G3 has the same discovery obligation as
+                # CLICK G3.  One resolved body contact followed by a masked
+                # local or remote residue is the existential lever witness.
+                # Re-contact, repetition, and mechanism typing belong to G4;
+                # requiring them here caused ls20's valid first witness to be
+                # contradicted from a later world state and blocked the sweep.
+                journal.response(entity_id, positive=True, evidence_ref=evidence_id)
+                witness = next(
+                    item
+                    for item in self.evidence._witnesses.get(target_member_id, ())
+                    if item.evidence_ref == evidence_id
+                )
+                journal.witness(entity_id, witness_ref=witness.witness_id)
+                discovery_ref = "G3-DISCOVERY-" + hashlib.sha256(
+                    _canonical({
+                        "entity_id": entity_id,
+                        "member_id": target_member_id,
+                        "witness_id": witness.witness_id,
+                    }).encode()
+                ).hexdigest()[:16]
+                # This answer says only what G3 proved: contact produced a
+                # non-counter, non-ego residue.  G4 retains ownership of the
+                # lever's mechanism, orbit, endpoint, and explanation.
+                journal.answer(entity_id, answer_ref=discovery_ref)
+                journal.close(entity_id, evidence_ref=evidence_id)
+                journal.ready_for_g4(entity_id, evidence_ref=evidence_id)
+                nav_discovery_recorded = True
+                epoch_record = dict(event.get("contact_epoch") or {})
+                discovery = {
+                    "schema": "virelai-g3-lever-discovery-v1",
+                    "status": "LEVER_FOUND",
+                    "entity_id": entity_id,
+                    "target_member_id": target_member_id,
+                    "witness_id": witness.witness_id,
+                    "evidence_ref": evidence_id,
+                    "channel": "BODY",
+                    "local_residue_cells": [
+                        list(cell) for cell in attribution.local_residue_cells
+                    ],
+                    "remote_residue_cells": [
+                        list(cell) for cell in attribution.remote_residue_cells
+                    ],
+                    "intervention": {
+                        "kind": "NAV",
+                        "entity_id": entity_id,
+                        "procedure_id": epoch_record.get("procedure_id"),
+                        "final_action": {
+                            "action": epoch_record.get("final_action")
+                        },
+                        "target_cells": [
+                            list(cell) for cell in scope.target_cells
+                        ],
+                    },
+                    "effect_summary": lever_effect_summary(
+                        attribution, witness_evidence_ref=evidence_id,
+                    ),
+                    "record_ref": discovery_ref,
+                    "next_operation": "CONTINUE_RANKED_G3_SWEEP",
+                    "typing_gate": "G4-REACTIONS",
+                }
+                self._lever_discoveries[target_member_id] = discovery
+                event["lever_discovery"] = discovery
             elif entity_id and attribution.positive:
                 journal.response(entity_id, positive=True, evidence_ref=evidence_id)
                 self._pending_confirmation = {
@@ -4131,6 +4201,14 @@ class _LeverTarget:
             self._navigation_steps += 1
             self._nav_route_evidence.append(evidence_id)
             if boundary_interrupted:
+                self._navigation_steps = 0
+            elif (
+                nav_discovery_recorded
+                and probe.pilot_intent == "CONTACT_ATTEMPT"
+            ):
+                # The positive witness is durable and this roster row is done.
+                # Continue the broad sweep; G4 returns after G3 inventory close.
+                self._target_index += 1
                 self._navigation_steps = 0
             elif (
                 target_changed
@@ -4600,6 +4678,10 @@ class _LeverTarget:
                 "evidence": self.evidence.snapshot(),
                 "dossier_answers": [
                     asdict(answer) for _, answer in sorted(self._dossier_answers.items())
+                ],
+                "lever_discoveries": [
+                    dict(discovery)
+                    for _, discovery in sorted(self._lever_discoveries.items())
                 ],
                 "inventory_answer": (
                     asdict(self._inventory_answer) if self._inventory_answer is not None else None
@@ -5134,12 +5216,26 @@ class _LeverTarget:
                 ),
             }
             dossier = self._dossier_answers.get(member_id)
-            if state == "G4-READY" and dossier is not None:
+            discovery = self._lever_discoveries.get(member_id)
+            if state == "G4-READY" and (dossier is not None or discovery is not None):
                 confirmed.append({
                     **base,
-                    "intervention": dict(dossier.intervention),
-                    "effect_summary": dict(dossier.effect_summary),
-                    "evidence_refs": list(dossier.evidence_refs),
+                    "intervention": dict(
+                        dossier.intervention if dossier is not None
+                        else discovery["intervention"]
+                    ),
+                    "effect_summary": dict(
+                        dossier.effect_summary if dossier is not None
+                        else discovery["effect_summary"]
+                    ),
+                    "evidence_refs": (
+                        list(dossier.evidence_refs) if dossier is not None
+                        else [str(discovery["evidence_ref"])]
+                    ),
+                    "g3_basis": (
+                        "SUPPORTED_CONFIRMATION" if dossier is not None
+                        else "FIRST_POSITIVE_CONTACT_WITNESS"
+                    ),
                 })
             elif state == "G3-CLOSED" and lifecycle is not None:
                 clean_null.append({
@@ -5266,12 +5362,19 @@ class _LeverTarget:
             entity_id = ledger.entity_for_member(member_id)
             lifecycle = journal.entities.get(str(entity_id or ""))
             dossier = self._dossier_answers.get(member_id)
+            discovery = self._lever_discoveries.get(member_id)
             ambiguity = self._bounded_ambiguities.get(str(entity_id or ""))
             lifecycle_state = None if lifecycle is None else lifecycle.state
             contact_records = contacts_by_entity.get(str(entity_id or ""), [])
             last_contact = contact_records[-1] if contact_records else None
             terrain_role = self._terrain_roles.get(str(entity_id or ""))
-            if lifecycle is not None and lifecycle.state == "G4-READY":
+            if (
+                lifecycle is not None
+                and lifecycle.state == "G4-READY"
+                and discovery is not None
+            ):
+                disposition = "LEVER_FOUND"
+            elif lifecycle is not None and lifecycle.state == "G4-READY":
                 disposition = "CONFIRMED_LEVER"
             elif lifecycle is not None and lifecycle.state == "G3-CLOSED":
                 disposition = "SCOPED_NULL"
@@ -5327,6 +5430,8 @@ class _LeverTarget:
                 evidence_refs.extend(terrain_role.get("evidence_refs") or ())
             elif dossier is not None:
                 evidence_refs.extend(dossier.evidence_refs)
+            elif discovery is not None:
+                evidence_refs.append(str(discovery["evidence_ref"]))
             elif ambiguity is not None and ambiguity.get("evidence_ref"):
                 evidence_refs.append(str(ambiguity["evidence_ref"]))
             elif lifecycle is not None and lifecycle.events:
@@ -5485,23 +5590,44 @@ class _ReactionTarget:
                 raise GateContractError(f"G4 subject {entity_id!r} is not G4-ready in the G3 lifecycle.")
             members = sorted(
                 member_id for member_id, bound_entity in ledger.member_to_entity.items()
-                if bound_entity == entity_id and member_id in g3._dossier_answers
+                if bound_entity == entity_id
+                and (
+                    member_id in g3._dossier_answers
+                    or member_id in g3._lever_discoveries
+                )
             )
             if len(members) != 1:
                 raise GateContractError(
-                    f"G4 requires exactly one accepted G3 dossier binding for {entity_id!r}."
+                    f"G4 requires exactly one G3 discovery binding for {entity_id!r}."
                 )
             member_id = members[0]
-            dossier = g3._dossier_answers[member_id]
-            confirmations = [
-                item for item in g3._confirmation_records
-                if str(item.get("entity_id") or "") == entity_id
-                and str(item.get("target_member_id") or "") == member_id
-                and str(item.get("status") or "").upper() == "SUPPORTED"
-            ]
-            if not confirmations:
-                raise GateContractError(f"G4 cannot find a supported G3 confirmation for {entity_id!r}.")
-            witness_evidence_ref = str(confirmations[-1].get("witness_evidence_ref") or "")
+            dossier = g3._dossier_answers.get(member_id)
+            discovery = g3._lever_discoveries.get(member_id)
+            if dossier is not None:
+                confirmations = [
+                    item for item in g3._confirmation_records
+                    if str(item.get("entity_id") or "") == entity_id
+                    and str(item.get("target_member_id") or "") == member_id
+                    and str(item.get("status") or "").upper() == "SUPPORTED"
+                ]
+                if not confirmations:
+                    raise GateContractError(
+                        f"G4 cannot find the G3 confirmation for {entity_id!r}."
+                    )
+                witness_evidence_ref = str(
+                    confirmations[-1].get("witness_evidence_ref") or ""
+                )
+                confirmation_ref = str(
+                    confirmations[-1].get("confirmation_evidence_ref") or ""
+                )
+                intervention = dossier.intervention
+                record_ref = dossier.answer_id
+            else:
+                assert discovery is not None
+                witness_evidence_ref = str(discovery.get("evidence_ref") or "")
+                confirmation_ref = None
+                intervention = dict(discovery.get("intervention") or {})
+                record_ref = str(discovery.get("record_ref") or "")
             attributions = [
                 item for item in g3.evidence._attributions.get(member_id, ())
                 if item.positive and item.evidence_ref == witness_evidence_ref
@@ -5509,14 +5635,13 @@ class _ReactionTarget:
             if not attributions:
                 raise GateContractError(f"G4 cannot find the positive G3 witness for {entity_id!r}.")
             attribution = attributions[0]
-            confirmation_ref = str(confirmations[-1].get("confirmation_evidence_ref") or "")
             try:
                 anatomies[entity_id] = compile_effect_anatomy(
                     attribution,
                     entity_id=entity_id,
-                    intervention=dossier.intervention,
+                    intervention=intervention,
                     confirmation_evidence_ref=confirmation_ref,
-                    dossier_answer_ref=dossier.answer_id,
+                    dossier_answer_ref=record_ref,
                     mask_law_version_id=None if mask is None else mask.law_version_id,
                 )
             except G4ReactionError as exc:
@@ -5546,10 +5671,7 @@ class _ReactionTarget:
             disposition=disposition,
             evidence_refs=tuple(
                 ref for entity_id in self._ordered_entities
-                for ref in (
-                    self._anatomies[entity_id].witness_evidence_ref,
-                    self._anatomies[entity_id].confirmation_evidence_ref,
-                )
+                for ref in self._anatomies[entity_id].support_evidence_refs
             ),
             unmet_requirements=unmet,
             explanation=(
@@ -5677,7 +5799,7 @@ class _ReactionTarget:
                     f"Name {anatomy.entity_id}, every channel id, its affected local or remote region, "
                     f"and these exact rewrites: {', '.join(rewrite_phrases)}."
                 ),
-                "evidence_refs": [anatomy.witness_evidence_ref, anatomy.confirmation_evidence_ref],
+                "evidence_refs": list(anatomy.support_evidence_refs),
                 "record_refs": [anatomy.dossier_answer_ref, anatomy.anatomy_id],
                 "competing_models": ["State one alternative compatible with this single witnessed transition."],
                 "falsifier": "State a later observation that would refute this effect description.",

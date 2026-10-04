@@ -1030,6 +1030,81 @@ def test_g3_inventory_labels_observed_contact_reachable_with_contact_type():
     assert adapter._target_index == 2
 
 
+def test_nav_g3_first_positive_contact_marks_lever_and_continues_sweep():
+    """G3 preserves discovery; repeat activation and mechanism typing belong to G4.
+
+    Author: Sol, 2026-10-04.
+    """
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((1, 1),))
+    first_member = adapter._ensure_frontier()[0]["member_id"]
+    first_entity = ledger.entity_for_member(first_member)
+    adapter.lifecycle_journal.attempt(first_entity, evidence_ref="E-FIRST-NULL")
+    adapter.lifecycle_journal.response(
+        first_entity, positive=False, evidence_ref="E-FIRST-NULL"
+    )
+    adapter.lifecycle_journal.close(first_entity, evidence_ref="E-FIRST-NULL")
+    adapter._target_index = 1
+    capability = machine.next_probe_capability()
+    entity_id = capability["target"]["entity_id"]
+    target_cell = tuple(capability["target"]["cells"][0])
+    adapter._last_nav_plan = NavStep(
+        "ACTION1", "CONTACT_ATTEMPT", (1, 1), target_cell, entity_id,
+        "predicted footprint intersects target",
+    )
+    probe = machine.validate_probe(
+        {"probe_token": capability["probe_token"], "pilot_intent": "CONTACT_ATTEMPT"},
+        [{"action": "ACTION1"}],
+    )
+    remote_cell = (0, 0)
+    after = tuple(
+        tuple(
+            5 if (row, col) in {target_cell, remote_cell} else value
+            for col, value in enumerate(values)
+        )
+        for row, values in enumerate(GRID)
+    )
+    outcome = _changed_outcome(GRID, after, 1)
+    # The synthetic fixture has no separately rendered ego frame. Preserve
+    # the terminal collision fact that the live adapter supplies from its
+    # target-bound route/contact scope.
+    outcome["refused_contact"] = True
+    event = machine.record_outcome(probe, outcome)
+
+    assert event["attribution"]["disposition"] in {
+        "LOCAL_LEVER_WITNESS", "LOCAL_AND_REMOTE_LEVER_WITNESS",
+    }
+    assert event["lever_discovery"]["status"] == "LEVER_FOUND"
+    assert event["lever_discovery"]["next_operation"] == "CONTINUE_RANKED_G3_SWEEP"
+    assert adapter._pending_confirmation is None
+    assert adapter.lifecycle_journal.entities[entity_id].state == "G4-READY"
+    assert adapter._target_index == 2
+    found_row = next(
+        row for row in machine.inventory_view(offset=0, limit=10)["items"]
+        if row["entity_id"] == entity_id
+    )
+    assert found_row["disposition"] == "LEVER_FOUND"
+    assert found_row["physics_type"] == "LEVER"
+    # This fixture has two roster rows, so advancing from rank two completes
+    # the broad sweep instead of scheduling a third target.
+    assert machine.next_probe_capability() is None
+    assert adapter._complete_reason == "NAV_ENUMERATION_COMPLETE"
+
+    inventory, _reason = executor.controller_answer(machine, machine.gate_view())
+    assert inventory is not None
+    machine.submit_answer(inventory)
+    assert machine.gate_id == "G4-REACTIONS"
+    g4_view = machine.gate_view()
+    assert g4_view["answer_template"]["entity_id"] == entity_id
+    assert g4_view["answer_template"]["evidence_refs"] == [event["evidence_id"]]
+
+
 def test_g3_inventory_labels_certified_route_exhaustion_unreachable():
     from test_g3_scheduler import machine_for
 

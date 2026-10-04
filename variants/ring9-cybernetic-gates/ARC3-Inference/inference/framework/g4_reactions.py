@@ -67,7 +67,7 @@ class LeverEffectAnatomy:
     target_member_id: str
     intervention: Mapping[str, Any]
     witness_evidence_ref: str
-    confirmation_evidence_ref: str
+    confirmation_evidence_ref: str | None
     dossier_answer_ref: str
     attribution_id: str
     mask_law_version_id: str | None
@@ -78,6 +78,17 @@ class LeverEffectAnatomy:
     coverage_complete: bool
     open_questions: tuple[str, ...]
     limitations: tuple[str, ...]
+
+    @property
+    def support_evidence_refs(self) -> tuple[str, ...]:
+        """Evidence G4 may describe without requiring G3 to repeat a discovery."""
+        refs = [self.witness_evidence_ref]
+        if (
+            self.confirmation_evidence_ref
+            and self.confirmation_evidence_ref != self.witness_evidence_ref
+        ):
+            refs.append(self.confirmation_evidence_ref)
+        return tuple(refs)
 
 
 @dataclass(frozen=True)
@@ -110,7 +121,7 @@ def compile_effect_anatomy(
     *,
     entity_id: str,
     intervention: Mapping[str, Any],
-    confirmation_evidence_ref: str,
+    confirmation_evidence_ref: str | None,
     dossier_answer_ref: str,
     mask_law_version_id: str | None,
 ) -> LeverEffectAnatomy:
@@ -122,10 +133,10 @@ def compile_effect_anatomy(
         raise G4ReactionError("entity_id is required")
     if not intervention:
         raise G4ReactionError("the accepted G3 intervention is required")
-    confirmation = str(confirmation_evidence_ref or "").strip()
+    confirmation = str(confirmation_evidence_ref or "").strip() or None
     dossier_ref = str(dossier_answer_ref or "").strip()
-    if not confirmation or not dossier_ref:
-        raise G4ReactionError("supported confirmation and accepted dossier references are required")
+    if not dossier_ref:
+        raise G4ReactionError("a binding G3 discovery or dossier record is required")
 
     changes: dict[Cell, tuple[int | None, int | None]] = {
         (row, col): (before, after)
@@ -232,9 +243,9 @@ def validate_reaction_answer(raw: Mapping[str, Any], anatomy: LeverEffectAnatomy
     if _canonical(supplied_channels) != _canonical(expected_channels):
         raise G4ReactionError("effect_channels must exactly preserve the controller-compiled anatomy")
     evidence_refs = tuple(str(item) for item in raw.get("evidence_refs") or ())
-    expected_evidence = (anatomy.witness_evidence_ref, anatomy.confirmation_evidence_ref)
+    expected_evidence = anatomy.support_evidence_refs
     if evidence_refs != expected_evidence:
-        raise G4ReactionError("evidence_refs must be the witness and confirmation in binding order")
+        raise G4ReactionError("evidence_refs must preserve the binding G3 support in order")
     record_refs = tuple(str(item) for item in raw.get("record_refs") or ())
     if record_refs != (anatomy.dossier_answer_ref, anatomy.anatomy_id):
         raise G4ReactionError("record_refs must preserve the accepted dossier and compiled anatomy")
