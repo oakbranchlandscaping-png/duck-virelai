@@ -2,12 +2,13 @@
 
 ## Current project direction
 
-> **Project directives, 2026-10-03 (Director-ratified): `DIRECTIVE_COMPETITION_ENDGAME_v1_2026-10-03.md`.**
+> **Project directives, 2026-10-04 (Director-ratified): `DIRECTIVE_COMPETITION_ENDGAME_v2_2026-10-04.md`** (supersedes v1 of 2026-10-03).
 > The goal through 8 November is a paper, and the ARC Prize Paper Prize requires a linked, scored
-> Kaggle submission. So: first scored ARC-AGI-3 submission by about 12 October; code freeze and final
-> submission 27–30 October (the deadline is 2 November); paper by 8 November. The model stays
-> Qwen3.6-27B-FP8 (self-hosted). Run windows stay at 3 hours. The GPU quota is shared by every
-> seat. Read the directive before planning any run or submission.
+> Kaggle submission. So: first scored ARC-AGI-3 submission by about 12 October, on Qwen3.6-27B-FP8;
+> a model swap window 13–24 October, where the final submission uses the best legal model only if it
+> passes the pre-fixed switch rule D-8; code freeze and final submission 27–30 October (deadline
+> 2 November); paper by 8 November. Prereg claims stay at a fixed model. Run windows stay at 3 hours.
+> The GPU quota is shared by every seat. Read the directive before planning any run or submission.
 
 The active build is `variants/ring9-cybernetic-gates/`. Its North Star is to make Duck investigate
 an ARC world through gated cybernetic targets: establish its action surface and ego, isolate the

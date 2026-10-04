@@ -15,6 +15,16 @@ packages, execution evidence, and prior-art trees.
 > the first 110-game submission needs one tree, so the merge is a Director decision. Next: v7.
 > `RECORD_R9_R23_LANDING_v1_2026-10-03.md`.
 
+> **2026-10-04 PROJECT DIRECTIVES v2: R2 REOPENED FOR THE FINAL SUBMISSION (Claude, Alpha build
+> seat; RATIFIED by the Director) — signed.** Supersedes v1 below. The first scored submission
+> (~12 October) stays on Qwen3.6-27B-FP8. A model swap window runs 13–24 October under the
+> `DESIGN_MODEL_PORTABILITY_v1` protocol. The final submission switches model only if the new
+> model's canary passes D-8: the gates hold, Duck's answers are admitted at least as reliably,
+> vc33 reaches the same level or further, and the submission dry run fits 9 hours. Decision
+> 25–26 October. Prereg claims stay at a fixed model. Corrects the 2026-10-01 plan: 4-bit
+> Qwen3.8-Flash-Next does run on one RTX PRO 6000 (three public stacks).
+> `DIRECTIVE_COMPETITION_ENDGAME_v2_2026-10-04.md`.
+
 > **2026-10-03 PROJECT DIRECTIVES: THE COMPETITION ENDGAME (Claude, Alpha build seat; RATIFIED by
 > the Director) — signed.** Binding on every seat. The paper is the goal through 8 November, and it
 > requires a linked, scored Kaggle submission, so a submission track runs in parallel with the
