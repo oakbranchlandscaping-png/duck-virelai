@@ -1,0 +1,2 @@
+Source aa799b5: 77 focused G3-to-G4 tests passed.
+Package source must preserve the first NAV lever witness and continue the ranked sweep.
