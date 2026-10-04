@@ -536,6 +536,30 @@ class _HarnessGameSession:
             total_tokens = _analyzer_reported_tokens(self.analyzer)
             if run.solver_note is None:
                 run.solver_note = f"tokens={total_tokens}"
+            # Close a bounded NAV/CLICK sweep with an explicit G3 product if
+            # the solver stopped before the aggregate inventory was accepted.
+            # The runtime state is still present here; it is removed below.
+            gate_machine = getattr(self.analyzer, "_gate_machine", None)
+            if gate_machine is not None and getattr(gate_machine, "gate_id", None) == "G3-LEVERS":
+                try:
+                    from inference.agent.gate_artifacts import record_g3_run_outcome
+
+                    boundary = _is_engine_game_over(self.game) or bool(
+                        getattr(run, "level_completed", False)
+                    )
+                    if boundary:
+                        product = "G3_BOUNDARY_DEFERRED"
+                        detail = "the environment ended or changed level while G3 still had open roster work"
+                    else:
+                        product = "G3_BUDGET_STOPPED"
+                        detail = "the solver action/time boundary stopped G3 before roster completion"
+                    record_g3_run_outcome(
+                        self.state_path, gate_machine, product, detail=detail,
+                    )
+                except Exception:
+                    # Artifact emission must never turn a completed game into
+                    # a harness crash; the existing run evidence remains valid.
+                    pass
             self._finish_if_needed()
             self._close_game_observer()
             self.state_path.unlink(missing_ok=True)

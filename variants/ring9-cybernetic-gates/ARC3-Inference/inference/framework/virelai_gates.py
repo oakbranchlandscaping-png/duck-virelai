@@ -2508,6 +2508,10 @@ class _LeverTarget:
         self._confirmation_records: list[dict[str, Any]] = []
         self._reachability_records: list[dict[str, Any]] = []
         self._reachability_answers: dict[str, GateAnswer] = {}
+        # Sol, 2026-10-03: Duck proves a reachability concept once per
+        # reasoning/topology/ego-law key. Per-target geometry remains
+        # controller-certified and is never copied from this semantic cache.
+        self._reachability_understandings: dict[str, dict[str, Any]] = {}
         # Sol, 2026-10-03: durable evidence for the explicit G3 target-execution ledger.
         self._nav_contact_records: list[dict[str, Any]] = []
         self._reopened_reachability_indices: set[int] = set()
@@ -2525,6 +2529,7 @@ class _LeverTarget:
         self._nav_route_evidence: list[str] = []
         self._nav_world_address: str | None = None
         self._nav_seen_world_addresses: set[str] = set()
+        self._nav_topology_epoch = 0
         self._last_nav_plan: Any | None = None
         # Sol, 2026-10-03: integer terrain is a current-state hypothesis built
         # from demonstrated ego/ground exchange and observed refused landings.
@@ -2622,6 +2627,158 @@ class _LeverTarget:
             "stands": stands,
             "palette": palette,
         }
+
+    def _reachability_semantic_key(
+        self,
+        *,
+        shape: Iterable[tuple[int, int]],
+        bearings: Mapping[str, tuple[int, int]],
+    ) -> str:
+        """Identity of one reachability idea Duck must understand once.
+
+        Targets are deliberately absent. Their certificates remain individual,
+        while this key captures the shared causal idea that an embodied ego is
+        outside an exhausted reachable component in one topology epoch.
+        """
+        payload = {
+            "reasoning_class": "OUTSIDE_EXHAUSTED_REACHABLE_COMPONENT",
+            "level": self.machine.lives.level,
+            "topology_epoch": self._nav_topology_epoch,
+            "ego_shape": sorted(tuple(cell) for cell in shape),
+            "bearings": {
+                str(action): list(delta)
+                for action, delta in sorted(bearings.items())
+            },
+            "action_surface": sorted(
+                str(action) for action in (
+                    getattr(self.machine.ego, "_currently_available", ())
+                    or (item.action for item in self.machine.ego.affordances)
+                )
+            ),
+        }
+        return "RU-" + hashlib.sha256(_canonical(payload).encode()).hexdigest()[:16]
+
+    def _current_reachability_signature(
+        self,
+        *,
+        context: Mapping[str, Any],
+        target_entity_id: str,
+        target_cells: Iterable[tuple[int, int]],
+    ) -> dict[str, Any]:
+        """Recompute one target's route question from current certified state.
+
+        Author: Sol (Alpha build seat), 2026-10-03.
+        """
+        from inference.framework.nav_terrain import (
+            analyze_terrain_reachability,
+            reachability_signature,
+        )
+
+        hypothesis = analyze_terrain_reachability(
+            grid=context["grid"],
+            anchor=context["anchor"],
+            shape=context["shape"],
+            bearings=context["bearings"],
+            palette=context["palette"],
+            demonstrated_stands=context["stands"],
+            refused=self._nav_refused,
+            target_entity_id=target_entity_id,
+            target_cells=target_cells,
+        )
+        return reachability_signature(
+            hypothesis,
+            target_cells=target_cells,
+            shape=context["shape"],
+            bearings=context["bearings"],
+            action_surface=(
+                getattr(self.machine.ego, "_currently_available", ())
+                or (item.action for item in self.machine.ego.affordances)
+            ),
+            topology_epoch=self._nav_topology_epoch,
+            world_state_address=self._nav_world_address,
+        ).snapshot()
+
+    def _reopen_changed_reachability(
+        self,
+        *,
+        evidence_ref: str,
+        reason: str,
+        entity_id: str | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        """Reopen only targets whose certified reachability question changed."""
+        from inference.framework.nav_terrain import reachability_signature_changes
+
+        context = self._terrain_context()
+        if context is None:
+            return ()
+        ledger = context["ledger"]
+        events: list[dict[str, Any]] = []
+        for record in tuple(self._reachability_records):
+            candidate = str(record.get("target_entity_id") or "")
+            if entity_id is not None and candidate != entity_id:
+                continue
+            old_signature = record.get("reachability_signature")
+            if not isinstance(old_signature, Mapping):
+                continue
+            hypothesis = ledger.entities.get(candidate)
+            if hypothesis is None or hypothesis.current is None:
+                target_cells: tuple[tuple[int, int], ...] = ()
+            else:
+                target_cells = tuple(hypothesis.current.cells)
+            if target_cells:
+                new_signature = self._current_reachability_signature(
+                    context=context,
+                    target_entity_id=candidate,
+                    target_cells=target_cells,
+                )
+            else:
+                # A disappeared component has no route hypothesis to analyze,
+                # but its geometry/identity input unequivocally changed.
+                new_signature = dict(old_signature)
+                new_signature.update({
+                    "target_geometry_id": "TG-" + hashlib.sha256(
+                        _canonical(()).encode()
+                    ).hexdigest()[:16],
+                    "target_cells": [],
+                    "topology_epoch": self._nav_topology_epoch,
+                    "world_state_address": self._nav_world_address,
+                    "reachable_stands": [],
+                    "contact_edges": [],
+                    "bridge_edges": [],
+                })
+                new_signature["signature_id"] = "RS-" + hashlib.sha256(
+                    _canonical({
+                        field: new_signature.get(field)
+                        for field in (
+                            "target_geometry_id", "ego_law_id", "topology_epoch",
+                            "contact_edges", "bridge_edges",
+                        )
+                    }).encode()
+                ).hexdigest()[:16]
+            changed_fields = reachability_signature_changes(
+                old_signature, new_signature,
+            )
+            if not changed_fields:
+                # Reachable-stand growth and a new frame address are useful
+                # audit data, but neither is a new experiment by itself.
+                record["last_signature_check"] = {
+                    "evidence_ref": evidence_ref,
+                    "current_signature_id": new_signature.get("signature_id"),
+                    "reachable_stand_count": len(
+                        new_signature.get("reachable_stands") or ()
+                    ),
+                    "changed_fields": [],
+                }
+                continue
+            events.extend(self._reopen_reachability(
+                entity_id=candidate,
+                evidence_ref=evidence_ref,
+                reason=reason,
+                old_signature=old_signature,
+                new_signature=new_signature,
+                changed_fields=changed_fields,
+            ))
+        return tuple(events)
 
     def _classify_terrain_rows(self, context: Mapping[str, Any] | None = None) -> None:
         """Account for visual floor/wall objects already touched as terrain.
@@ -3002,12 +3159,21 @@ class _LeverTarget:
             for record in tuple(self._reachability_records):
                 entity_id = str(record.get("target_entity_id") or "")
                 hypothesis = ledger.entities.get(entity_id)
-                old_version = record.get("target_version")
-                if (
-                    hypothesis is not None and old_version is not None
-                    and hypothesis.version > int(old_version)
-                ):
-                    self._reopen_reachability(
+                old_cells = tuple(
+                    tuple(int(value) for value in cell)
+                    for cell in record.get("target_cells") or ()
+                )
+                new_cells = (
+                    ()
+                    if hypothesis is None or hypothesis.current is None
+                    else tuple(hypothesis.current.cells)
+                )
+                # Entity versions are observation sequence numbers: STILL
+                # increments them too. Reopen only for an actual target
+                # geometry/identity change, never for another target's
+                # counter-only transition.
+                if old_cells and new_cells != old_cells:
+                    self._reopen_changed_reachability(
                         entity_id=entity_id,
                         evidence_ref=evidence_ref,
                         reason="target geometry or identity changed after route exhaustion",
@@ -3015,12 +3181,43 @@ class _LeverTarget:
         return scope
 
     def _reopen_reachability(
-        self, *, evidence_ref: str, reason: str, entity_id: str | None = None,
-    ) -> None:
-        """Queue provisional route conclusions for another evidence-led attempt."""
+        self,
+        *,
+        evidence_ref: str,
+        reason: str,
+        entity_id: str | None = None,
+        old_signature: Mapping[str, Any] | None = None,
+        new_signature: Mapping[str, Any] | None = None,
+        changed_fields: Iterable[str] = (),
+    ) -> tuple[dict[str, Any], ...]:
+        """Queue terminal route rows whose target-specific question changed."""
         ledger = self._ensure_entity_ledger()
         journal = self.lifecycle_journal
         assert journal is not None
+        events: list[dict[str, Any]] = []
+        changed_field_tuple = tuple(str(field) for field in changed_fields)
+
+        def event_signature(signature: Mapping[str, Any] | None) -> dict[str, Any] | None:
+            if signature is None:
+                return None
+            compact = {
+                "schema": signature.get("schema"),
+                "signature_id": signature.get("signature_id"),
+                "reachable_stand_count": len(signature.get("reachable_stands") or ()),
+                "world_state_address": signature.get("world_state_address"),
+            }
+            for field in changed_field_tuple:
+                compact[field] = signature.get(field)
+            if "target_geometry_id" in changed_field_tuple:
+                compact["target_cells"] = signature.get("target_cells")
+            if "ego_law_id" in changed_field_tuple:
+                compact.update({
+                    "ego_shape": signature.get("ego_shape"),
+                    "bearings": signature.get("bearings"),
+                    "action_surface": signature.get("action_surface"),
+                })
+            return compact
+
         candidates = self._roster_after_inherited_nulls()
         entity_to_index = {
             ledger.entity_for_member(row["member_id"]): index
@@ -3029,6 +3226,8 @@ class _LeverTarget:
         for record in self._reachability_records:
             candidate = str(record.get("target_entity_id") or "")
             if entity_id is not None and candidate != entity_id:
+                continue
+            if str(record.get("status") or record.get("disposition") or "") != "PRESUMED_UNREACHABLE":
                 continue
             lifecycle = journal.entities.get(candidate)
             if lifecycle is None or lifecycle.state != "PRESUMED_UNREACHABLE":
@@ -3042,7 +3241,19 @@ class _LeverTarget:
             record["disposition"] = "REOPENED"
             record["reopened_by_evidence_ref"] = evidence_ref
             record["reopen_reason"] = reason
+            event = {
+                "schema": "virelai-nav-reachability-reopen-v1",
+                "target_entity_id": candidate,
+                "evidence_ref": evidence_ref,
+                "reason": reason,
+                "changed_fields": list(changed_field_tuple),
+                "old_signature": event_signature(old_signature),
+                "new_signature": event_signature(new_signature),
+            }
+            record.setdefault("reopen_events", []).append(event)
             self._reopened_reachability_indices.add(index)
+            events.append(event)
+        return tuple(events)
 
     def _apply_nav_world_delta(
         self,
@@ -3083,6 +3294,7 @@ class _LeverTarget:
         self._terrain_palette = None
         self._terrain_hypotheses.clear()
         self._terrain_falsification_refs.clear()
+        self._nav_topology_epoch += 1
         journal = self.lifecycle_journal
         if journal is not None:
             for entity_id in tuple(self._terrain_roles):
@@ -3094,7 +3306,7 @@ class _LeverTarget:
                         reason="terrain role must be checked in the changed world state",
                     )
         self._terrain_roles.clear()
-        self._reopen_reachability(
+        reopened = self._reopen_changed_reachability(
             evidence_ref=evidence_ref,
             reason=(
                 "the counter-masked world changed, so prior impassability evidence belongs "
@@ -3111,7 +3323,8 @@ class _LeverTarget:
                 {"stand": list(stand), "action": action}
                 for stand, action in invalidated_edges
             ],
-            "reopened_reachability": bool(self._reopened_reachability_indices),
+            "reopened_reachability": bool(reopened),
+            "reachability_reopen_events": [dict(item) for item in reopened],
             "reason": (
                 "A world delta may change passability; routing refusals are scoped to their "
                 "observed counter-masked grid state."
@@ -3282,6 +3495,7 @@ class _LeverTarget:
         from inference.framework.nav_terrain import (
             analyze_terrain_reachability,
             plan_hypothesis_test,
+            shared_bridge_support,
         )
 
         context = self._terrain_context()
@@ -3302,6 +3516,10 @@ class _LeverTarget:
         target_hypothesis = ledger.entities.get(target_entity)
         if target_hypothesis is not None and target_hypothesis.current is not None:
             target_cells = target_hypothesis.current.cells
+        semantic_key = self._reachability_semantic_key(
+            shape=shape,
+            bearings=bearings,
+        )
 
         terrain_hypothesis = None
         if palette.floor_integers:
@@ -3317,16 +3535,42 @@ class _LeverTarget:
                 target_cells=target_cells,
             )
             self._terrain_hypotheses[target_entity] = terrain_hypothesis.snapshot()
+            signature = self._current_reachability_signature(
+                context=context,
+                target_entity_id=target_entity,
+                target_cells=target_cells,
+            )
             falsifier_ref = self._terrain_falsification_refs.get(target_entity)
+            shared_support = shared_bridge_support(
+                terrain_hypothesis,
+                shape=shape,
+                bearings=bearings,
+                refused=self._nav_refused,
+                target_cells=target_cells,
+                bounds=(len(grid), len(grid[0])),
+            )
+            shared_refs = tuple(dict.fromkeys(
+                self._nav_refused_evidence.get((stand, action), "")
+                for stand, action, _landing in shared_support.refused_edges
+            ))
+            shared_refs = tuple(ref for ref in shared_refs if ref)
+            target_frontier_exhausted = (
+                shared_support.status == "SUPPORTED" and bool(shared_refs)
+            )
+            route_limit_ref = (
+                (falsifier_ref or shared_refs[-1])
+                if target_frontier_exhausted else None
+            )
             if (
                 terrain_hypothesis.status == "PREDICTED_UNREACHABLE"
-                and falsifier_ref
+                and route_limit_ref
                 and self._pending_reachability is None
             ):
                 evidence_refs = tuple(dict.fromkeys(
                     list(palette.floor_refs())
                     + list(palette.wall_refs())
-                    + [falsifier_ref]
+                    + list(shared_refs)
+                    + ([falsifier_ref] if falsifier_ref else [])
                     + [ref for _action, ref in control.evidence_refs]
                 ))
                 self._pending_reachability = {
@@ -3337,7 +3581,12 @@ class _LeverTarget:
                     "target_version": (
                         target_hypothesis.version if target_hypothesis is not None else None
                     ),
+                    "target_cells": [list(cell) for cell in target_cells],
                     "status": "PRESUMED_UNREACHABLE",
+                    "reasoning_class": "OUTSIDE_EXHAUSTED_REACHABLE_COMPONENT",
+                    "semantic_key": semantic_key,
+                    "semantic_reuse": self._reachability_understandings.get(semantic_key),
+                    "reachability_signature": signature,
                     "reachable_stands": [list(item) for item in terrain_hypothesis.reachable_stands],
                     "refused_edges": [
                         [list(stand), action] for stand, action in sorted(self._nav_refused)
@@ -3346,7 +3595,14 @@ class _LeverTarget:
                     "remaining_gap": terrain_hypothesis.remaining_gap,
                     "contact_surface_count": len(terrain_hypothesis.contact_edges),
                     "open_frontier_edge_count": len(terrain_hypothesis.bridge_edges),
-                    "falsification_attempt_evidence_ref": falsifier_ref,
+                    "falsification_attempt_evidence_ref": route_limit_ref,
+                    "route_exhaustion_basis": (
+                        "TARGET_FALSIFIER"
+                        if falsifier_ref else "SHARED_TOPOLOGY_REFUSAL"
+                    ),
+                    "shared_bridge_support": (
+                        shared_support.snapshot()
+                    ),
                     "palette_id": palette.palette_id,
                     "inertness_claim_permitted": False,
                     "reopen_conditions": [
@@ -3391,11 +3647,21 @@ class _LeverTarget:
                 evidence_refs = tuple(ref for ref in evidence_refs if ref)
                 if evidence_refs:
                     snapshot = certificate.snapshot()
+                    signature = self._current_reachability_signature(
+                        context=context,
+                        target_entity_id=target_entity,
+                        target_cells=target_cells,
+                    )
                     snapshot.update({
                         "target_member_id": member_id,
                         "target_version": (
                             target_hypothesis.version if target_hypothesis is not None else None
                         ),
+                        "target_cells": [list(cell) for cell in target_cells],
+                        "reasoning_class": "OUTSIDE_EXHAUSTED_REACHABLE_COMPONENT",
+                        "semantic_key": semantic_key,
+                        "semantic_reuse": self._reachability_understandings.get(semantic_key),
+                        "reachability_signature": signature,
                         "evidence_refs": list(evidence_refs),
                         "world_state_address": self._nav_world_address,
                         "level": self.machine.lives.level,
@@ -3536,10 +3802,14 @@ class _LeverTarget:
                 event["nav_terrain"]["hypothesis_id"] = getattr(
                     plan, "hypothesis_id", None
                 )
-            self._reopen_reachability(
+            reopened = self._reopen_changed_reachability(
                 evidence_ref=evidence_id,
                 reason="a new demonstrated floor stand expanded the reachable component",
             )
+            if reopened:
+                event["reachability_reopen_events"] = [
+                    dict(item) for item in reopened
+                ]
         elif movement_refused:
             edge = (tuple(getattr(plan, "stand")), action_name)
             self._nav_refused.add(edge)
@@ -3999,13 +4269,29 @@ class _LeverTarget:
         if raw.get("move_to_next_target") is not True:
             raise GateContractError("The accepted reachability explanation must release the target.")
         explanation = str(raw.get("explanation") or "").strip()
+        meaning = str(raw.get("meaning") or "").strip().upper()
+        not_proven = str(raw.get("not_proven") or "").strip().upper()
+        reopen_if = str(raw.get("reopen_if") or "").strip().upper()
         epistemic_limit = str(raw.get("epistemic_limit") or "").strip()
         evidence_refs = _strings(raw.get("evidence_refs"), "evidence_refs")
         required_refs = tuple(str(ref) for ref in pending.get("evidence_refs") or ())
         reopen_conditions = _strings(raw.get("reopen_conditions"), "reopen_conditions")
-        if not explanation or not epistemic_limit:
+        if meaning != "NO_CONTACT_PATH_IN_CURRENT_MAPPED_COMPONENT":
             raise GateContractError(
-                "Reachability explanation requires the mapped-field basis and its provisional limit."
+                "Reachability meaning must be NO_CONTACT_PATH_IN_CURRENT_MAPPED_COMPONENT."
+            )
+        if not_proven != "INERT_OR_PERMANENTLY_UNREACHABLE":
+            raise GateContractError(
+                "Reachability not_proven must be INERT_OR_PERMANENTLY_UNREACHABLE."
+            )
+        if reopen_if != "RELEVANT_REACHABILITY_INPUT_CHANGES":
+            raise GateContractError(
+                "Reachability reopen_if must be RELEVANT_REACHABILITY_INPUT_CHANGES."
+            )
+        word_count = len(explanation.split())
+        if not explanation or word_count > 40 or not epistemic_limit:
+            raise GateContractError(
+                "Reachability explanation requires 1-40 words plus the certified provisional limit."
             )
         if tuple(evidence_refs) != required_refs:
             raise GateContractError(
@@ -4069,7 +4355,17 @@ class _LeverTarget:
             "evidence_ref": evidence_refs[-1],
             "entity_id": entity_id,
             "target_member_id": member_id,
+            "understanding": {
+                "meaning": meaning,
+                "not_proven": not_proven,
+                "reopen_if": reopen_if,
+                "explanation": explanation,
+            },
+            "understanding_reused": bool(pending.get("semantic_reuse")),
         }
+        semantic_key = str(pending.get("semantic_key") or "")
+        if semantic_key:
+            self._reachability_understandings[semantic_key] = dict(record["understanding"])
         self._reachability_answers[entity_id] = answer
         self._reachability_records.append(record)
         self._bounded_ambiguities[entity_id] = record
@@ -4318,6 +4614,10 @@ class _LeverTarget:
                     asdict(answer)
                     for _, answer in sorted(self._reachability_answers.items())
                 ],
+                "reachability_understandings": {
+                    key: dict(value)
+                    for key, value in sorted(self._reachability_understandings.items())
+                },
                 "bounded_ambiguities": [
                     dict(item) for _, item in sorted(self._bounded_ambiguities.items())
                 ],
@@ -4388,6 +4688,14 @@ class _LeverTarget:
                 ),
                 "closest_stand": self._pending_reachability.get("closest_stand"),
                 "remaining_gap": self._pending_reachability.get("remaining_gap"),
+                "route_exhaustion_basis": self._pending_reachability.get(
+                    "route_exhaustion_basis", "TARGET_FALSIFIER"
+                ),
+                "shared_refused_edge_count": len(
+                    (
+                        self._pending_reachability.get("shared_bridge_support") or {}
+                    ).get("refused_edges") or ()
+                ),
                 "inertness_claim_permitted": False,
                 "move_to_next_target": True,
                 "reopen_conditions": list(
@@ -4396,6 +4704,27 @@ class _LeverTarget:
                 "epistemic_limit": (
                     "This is a provisional routing conclusion, not evidence that the object is "
                     "inert or permanently unreachable."
+                ),
+                "reasoning_class": self._pending_reachability.get("reasoning_class"),
+                "semantic_key": self._pending_reachability.get("semantic_key"),
+                "meaning": (
+                    self._pending_reachability.get("semantic_reuse") or {}
+                ).get("meaning", "NO_CONTACT_PATH_IN_CURRENT_MAPPED_COMPONENT"),
+                "not_proven": (
+                    self._pending_reachability.get("semantic_reuse") or {}
+                ).get("not_proven", "INERT_OR_PERMANENTLY_UNREACHABLE"),
+                "reopen_if": (
+                    self._pending_reachability.get("semantic_reuse") or {}
+                ).get("reopen_if", "RELEVANT_REACHABILITY_INPUT_CHANGES"),
+                "explanation": (
+                    self._pending_reachability.get("semantic_reuse") or {}
+                ).get(
+                    "explanation",
+                    "In at most 40 words, explain why the ego cannot currently contact this "
+                    "target, why that does not make it inert, and what could reopen the question.",
+                ),
+                "semantic_reuse": bool(
+                    self._pending_reachability.get("semantic_reuse")
                 ),
             } if self._pending_reachability is not None else {
                 "answer_kind": "LEVER_DOSSIER",
@@ -4563,9 +4892,21 @@ class _LeverTarget:
                 "refused_edge_count": len(record.get("refused_edges") or ()),
                 "closest_stand": record.get("closest_stand"),
                 "remaining_gap": record.get("remaining_gap"),
+                "route_exhaustion_basis": record.get("route_exhaustion_basis"),
+                "shared_refused_edge_count": len(
+                    (record.get("shared_bridge_support") or {}).get("refused_edges") or ()
+                ),
                 "evidence_refs": record.get("evidence_refs"),
                 "answer_id": record.get("answer_id"),
                 "inertness_claim_permitted": False,
+                "reachability_signature_id": (
+                    record.get("reachability_signature") or {}
+                ).get("signature_id"),
+                "reopen_event_count": len(record.get("reopen_events") or ()),
+                "last_reopen_changed_fields": (
+                    (record.get("reopen_events") or [{}])[-1].get("changed_fields")
+                    if record.get("reopen_events") else []
+                ),
                 "detail_delivery": "FULL_SNAPSHOT_OR_EVIDENCE_QUERY",
             }
             for record in attribution.get("reachability_records") or ()
@@ -4589,9 +4930,20 @@ class _LeverTarget:
                 ),
                 "closest_stand": pending_reachability.get("closest_stand"),
                 "remaining_gap": pending_reachability.get("remaining_gap"),
+                "route_exhaustion_basis": pending_reachability.get(
+                    "route_exhaustion_basis"
+                ),
+                "shared_refused_edge_count": len(
+                    (
+                        pending_reachability.get("shared_bridge_support") or {}
+                    ).get("refused_edges") or ()
+                ),
                 "evidence_refs": pending_reachability.get("evidence_refs"),
                 "reopen_conditions": pending_reachability.get("reopen_conditions"),
                 "inertness_claim_permitted": False,
+                "reachability_signature_id": (
+                    pending_reachability.get("reachability_signature") or {}
+                ).get("signature_id"),
                 "detail_delivery": "FULL_SNAPSHOT_OR_EVIDENCE_QUERY",
             }
         palette = scheduler.get("terrain_palette")

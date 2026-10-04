@@ -2,13 +2,15 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from inference.framework.nav_control import compile_nav_control_map
 from inference.framework.nav_intervention import ContactEpoch, ContactProcedure, InterventionRef
 from inference.framework.nav_route import (
     NavLattice, certify_unreachable, classify_contact, plan_contact,
 )
 from inference.framework.cybernetic_targeting import MemoryProduct
-from inference.framework.virelai_gates import CyberneticGateMachine
+from inference.framework.virelai_gates import CyberneticGateMachine, GateContractError
 from inference.framework.controller_executor import next_owned_step, wake_reason
 from inference.framework import controller_executor as executor
 from inference.framework.nav_route import NavStep
@@ -550,6 +552,416 @@ def test_reachability_answer_explains_limit_releases_target_and_stays_bounded():
     assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
     assert target["entity_id"] not in adapter._bounded_ambiguities
     assert adapter._reachability_records[-1]["reopened_by_evidence_ref"] == "E-NEW-FLOOR"
+
+
+def test_still_version_increment_does_not_reopen_accepted_reachability():
+    """Regression from live ls20 v2: E0006's counter-only refusal reopened E0005.
+
+    Entity versions are sighting sequence numbers and advance on STILL.  The
+    reachability row is scoped to target geometry, so the unchanged cells must
+    remain terminal even though the bookkeeping version advances.
+    """
+    from test_g3_scheduler import GRID, machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    target = machine.next_probe_capability()["target"]
+    ledger = adapter._ensure_entity_ledger()
+    entity = ledger.entities[target["entity_id"]]
+    original_cells = tuple(entity.current.cells)
+    original_version = entity.version
+    adapter._pending_reachability = {
+        "schema": "virelai-nav-reachability-certificate-v2",
+        "target_entity_id": target["entity_id"],
+        "target_member_id": target["member_id"],
+        "target_version": original_version,
+        "target_cells": [list(cell) for cell in original_cells],
+        "status": "PRESUMED_UNREACHABLE",
+        "reasoning_class": "OUTSIDE_EXHAUSTED_REACHABLE_COMPONENT",
+        "semantic_key": "RU-live-regression",
+        "semantic_reuse": None,
+        "reachable_stands": [[1, 1]],
+        "refused_edges": [[[1, 1], "ACTION1"]],
+        "closest_stand": [1, 1],
+        "remaining_gap": 3,
+        "inertness_claim_permitted": False,
+        "reopen_conditions": [
+            "new stood anchor", "previously refused edge yields",
+            "target geometry or identity changes",
+            "ego footprint, bearing map, or action surface changes",
+            "terrain or level state changes",
+        ],
+        "evidence_refs": ["E-FLOOR", "E-REFUSAL"],
+    }
+    template = machine.gate_view()["answer_template"]
+    machine.submit_answer({
+        **template,
+        "explanation": (
+            "The mapped ego has no contact path now; this does not prove inertness "
+            "and relevant route changes reopen the question."
+        ),
+    })
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "PRESUMED_UNREACHABLE"
+
+    next_target = machine.next_probe_capability()["target"]
+    adapter.observation_scope(
+        _unchanged_outcome(GRID, 1, action="ACTION4"),
+        target_member_id=next_target["member_id"],
+        target_entity_id=next_target["entity_id"],
+    )
+
+    assert entity.version > original_version
+    assert tuple(entity.current.cells) == original_cells
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "PRESUMED_UNREACHABLE"
+    assert target["entity_id"] not in adapter._reopened_reachability_indices
+
+
+def test_reachability_understanding_is_short_and_reused_by_controller():
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    first = machine.next_probe_capability()["target"]
+    shared = {
+        "schema": "virelai-nav-reachability-certificate-v2",
+        "target_entity_id": first["entity_id"],
+        "target_member_id": first["member_id"],
+        "target_version": 1,
+        "target_cells": first["cells"],
+        "status": "PRESUMED_UNREACHABLE",
+        "reasoning_class": "OUTSIDE_EXHAUSTED_REACHABLE_COMPONENT",
+        "semantic_key": "RU-shared",
+        "semantic_reuse": None,
+        "reachable_stands": [[1, 1]],
+        "refused_edges": [[[1, 1], "ACTION1"]],
+        "closest_stand": [1, 1],
+        "remaining_gap": 3,
+        "inertness_claim_permitted": False,
+        "reopen_conditions": [
+            "new stood anchor", "previously refused edge yields",
+            "target geometry or identity changes",
+            "ego footprint, bearing map, or action surface changes",
+            "terrain or level state changes",
+        ],
+        "evidence_refs": ["E-FLOOR", "E-REFUSAL"],
+    }
+    adapter._pending_reachability = dict(shared)
+    template = machine.gate_view()["answer_template"]
+    explanation = (
+        "The ego has no contact path in the mapped component; this does not prove "
+        "inertness, and relevant route changes reopen the question."
+    )
+    machine.submit_answer({**template, "explanation": explanation})
+    assert len(explanation.split()) <= 40
+    assert adapter._reachability_understandings["RU-shared"]["explanation"] == explanation
+
+    second = machine.next_probe_capability()["target"]
+    adapter._pending_reachability = {
+        **shared,
+        "target_entity_id": second["entity_id"],
+        "target_member_id": second["member_id"],
+        "target_cells": second["cells"],
+        "semantic_reuse": dict(adapter._reachability_understandings["RU-shared"]),
+    }
+    view = machine.gate_view()
+    assert view["answer_template"]["semantic_reuse"] is True
+    step = next_owned_step(machine)
+    assert (step.owner, step.kind) == ("CONTROLLER", "ANSWER")
+    assert step.answer["explanation"] == explanation
+
+
+def test_reachability_understanding_rejects_an_essay():
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    target = machine.next_probe_capability()["target"]
+    adapter._pending_reachability = {
+        "target_entity_id": target["entity_id"], "target_member_id": target["member_id"],
+        "status": "PRESUMED_UNREACHABLE", "reasoning_class": "OUTSIDE_EXHAUSTED_REACHABLE_COMPONENT",
+        "semantic_key": "RU-long", "semantic_reuse": None,
+        "reachable_stands": [[1, 1]], "refused_edges": [], "closest_stand": [1, 1],
+        "remaining_gap": 2, "inertness_claim_permitted": False,
+        "reopen_conditions": ["terrain changes"], "evidence_refs": ["E-1"],
+    }
+    template = machine.gate_view()["answer_template"]
+    with pytest.raises(GateContractError, match="1-40 words"):
+        machine.submit_answer({**template, "explanation": "word " * 41})
+
+
+def test_reachability_semantic_key_reopens_understanding_for_relevant_context_change():
+    from test_g3_scheduler import machine_for
+
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"], "EMBODIED_EGO"
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    shape = ((0, 0), (0, 1))
+    bearings = {"ACTION1": (-1, 0), "ACTION2": (1, 0)}
+    original = adapter._reachability_semantic_key(shape=shape, bearings=bearings)
+
+    adapter._nav_topology_epoch += 1
+    changed_topology = adapter._reachability_semantic_key(shape=shape, bearings=bearings)
+    changed_ego = adapter._reachability_semantic_key(
+        shape=((0, 0),), bearings=bearings
+    )
+    machine.ego._currently_available.add("ACTION5")
+    changed_action_surface = adapter._reachability_semantic_key(
+        shape=((0, 0),), bearings=bearings
+    )
+
+    assert changed_topology != original
+    assert changed_ego != changed_topology
+    assert changed_action_surface != changed_ego
+
+
+def _n2_signature_fixture(monkeypatch, *, refused=()):
+    """One accepted route row plus a controllable current terrain context."""
+    from inference.framework.nav_terrain import TerrainPalette
+    from test_g3_scheduler import machine_for
+
+    grid = tuple(tuple(
+        3 if (row, col) == (0, 2) else 2 if (row, col) == (2, 2) else 0
+        for col in range(5)
+    ) for row in range(5))
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"],
+        "EMBODIED_EGO", grid=grid,
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((2, 2),))
+    adapter._target_index = 1
+    target = machine.next_probe_capability()["target"]
+    adapter._nav_refused = set(refused)
+    context = {
+        "control": None,
+        "bearings": {
+            "ACTION1": (-1, 0), "ACTION2": (1, 0),
+            "ACTION3": (0, -1), "ACTION4": (0, 1),
+        },
+        "ledger": ledger,
+        "grid": grid,
+        "cells": ((2, 2),),
+        "anchor": (2, 2),
+        "shape": frozenset({(0, 0)}),
+        "stands": {(2, 2)},
+        "palette": TerrainPalette(
+            schema="virelai-nav-terrain-palette-v1", palette_id="TP-test",
+            floor_integers=(), wall_integers=(), floor_cells=(), wall_cells=(),
+            floor_evidence=(), wall_evidence=(), action_coverage=(), limitations=(),
+        ),
+    }
+    monkeypatch.setattr(adapter, "_terrain_context", lambda: context)
+    signature = adapter._current_reachability_signature(
+        context=context,
+        target_entity_id=target["entity_id"],
+        target_cells=target["cells"],
+    )
+    record = {
+        "target_entity_id": target["entity_id"],
+        "target_member_id": target["member_id"],
+        "status": "PRESUMED_UNREACHABLE",
+        "disposition": "PRESUMED_UNREACHABLE",
+        "reachability_signature": signature,
+    }
+    adapter._reachability_records.append(record)
+    adapter._bounded_ambiguities[target["entity_id"]] = record
+    adapter.lifecycle_journal.transition(
+        target["entity_id"], "PRESUMED_UNREACHABLE",
+        evidence_ref="E-ACCEPTED", actor="TEST",
+        reason="fixture route question exhausted",
+    )
+    return adapter, context, target, record
+
+
+def test_n2_irrelevant_new_stand_and_unrelated_probe_do_not_reopen(monkeypatch):
+    adapter, context, target, record = _n2_signature_fixture(monkeypatch)
+
+    assert adapter._reopen_changed_reachability(
+        evidence_ref="E-UNRELATED", reason="unrelated target probe",
+    ) == ()
+    context["stands"].add((3, 2))  # expands away from the target at (0, 2)
+    assert adapter._reopen_changed_reachability(
+        evidence_ref="E-IRRELEVANT-STAND", reason="new demonstrated stand",
+    ) == ()
+
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "PRESUMED_UNREACHABLE"
+    assert record["last_signature_check"]["changed_fields"] == []
+    assert len(record["last_signature_check"]["current_signature_id"]) > 3
+
+
+def test_n2_relevant_new_stand_reopens_with_signature_diff(monkeypatch):
+    adapter, context, target, record = _n2_signature_fixture(monkeypatch)
+    context["stands"].add((1, 2))  # supplies a direct ACTION1 contact experiment
+
+    events = adapter._reopen_changed_reachability(
+        evidence_ref="E-RELEVANT-STAND", reason="new demonstrated stand",
+    )
+
+    assert len(events) == 1
+    assert set(events[0]["changed_fields"]) == {"contact_edges", "bridge_edges"}
+    assert events[0]["old_signature"]["contact_edges"] == ()
+    assert events[0]["new_signature"]["contact_edges"]
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
+    assert record["reopen_events"][-1] == events[0]
+
+
+def test_n2_yielding_refusal_reopens_only_when_experiment_set_changes(monkeypatch):
+    refused = {((2, 2), "ACTION1")}
+    adapter, _context, target, _record = _n2_signature_fixture(
+        monkeypatch, refused=refused,
+    )
+    adapter._nav_refused.remove(((2, 2), "ACTION1"))
+
+    events = adapter._reopen_changed_reachability(
+        evidence_ref="E-REFUSAL-YIELDED", reason="previously refused edge yielded",
+    )
+
+    assert len(events) == 1
+    assert "bridge_edges" in events[0]["changed_fields"]
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
+
+
+def test_n2_world_state_epoch_reopens_and_names_the_changed_input(monkeypatch):
+    adapter, _context, target, _record = _n2_signature_fixture(monkeypatch)
+    adapter._nav_topology_epoch += 1
+
+    events = adapter._reopen_changed_reachability(
+        evidence_ref="E-WORLD-DELTA", reason="counter-masked world changed",
+    )
+
+    assert len(events) == 1
+    assert events[0]["changed_fields"] == ["topology_epoch"]
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
+
+
+def test_n2_disappeared_target_reopens_as_geometry_change(monkeypatch):
+    adapter, context, target, _record = _n2_signature_fixture(monkeypatch)
+    context["ledger"] = SimpleNamespace(
+        entities={target["entity_id"]: SimpleNamespace(current=None)}
+    )
+
+    events = adapter._reopen_changed_reachability(
+        evidence_ref="E-TARGET-DISAPPEARED", reason="target geometry changed",
+        entity_id=target["entity_id"],
+    )
+
+    assert len(events) == 1
+    assert "target_geometry_id" in events[0]["changed_fields"]
+    assert events[0]["new_signature"]["target_cells"] == []
+    assert adapter.lifecycle_journal.entities[target["entity_id"]].state == "REOPENED"
+
+
+def test_n2_old_reopened_record_cannot_steal_a_later_invalidation(monkeypatch):
+    adapter, context, target, old_record = _n2_signature_fixture(monkeypatch)
+    adapter._reopen_reachability(
+        entity_id=target["entity_id"], evidence_ref="E-FIRST", reason="first change",
+    )
+    adapter.lifecycle_journal.transition(
+        target["entity_id"], "PRESUMED_UNREACHABLE",
+        evidence_ref="E-REACCEPTED", actor="TEST", reason="new certificate accepted",
+    )
+    current_record = {
+        **old_record,
+        "status": "PRESUMED_UNREACHABLE",
+        "disposition": "PRESUMED_UNREACHABLE",
+        "reachability_signature": dict(old_record["reachability_signature"]),
+    }
+    adapter._reachability_records.append(current_record)
+    context["stands"].add((1, 2))
+
+    events = adapter._reopen_changed_reachability(
+        evidence_ref="E-SECOND", reason="new contact experiment",
+    )
+
+    assert len(events) == 1
+    assert old_record["reopened_by_evidence_ref"] == "E-FIRST"
+    assert current_record["reopened_by_evidence_ref"] == "E-SECOND"
+
+
+def test_n3_one_shared_boundary_refusal_closes_sibling_targets_individually(monkeypatch):
+    from inference.framework.nav_terrain import TerrainPalette
+    from test_g3_scheduler import machine_for
+
+    grid = tuple(tuple(
+        3 if (row, col) == (0, 1)
+        else 4 if (row, col) == (0, 3)
+        else 2 if (row, col) == (2, 2)
+        else 0
+        for col in range(5)
+    ) for row in range(5))
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4"],
+        "EMBODIED_EGO", grid=grid,
+    )
+    adapter = machine._adapters["G3-LEVERS"]
+    ledger = adapter._ensure_entity_ledger()
+    assert ledger.bind_role_cells("EGO", ((2, 2),))
+    adapter._target_index = 1
+    shared_edge = ((2, 2), "ACTION1")
+    adapter._nav_refused = {shared_edge}
+    adapter._nav_refused_evidence[shared_edge] = "E-SHARED-BOUNDARY"
+    context = {
+        "control": SimpleNamespace(evidence_refs=()),
+        "bearings": {"ACTION1": (-1, 0)},
+        "ledger": ledger,
+        "grid": grid,
+        "cells": ((2, 2),),
+        "anchor": (2, 2),
+        "shape": frozenset({(0, 0)}),
+        "stands": {(2, 2)},
+        "palette": TerrainPalette(
+            schema="virelai-nav-terrain-palette-v1", palette_id="TP-shared",
+            floor_integers=(1,), wall_integers=(), floor_cells=((2, 2),),
+            wall_cells=(), floor_evidence=((1, ("E-FLOOR",)),),
+            wall_evidence=(), action_coverage=("ACTION1",), limitations=(),
+        ),
+    }
+    monkeypatch.setattr(adapter, "_terrain_context", lambda: context)
+
+    first = machine.next_probe_capability()["target"]
+    assert adapter.planned_nav_step(first) is None
+    first_template = machine.gate_view()["answer_template"]
+    assert first_template["semantic_reuse"] is False
+    assert first_template["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL"
+    assert first_template["shared_refused_edge_count"] == 1
+    assert adapter._pending_reachability["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL"
+    machine.submit_answer({
+        **first_template,
+        "explanation": (
+            "The mapped ego has no contact path now; this does not prove inertness, "
+            "and relevant route changes reopen the target."
+        ),
+    })
+
+    second = machine.next_probe_capability()["target"]
+    assert second["entity_id"] != first["entity_id"]
+    assert adapter.planned_nav_step(second) is None
+    assert adapter._pending_reachability["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL"
+    assert machine.gate_view()["answer_template"]["semantic_reuse"] is True
+    controller_step = next_owned_step(machine)
+    assert (controller_step.owner, controller_step.kind) == ("CONTROLLER", "ANSWER")
+    machine.submit_answer(controller_step.answer)
+
+    records = adapter._reachability_records[-2:]
+    assert [row["target_entity_id"] for row in records] == [
+        first["entity_id"], second["entity_id"],
+    ]
+    assert all(
+        row["falsification_attempt_evidence_ref"] == "E-SHARED-BOUNDARY"
+        for row in records
+    )
+    assert all(row["route_exhaustion_basis"] == "SHARED_TOPOLOGY_REFUSAL" for row in records)
+    assert records[0]["reachability_signature"]["target_geometry_id"] != records[1]["reachability_signature"]["target_geometry_id"]
+    assert records[1]["understanding_reused"] is True
+    assert adapter._navigation_steps == 0
 
 
 def test_g3_inventory_is_a_prepopulated_visual_target_execution_ledger():

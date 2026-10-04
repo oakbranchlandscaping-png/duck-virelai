@@ -9,6 +9,9 @@ from inference.framework.nav_terrain import (
     analyze_terrain_reachability,
     infer_terrain_palette,
     plan_hypothesis_test,
+    reachability_signature,
+    reachability_signature_changes,
+    shared_bridge_support,
 )
 
 
@@ -139,6 +142,65 @@ def test_predicted_limit_produces_a_falsifier_action_not_a_verdict():
     assert falsifier is not None
     assert falsifier.experiment_kind == "FALSIFIER"
     assert falsifier.landing == (1, 2)
+
+
+def test_reachability_signature_separates_audit_growth_from_reopen_inputs():
+    grid = tuple(tuple(0 for _ in range(5)) for _ in range(5))
+    bearings = {
+        "UP": (-1, 0), "DOWN": (1, 0),
+        "LEFT": (0, -1), "RIGHT": (0, 1),
+    }
+
+    def signature(*, stands, target=((0, 2),), shape=((0, 0),), epoch=0):
+        hypothesis = analyze_terrain_reachability(
+            grid=grid, anchor=(2, 2), shape=frozenset(shape), bearings=bearings,
+            palette=_palette(floor=(), wall=()), demonstrated_stands=set(stands),
+            refused=(), target_entity_id="TARGET", target_cells=target,
+        )
+        return reachability_signature(
+            hypothesis, target_cells=target, shape=shape, bearings=bearings,
+            action_surface=bearings, topology_epoch=epoch,
+            world_state_address="WORLD-A",
+        ).snapshot()
+
+    original = signature(stands={(2, 2)})
+    irrelevant_growth = signature(stands={(2, 2), (3, 2)})
+    target_changed = signature(stands={(2, 2)}, target=((0, 1),))
+    ego_changed = signature(stands={(2, 2)}, shape=((0, 0), (0, 1)))
+    topology_changed = signature(stands={(2, 2)}, epoch=1)
+
+    assert original["reachable_stands"] != irrelevant_growth["reachable_stands"]
+    assert reachability_signature_changes(original, irrelevant_growth) == ()
+    assert "target_geometry_id" in reachability_signature_changes(original, target_changed)
+    assert "ego_law_id" in reachability_signature_changes(original, ego_changed)
+    assert reachability_signature_changes(original, topology_changed) == ("topology_epoch",)
+
+
+def test_shared_bridge_support_reuses_only_a_strictly_closer_refusal():
+    grid = tuple(tuple(0 for _ in range(5)) for _ in range(5))
+    shape = frozenset({(0, 0)})
+    bearings = {"UP": (-1, 0), "RIGHT": (0, 1)}
+    refused = {((2, 2), "UP")}
+
+    def support(target):
+        hypothesis = analyze_terrain_reachability(
+            grid=grid, anchor=(2, 2), shape=shape, bearings=bearings,
+            palette=_palette(floor=(), wall=()), demonstrated_stands={(2, 2)},
+            refused=refused, target_entity_id="TARGET", target_cells={target},
+        )
+        return shared_bridge_support(
+            hypothesis, shape=shape, bearings=bearings, refused=refused,
+            target_cells={target}, bounds=(5, 5),
+        )
+
+    dominated = support((0, 2))
+    tied = support((1, 3))
+
+    assert dominated.status == "SUPPORTED"
+    assert dominated.refused_edges == (((2, 2), "UP", (1, 2)),)
+    assert dominated.closest_refused_gap < dominated.closest_open_gap
+    assert tied.status == "UNSUPPORTED"
+    assert tied.closest_refused_gap == tied.closest_open_gap
 
 
 def test_local_refusal_overrides_floor_class_without_poisoning_other_routes():

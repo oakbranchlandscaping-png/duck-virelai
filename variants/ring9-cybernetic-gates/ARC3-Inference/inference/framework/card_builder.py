@@ -50,9 +50,14 @@ CARD_BUDGET = sum(SLOT_BUDGETS.values()) + ENVELOPE_CHARS
 CERTIFIED_TEMPLATE_FIELDS: dict[str, tuple[str, ...]] = {
     "G1-EGO": ("evidence_refs",),
     "G2-COUNTER": ("candidate_id", "evidence_refs", "novel_prediction.scope"),
+    # Sol, 2026-10-03: keep per-target reachability facts controller-owned.
     "G3-LEVERS": (
         "effect_summary", "evidence_refs", "lever_entities", "clean_null_entities",
-        "ambiguous_entities",
+        "ambiguous_entities", "target_member_id", "target_entity_id", "conclusion",
+        "reachable_stand_count", "refused_edge_count", "closest_stand", "remaining_gap",
+        "inertness_claim_permitted", "move_to_next_target", "reopen_conditions",
+        "epistemic_limit", "semantic_key", "reasoning_class", "semantic_reuse",
+        "route_exhaustion_basis", "shared_refused_edge_count",
     ),
     "G4-REACTIONS": ("effect_channels",),
 }

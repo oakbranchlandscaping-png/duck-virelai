@@ -90,6 +90,209 @@ class TerrainPlan:
     experiment_kind: str
 
 
+@dataclass(frozen=True)
+class ReachabilitySignature:
+    """Target-specific inputs and experiments behind a provisional route limit.
+
+    ``reachable_stands`` and ``world_state_address`` are retained for audit.
+    Reopening is controlled by the target geometry, ego law, topology epoch,
+    contact edges and nearest unspent target-directed bridge edges.
+
+    Author: Sol (Alpha build seat), 2026-10-03.
+    """
+
+    schema: str
+    signature_id: str
+    target_entity_id: str
+    target_geometry_id: str
+    target_cells: tuple[Cell, ...]
+    ego_law_id: str
+    ego_shape: tuple[Cell, ...]
+    bearings: tuple[tuple[str, Cell], ...]
+    action_surface: tuple[str, ...]
+    topology_epoch: int
+    world_state_address: str | None
+    reachable_stands: tuple[Cell, ...]
+    contact_edges: tuple[tuple[Cell, str, Cell], ...]
+    bridge_edges: tuple[tuple[Cell, str, Cell], ...]
+
+    def snapshot(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class SharedBridgeSupport:
+    """A previously refused boundary press that dominates open target bridges.
+
+    The refusal may support several targets, but this result is recomputed for
+    each target and retains that target's own gap and edge set.
+
+    Author: Sol (Alpha build seat), 2026-10-03.
+    """
+
+    schema: str
+    target_entity_id: str
+    status: str
+    refused_edges: tuple[tuple[Cell, str, Cell], ...]
+    closest_refused_gap: int | None
+    closest_open_gap: int | None
+    reason: str
+
+    def snapshot(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+REACHABILITY_REOPEN_FIELDS = (
+    "target_geometry_id",
+    "ego_law_id",
+    "topology_epoch",
+    "contact_edges",
+    "bridge_edges",
+)
+
+
+def reachability_signature(
+    hypothesis: TerrainHypothesis,
+    *,
+    target_cells: Iterable[Cell],
+    shape: Iterable[Cell],
+    bearings: Mapping[str, Cell],
+    action_surface: Iterable[str],
+    topology_epoch: int,
+    world_state_address: str | None,
+) -> ReachabilitySignature:
+    """Freeze the target-specific route question represented by a hypothesis."""
+    target = tuple(sorted((int(r), int(c)) for r, c in target_cells))
+    ego_shape = tuple(sorted((int(r), int(c)) for r, c in shape))
+    bearing_rows = tuple(sorted(
+        (str(action), (int(delta[0]), int(delta[1])))
+        for action, delta in bearings.items()
+    ))
+    actions = tuple(sorted(str(action) for action in action_surface))
+    target_geometry_id = "TG-" + hashlib.sha256(
+        _canonical(target).encode()
+    ).hexdigest()[:16]
+    ego_law_id = "EL-" + hashlib.sha256(_canonical({
+        "shape": ego_shape,
+        "bearings": bearing_rows,
+        "actions": actions,
+    }).encode()).hexdigest()[:16]
+
+    # The controller will execute only the nearest target-directed bridge.
+    # Keeping every equally nearest bridge preserves real alternatives while
+    # excluding unrelated frontier growth elsewhere in the room.
+    bridge_edges: tuple[tuple[Cell, str, Cell], ...] = ()
+    if hypothesis.bridge_edges:
+        first = hypothesis.bridge_edges[0]
+        nearest_gap = _distance(frozenset(ego_shape), first[2], frozenset(target))
+        bridge_edges = tuple(
+            edge for edge in hypothesis.bridge_edges
+            if _distance(frozenset(ego_shape), edge[2], frozenset(target)) == nearest_gap
+        )
+    reopen_payload = {
+        "target_geometry_id": target_geometry_id,
+        "ego_law_id": ego_law_id,
+        "topology_epoch": int(topology_epoch),
+        "contact_edges": hypothesis.contact_edges,
+        "bridge_edges": bridge_edges,
+    }
+    signature_id = "RS-" + hashlib.sha256(
+        _canonical(reopen_payload).encode()
+    ).hexdigest()[:16]
+    return ReachabilitySignature(
+        schema="virelai-nav-reachability-signature-v1",
+        signature_id=signature_id,
+        target_entity_id=str(hypothesis.target_entity_id),
+        target_geometry_id=target_geometry_id,
+        target_cells=target,
+        ego_law_id=ego_law_id,
+        ego_shape=ego_shape,
+        bearings=bearing_rows,
+        action_surface=actions,
+        topology_epoch=int(topology_epoch),
+        world_state_address=(
+            None if world_state_address is None else str(world_state_address)
+        ),
+        reachable_stands=tuple(hypothesis.reachable_stands),
+        contact_edges=tuple(hypothesis.contact_edges),
+        bridge_edges=bridge_edges,
+    )
+
+
+def reachability_signature_changes(
+    before: Mapping[str, Any], after: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Return only changes that create a different reachability question."""
+    return tuple(
+        field for field in REACHABILITY_REOPEN_FIELDS
+        if _canonical(before.get(field)) != _canonical(after.get(field))
+    )
+
+
+def shared_bridge_support(
+    hypothesis: TerrainHypothesis,
+    *,
+    shape: Iterable[Cell],
+    bearings: Mapping[str, Cell],
+    refused: Iterable[Edge],
+    target_cells: Iterable[Cell],
+    bounds: tuple[int, int],
+) -> SharedBridgeSupport:
+    """Find already-spent boundary presses that settle this target's next probe.
+
+    A shared refusal is sufficient only when it is strictly closer to the
+    target than every still-open bridge. Equal-distance open alternatives must
+    be tried rather than hidden by reuse.
+    """
+    body = frozenset((int(r), int(c)) for r, c in shape)
+    target = frozenset((int(r), int(c)) for r, c in target_cells)
+    reachable = frozenset(hypothesis.reachable_stands)
+    valid = frozenset(hypothesis.valid_stands)
+    refused_candidates: list[tuple[int, Cell, str, Cell]] = []
+    for stand, action in sorted(set(refused)):
+        if stand not in reachable or action not in bearings:
+            continue
+        dr, dc = bearings[action]
+        landing = (stand[0] + dr, stand[1] + dc)
+        if not _in_bounds(body, landing, bounds):
+            continue
+        if footprint(body, landing) & target or landing in valid:
+            continue
+        refused_candidates.append((
+            _distance(body, landing, target), stand, action, landing,
+        ))
+    closest_refused = (
+        min((row[0] for row in refused_candidates), default=None)
+    )
+    closest_open = (
+        _distance(body, hypothesis.bridge_edges[0][2], target)
+        if hypothesis.bridge_edges else None
+    )
+    supported = bool(
+        closest_refused is not None
+        and (closest_open is None or closest_refused < closest_open)
+    )
+    edges = tuple(
+        (stand, action, landing)
+        for gap, stand, action, landing in refused_candidates
+        if supported and gap == closest_refused
+    )
+    return SharedBridgeSupport(
+        schema="virelai-nav-shared-bridge-support-v1",
+        target_entity_id=hypothesis.target_entity_id,
+        status="SUPPORTED" if supported else "UNSUPPORTED",
+        refused_edges=edges,
+        closest_refused_gap=closest_refused,
+        closest_open_gap=closest_open,
+        reason=(
+            "The closest target-directed boundary experiment was already refused in this "
+            "topology and every open bridge is farther away."
+            if supported else
+            "No prior refusal strictly dominates the target's remaining open bridge experiments."
+        ),
+    )
+
+
 def footprint(shape: Iterable[Cell], anchor: Cell) -> frozenset[Cell]:
     return frozenset((anchor[0] + r, anchor[1] + c) for r, c in shape)
 
@@ -442,6 +645,8 @@ def plan_hypothesis_test(
 
 
 __all__ = [
-    "TerrainHypothesis", "TerrainPalette", "TerrainPlan",
+    "ReachabilitySignature", "SharedBridgeSupport", "TerrainHypothesis", "TerrainPalette", "TerrainPlan",
     "analyze_terrain_reachability", "infer_terrain_palette", "plan_hypothesis_test",
+    "reachability_signature", "reachability_signature_changes",
+    "shared_bridge_support",
 ]

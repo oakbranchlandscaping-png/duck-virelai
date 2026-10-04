@@ -9,7 +9,7 @@ import re
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 from urllib.parse import urlparse, urlunparse
 
 import requests
@@ -2779,6 +2779,10 @@ class ToolAgent:
         )
         controller_focus_update = self._controller_focus_update()
         gate_context_update = self._gate_context_update(state_path)
+        # Sol, 2026-10-03: ``_gate_context_update`` ensures the machine exists. Keep the same
+        # instance for deciding whether this turn is the one-time compact
+        # reachability-understanding checkpoint.
+        gate_machine = self._gate_machine
         self._sync_no_progress_tool_guard(state_path)
         controller_handoff = self._controller.take_handoff()
         user_prompt = self._build_user_prompt(
@@ -2819,10 +2823,22 @@ class ToolAgent:
         append_transcript("USER PROMPT", user_prompt)
 
         previous_history_messages = list(self._history_messages)
+        semantic_checkpoint = False
+        if self._virelai_gates_enabled and gate_machine is not None:
+            checkpoint_view = gate_machine.gate_view()
+            checkpoint_template = checkpoint_view.get("answer_template")
+            semantic_checkpoint = bool(
+                gate_machine.gate_id == "G3-LEVERS"
+                and checkpoint_view.get("status") == "ANSWER_REQUIRED"
+                and isinstance(checkpoint_template, Mapping)
+                and checkpoint_template.get("answer_kind") == "TARGET_REACHABILITY"
+                and checkpoint_template.get("semantic_reuse") is not True
+            )
         self._gate_transitioned_this_turn = False
         preserve_history = True
+        request_history = [] if semantic_checkpoint else self._history_messages
         messages: list[dict[str, Any]] = self._trim_messages_for_context(
-            [{"role": "system", "content": self._system_prompt}, *self._history_messages, self._build_user_message(user_prompt, current_frame)],
+            [{"role": "system", "content": self._system_prompt}, *request_history, self._build_user_message(user_prompt, current_frame)],
             tools=self._tools(state_path),
             preserve_recent=1,
         )
@@ -2850,7 +2866,14 @@ class ToolAgent:
 
         try:
             turn_count = 0
-            while self._tool_steps is None or turn_count < self._tool_steps:
+            turn_limit = (
+                2
+                if semantic_checkpoint and self._tool_steps is None
+                else min(2, self._tool_steps)
+                if semantic_checkpoint
+                else self._tool_steps
+            )
+            while turn_limit is None or turn_count < turn_limit:
                 yielded_control_reason = control_yield_reason()
                 if yielded_control_reason is not None:
                     break
@@ -3191,6 +3214,11 @@ class ToolAgent:
             log.warning("analyzer failed at action %d: %s", display_action_num, exc)
             return None
         finally:
+            # Sol, 2026-10-03: the compact reachability checkpoint is durable in the gate's
+            # understanding record. Do not append its repair exchange to the
+            # ordinary gameplay transcript and grow every later request.
+            if semantic_checkpoint:
+                preserve_history = False
             if preserve_history:
                 self._history_messages = self._history_after_turn(
                     messages,
@@ -3239,6 +3267,18 @@ class ToolAgent:
                 tools=latest_request_tools,
                 tool_choice=latest_request_tool_choice,
                 transcript="".join(transcript_parts),
+            )
+        if controlled_stop_reason and semantic_checkpoint and gate_machine is not None:
+            # A compact G3 reachability answer received its bounded repair
+            # allowance and still did not satisfy the contract.  Leave a
+            # durable product for the solver; this is not G3 completion.
+            from inference.agent.gate_artifacts import record_g3_run_outcome
+
+            record_g3_run_outcome(
+                state_path,
+                gate_machine,
+                "G3_SEMANTIC_RETRY_EXHAUSTED",
+                detail=controlled_stop_reason,
             )
         return AnalyzerTurnResult(
             step_executed=step_executed,

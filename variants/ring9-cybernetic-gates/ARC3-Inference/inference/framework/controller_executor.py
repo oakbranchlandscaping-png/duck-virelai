@@ -354,6 +354,13 @@ def controller_answer(machine: Any, view: Mapping[str, Any]) -> tuple[dict[str, 
         return _anatomy_answer(template), "G4.1 anatomy from the certified channels"
     if template.get("answer_kind") == "LEVER_DOSSIER":
         return _dossier_answer(template), "G3 dossier from the effect summary"
+    # Sol, 2026-10-03: reuse accepted causal meaning; the current target facts
+    # still come from this controller-certified template.
+    if (
+        template.get("answer_kind") == "TARGET_REACHABILITY"
+        and template.get("semantic_reuse") is True
+    ):
+        return dict(template), "G3 reachability meaning reused for this certified target"
     if template.get("answer_kind") == "LEVER_INVENTORY" and "lever_entities" in template:
         return _inventory_answer(template)
     return None, f"{gate} answer shape {template.get('answer_kind')!r} is not controller-owned"

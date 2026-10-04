@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from inference.agent.runtime_state import RUNTIME_STATE_FILENAME, load_runtime_state
 
@@ -143,6 +143,123 @@ def record_gate_answer(
         handle.write(json.dumps(answer_record, sort_keys=True) + "\n")
     if answering_gate_id == "G3-LEVERS":
         _write_g3_target_ledger(state_path, gate_machine)
+        # The machine has advanced only after the aggregate answer is accepted;
+        # capture the hand-off while the G3 journal remains available through
+        # its adapter.  G4 is legal only from this explicit product.
+        record_g3_run_outcome(
+            state_path,
+            gate_machine,
+            "G3_COMPLETE",
+            detail="the complete eligible roster was accepted by the G3 inventory contract",
+        )
 
 
-__all__ = ["record_gate_answer", "record_probe_outcome"]
+def _g3_adapter_snapshot(gate_machine: Any) -> Mapping[str, Any]:
+    adapter = getattr(gate_machine, "_adapters", {}).get("G3-LEVERS")
+    if adapter is None:
+        return {}
+    try:
+        snapshot = adapter.snapshot()
+    except Exception:
+        return {}
+    return snapshot if isinstance(snapshot, Mapping) else {}
+
+
+def _g3_outcome_path(state_path: Path) -> Path:
+    return state_path.with_name(
+        state_path.name.replace(
+            f"_{RUNTIME_STATE_FILENAME}", "_g3_run_outcome.json"
+        )
+    )
+
+
+def record_g3_run_outcome(
+    state_path: Path,
+    gate_machine: Any,
+    product_type: str,
+    *,
+    detail: str = "",
+) -> dict[str, Any] | None:
+    """Persist one explicit G3 run product.
+
+    This is deliberately a product of the controller state, not a Duck claim.
+    It may be called at a bounded runtime stop, so incomplete work remains
+    visible and cannot be mistaken for a successful G3-to-G4 transition.
+    """
+    product = str(product_type or "").strip().upper()
+    allowed = {
+        "G3_COMPLETE", "G3_BUDGET_STOPPED", "G3_SEMANTIC_RETRY_EXHAUSTED",
+        "G3_BOUNDARY_DEFERRED",
+    }
+    if product not in allowed:
+        raise ValueError(f"unknown G3 run product: {product_type!r}")
+    snapshot = _g3_adapter_snapshot(gate_machine)
+    journal = snapshot.get("lifecycle_journal") if isinstance(snapshot, Mapping) else {}
+    journal = journal if isinstance(journal, Mapping) else {}
+    entities = journal.get("entities") if isinstance(journal, Mapping) else {}
+    entities = entities if isinstance(entities, Mapping) else {}
+    state_counts = journal.get("state_counts") if isinstance(journal, Mapping) else {}
+    state_counts = state_counts if isinstance(state_counts, Mapping) else {}
+    pending_target: dict[str, Any] | None = None
+    try:
+        capability = gate_machine.next_probe_capability()
+    except Exception:
+        capability = None
+    if isinstance(capability, Mapping):
+        target = capability.get("target")
+        if isinstance(target, Mapping):
+            pending_target = {
+                key: target[key] for key in (
+                    "rank", "entity_id", "member_id", "integer", "shape_family",
+                ) if key in target
+            }
+    last_evidence: dict[str, Any] | None = None
+    last_event_serial = -1
+    for entity_id, row in sorted(entities.items()):
+        if not isinstance(row, Mapping):
+            continue
+        event = row.get("last_event")
+        if isinstance(event, Mapping):
+            event_id = str(event.get("event_id") or "")
+            try:
+                event_serial = int(event_id.rsplit("-", 1)[-1])
+            except ValueError:
+                event_serial = last_event_serial
+            if event_serial >= last_event_serial:
+                last_event_serial = event_serial
+                last_evidence = {
+                    "entity_id": str(entity_id),
+                    "event_id": event.get("event_id"),
+                    "to_state": event.get("to_state"),
+                    "evidence_ref": event.get("evidence_ref"),
+                    "reason": event.get("reason"),
+                }
+    gate_after = str(getattr(gate_machine, "gate_id", ""))
+    g4_ids = {"G4-REACTIONS", "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW"}
+    record = {
+        "schema": "virelai-g3-run-outcome-v1",
+        "product": product,
+        "detail": str(detail or ""),
+        "gate_at_emit": gate_after,
+        "g4_legal_open": bool(product == "G3_COMPLETE" and gate_after in g4_ids),
+        "pending_target": pending_target,
+        "last_accepted_evidence": last_evidence,
+        "remaining_roster_counts": {
+            str(key): int(value) for key, value in sorted(state_counts.items())
+            if isinstance(value, (int, float))
+        },
+        "eligible_roster_count": int(journal.get("entity_count") or 0),
+        "scheduler": dict(snapshot.get("scheduler") or {}),
+    }
+    path = _g3_outcome_path(state_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    history_path = path.with_name(path.stem + "_history.jsonl")
+    with history_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
+    return record
+
+
+__all__ = ["record_gate_answer", "record_g3_run_outcome", "record_probe_outcome"]
