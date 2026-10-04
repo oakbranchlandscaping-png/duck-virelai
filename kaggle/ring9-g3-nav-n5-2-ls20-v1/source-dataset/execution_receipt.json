@@ -1,0 +1,47 @@
+{
+  "behavior_window_starts_at_benchmark": true,
+  "budgets": {
+    "context_window_tokens": 65536,
+    "max_environment_actions_per_world": 60,
+    "max_output_tokens_per_turn": 4096,
+    "max_runtime_seconds_per_world": 700,
+    "tool_output_tokens": 1024
+  },
+  "concurrency": 1,
+  "controller_executor": true,
+  "dependencies": {
+    "chat_template_kwargs": "{\"preserve_thinking\": true}",
+    "max_model_len": 65536,
+    "model": "mikedan7/qwen3-8-27b-fp8-official",
+    "reasoning_parser": "qwen3",
+    "served_model_name": "Qwen/Qwen3.8-27B-FP8",
+    "stamp": "vllm==0.19.0 torch==2.10.0 flashinfer==0.6.6\n",
+    "tool_call_parser": "qwen3_xml",
+    "wheelhouse": "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  },
+  "inference_profile": {
+    "duplicate_read_only_limit": 2,
+    "enable_thinking": true,
+    "max_read_only_without_progress": 8,
+    "model_request_timeout_seconds": 600,
+    "temperature": 0.6
+  },
+  "mode": "gated",
+  "model": {
+    "id": "Qwen/Qwen3.8-27B-FP8",
+    "pinned_revision": "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+    "source": "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1"
+  },
+  "package": {
+    "manifest_sha256": "fcae0b97b7914f6944331d307f4c31f86369bf99a0fa4410476ce3fe7eed302b",
+    "name": "ring9-g3-nav-n5-2-ls20-v1",
+    "sha256": "175edea6fd37ca86df7ff3777c631fe13d03dc2329e0ba597c217cc87db16f7b"
+  },
+  "passes": 1,
+  "revisions": "N5.2 bounded route handoff after semantic reuse",
+  "schema": "virelai-g3-nav-n5-2-ls20-v1-execution-receipt-v1",
+  "source_commit": "6c10b8e",
+  "worlds": [
+    "ls20-9607627b"
+  ]
+}

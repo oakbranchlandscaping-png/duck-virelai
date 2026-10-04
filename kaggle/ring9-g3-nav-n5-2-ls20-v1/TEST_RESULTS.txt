@@ -1,0 +1,2 @@
+Source 6c10b8e: N5.2 focused suite passed, with 14 dependency deprecation warnings.
+Package source must reproduce the bounded semantic and route-handoff behavior.

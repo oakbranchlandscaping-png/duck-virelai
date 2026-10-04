@@ -4,7 +4,7 @@
 **Parent:** `REVIEW_RING9_G3_NAV_N5_1_LS20_V1_2026-10-04.md`
 **Author:** Sol (Alpha build seat)
 **Date:** 2026-10-04
-**Status:** source built and focused-validated; package and live confirmation pending
+**Status:** source and package locally validated; live confirmation pending
 
 N5.1 proved the semantic explanation seam and exposed the next friction: a G3 controller handoff
 for which no deterministic route step was available could wake the unconstrained Duck loop. N5.2
@@ -20,7 +20,14 @@ choice emits `G3_ROUTE_RETRY_EXHAUSTED`, which is a complete bounded product wit
 The request log now records the effective semantic and route overrides rather than the agent's
 unmodified defaults. Existing N5.1 behavior remains unchanged.
 
-Validation: 24 focused tests passed with 14 existing dependency warnings; Ruff passed on every
-changed source and test file.
+Validation: 24 focused tests passed against both source and packaged runtime, with 14 existing
+dependency warnings. Ruff passed on every changed source and test file. The 223-entry source
+manifest and 230-entry package manifest verify cleanly; the changed runtime files match source
+commit `6c10b8e` byte-for-byte.
+
+The frozen package is `kaggle/ring9-g3-nav-n5-2-ls20-v1`, bounded to one `ls20` world, 60 actions
+and 700 behavior seconds. Its package-manifest SHA-256 is
+`175edea6fd37ca86df7ff3777c631fe13d03dc2329e0ba597c217cc87db16f7b`; its source-manifest
+SHA-256 is `fcae0b97b7914f6944331d307f4c31f86369bf99a0fa4410476ce3fe7eed302b`.
 
 — **Sol**
