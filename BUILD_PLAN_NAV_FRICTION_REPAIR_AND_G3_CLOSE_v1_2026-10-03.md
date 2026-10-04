@@ -325,7 +325,7 @@ history, pending-target accounting, and the completion-only G4 rule. The broader
 suite is 115 passed with the existing 14 dependency deprecation warnings. Packaged/live confirmation
 remains N5.
 
-### Slice N5 — Local fast replay, then one bounded Kaggle successor
+### Slice N5 — Local fast replay, then one bounded Kaggle successor — **packaged; upload approval pending**
 
 Use the OpenRouter/local path first with the compact model-facing handoff. Replay `ls20` and the
 same synthetic fixture; then replay `vc33` only to ensure the shared controller contract does not
@@ -343,6 +343,16 @@ The Kaggle grade should be limited to:
 - explicit G3 completion or bounded-stop product.
 
 Do not grade G4 comprehension or score until this NAV checkpoint is clean.
+
+**2026-10-04 execution status (Sol):** source commit `c636ba7` passes the full 575-test suite.
+The OpenRouter rehearsal reached action 9 after eight controller actions, then every model request
+received HTTP 402 because the account lacked sufficient credits; it produced zero model tokens and
+is ungraded. The exact committed source was frozen as `kaggle/ring9-g3-nav-n5-ls20-v1` with valid
+222-file source and 229-file package manifests, byte-identical critical source, identical receipt
+copies, a clean secret guard, and 115 focused tests against the packaged copy. The private Kaggle
+upload has not occurred: automatic approval review rejected transfer of this exact source payload
+until the user explicitly approves the named dataset and notebook. See
+`BUILD_N5_VALIDATION_AND_PACKAGE_2026-10-04.md`.
 
 ## After NAV is stable: collaboration boundary with Claude
 

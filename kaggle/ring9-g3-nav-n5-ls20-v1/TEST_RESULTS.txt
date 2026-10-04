@@ -1,0 +1,2 @@
+Source c636ba7: 575 passed, 14 dependency deprecation warnings, in 553.92 seconds.
+N4 focused suite: 115 passed. Package source must reproduce the focused tests.

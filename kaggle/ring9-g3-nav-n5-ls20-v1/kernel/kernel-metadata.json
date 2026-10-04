@@ -1,0 +1,24 @@
+{
+  "code_file": "taaf_kaggle_run_share.ipynb",
+  "competition_sources": [
+    "arc-prize-2026-arc-agi-3"
+  ],
+  "dataset_sources": [
+    "stephenkaskin/taaf-duck-virelai-ring9-g3-nav-n5-ls20-v1",
+    "mirzamilanfarabi/arc3-vllm-h100-wheelhouse-v3"
+  ],
+  "docker_image": "gcr.io/kaggle-private-byod/python@sha256:37c64f7dd9c54116ecd1bcc88817c5469b88387388fade02bfa8bf3fc647d461",
+  "enable_gpu": true,
+  "enable_internet": false,
+  "enable_tpu": false,
+  "id": "stephenkaskin/taaf-virelai-ring9-g3-nav-n5-ls20-v1",
+  "is_private": true,
+  "kernel_sources": [],
+  "kernel_type": "notebook",
+  "language": "python",
+  "machine_shape": "NvidiaRtxPro6000",
+  "model_sources": [
+    "mikedan7/qwen3-8-27b-fp8-official/PyTorch/hf-fp8/1"
+  ],
+  "title": "taaf-virelai-ring9-g3-nav-n5-ls20-v1"
+}
