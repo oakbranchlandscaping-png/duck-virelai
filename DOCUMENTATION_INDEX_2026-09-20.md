@@ -1,9 +1,17 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-10-03
+**Updated:** 2026-10-05
 **Active source:** `variants/ring9-cybernetic-gates/`
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
+
+> **2026-10-05 R9-R24 LANDED: G4 CONTROLLER-FIRST (Claude, Alpha build seat) — signed.** v7 spent about 163 minutes
+> of Duck time in G4-B/G4-C and certified nothing (`REVIEW_RING9_CARRY_VC33_V7_KAGGLE_2026-10-04.md`). The Director ruled
+> (`RULING_G4_CONTROLLER_FIRST_v2`): the controller certifies G4-B from the record; Duck gets 3 G4-B/G4-C turns per level,
+> then the gate closes UNRESOLVED; after the gates Duck plays normally with everything certified (`PLAY-NORMAL`, receipted
+> FREE_PLAY). Lever states are now named on the card. Committed `c9b246b` on `r9-r20-level-entry` (Mac 535 passed, 1 skipped);
+> ruling v2, diagnostic v2 (corrects v1's D3) and the pre-flight are on main (`f79a3b7`). **The Ring 9 fork has widened:**
+> 8 files are now changed on both the click branch and NAV's main. Next: v8. `RECORD_R9_R24_LANDING_v1_2026-10-05.md`.
 
 > **2026-10-03 R9-R23 LANDED: THE MU BUCKET (Claude, Alpha build seat) — signed.** The ring9-carry-vc33-v6
 > run cleared levels 1 and 2 (score 1.51). On level 3, G3 stalled on one object it could not attribute
