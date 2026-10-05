@@ -3,7 +3,7 @@
 **Type:** `UNIFICATION_RING9_SINGLE_TREE` · **v1** · **2026-10-05**
 **Status:** locally validated integration checkpoint on branch `ring9-unified`
 **Canonical source path:** `variants/ring9-cybernetic-gates/ARC3-Inference/`
-**Signed:** Sol, Alpha build seat, with read-only audits from the Claude, runtime, and lineage seats.
+**Signed:** Sol, Alpha build seat, with parallel repository-structure, runtime and lineage audits commissioned by Sol.
 
 ## Purpose
 
@@ -40,7 +40,7 @@ A later null or different result may refine the lever's type. It never retracts 
 | `tests/fixtures/*.json.gz` | Versioned replay evidence, not a production adapter |
 | Ring 8, Ring 7, vendored golden, separate `virelai-golden` | Donors and historical evidence only |
 
-Direct live evidence supports N5.3's NAV first-witness path, vc33 v6's CLICK discovery/G4-A handoff, and vc33 v7's partial inventory/G4 progress. R9-R24's controller-first G4 has builder-reported tests and record pre-flight evidence; no completed live v8 review was found during the audit. Mu return, newborn-object scheduling, and NAV record-derived G4 relations therefore remain unproven until the unified tree exercises them.
+The live N5.1 record contains the positive NAV contact at transition 18 that motivated the first-witness repair. N5.3 has synthetic local validation and a packaged Kaggle checkpoint, but its submitted run was not downloaded or graded; no direct live result supports the N5.3 `LEVER_FOUND` emission, roster advance, or G4 handoff yet. Direct live evidence supports vc33 v6's CLICK discovery/G4-A handoff and vc33 v7's partial inventory/G4 progress. R9-R24's controller-first G4 has builder-reported tests and record pre-flight evidence; no completed live v8 review was found during the audit. Mu return, newborn-object scheduling, and NAV record-derived G4 relations therefore remain unproven until the unified tree exercises them.
 
 ## Merge invariants
 
@@ -63,7 +63,7 @@ The branch is not canonical merely because Git reports a clean merge. It must pa
 2. CLICK and NAV both satisfy the shared first-witness contract;
 3. NAV still advances to the next roster target and seeds G4 from the exact first witness;
 4. vc33 v6/v7 replay preserves life, level, carry, partial inventory, G4 intake, and controller-derived answers;
-5. NAV N5.1/N5.3 evidence preserves terrain, reachability, and lever discovery behavior;
+5. NAV synthetic tests preserve terrain, reachability, and first-witness behavior; no NAV replay fixture exists yet, so an N5.1 or graded N5.3 record must pin live replay fidelity;
 6. ownership tests show deterministic G0-G4 work remains controller-owned;
 7. a clean Git export builds a package whose manifest references only files present in the mount.
 
