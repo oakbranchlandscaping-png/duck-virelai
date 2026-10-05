@@ -122,7 +122,7 @@ def validate_lever_dossier(
     refs = _string_list(raw.get("evidence_refs"), "evidence_refs", required=True)
     if set(refs) != set(required_evidence_refs) or len(refs) != len(required_evidence_refs):
         raise LeverDossierError(
-            "evidence_refs must exactly name the witness and its supported confirmation"
+            "evidence_refs must exactly name the witness and its certifying confirmation"
         )
     competing = _string_list(
         raw.get("competing_models"), "competing_models", required=True

@@ -193,6 +193,20 @@ class LeverRun:
             return "CYCLE"
         return "RECURRENT"
 
+    def typing(self) -> dict[str, Any]:
+        """R9-R22 D10: the ruled vocabulary, mechanism and condition apart (v4 WO-E7, tc1-tc8).
+
+        A run that moved and then held is UNIFORM; one that never left its entry state is UNKNOWN
+        with the condition SATURATED. ``lever_class`` keeps both as ABSORBING for its readers.
+        DIRECTIONAL stays reserved for the effect subtree (WO-DIVE-01 R1).
+        """
+        effective = sum(1 for step in self.orbit.steps if step.world_changed)
+        found = self.lever_class()
+        mechanism, condition = (found if found in {"TOGGLE", "CYCLE"} else "UNKNOWN"), None
+        if found == "ABSORBING":
+            mechanism, condition = ("UNIFORM", None) if effective else ("UNKNOWN", "SATURATED")
+        return {"mechanism": mechanism, "condition": condition, "effective_presses": effective}
+
     def snapshot(self, *, include_cells: bool = True) -> dict[str, Any]:
         return {
             "schema": "virelai-g4a-lever-run-v1",
@@ -205,7 +219,19 @@ class LeverRun:
             "confirmation_required": self.confirmation_required,
             "confirmation": [dict(item) for item in self.confirmation],
             "lever_class": self.lever_class(),
+            "typing": self.typing(),
         }
+
+
+def g3_pairs(readings: Mapping[str, Mapping[str, Any]], entities: Sequence[str]) -> dict[str, dict[str, Any]]:
+    """R9-R22 D9: each lever's G3 witness and repeat press, two orbit steps from their own entry state.
+
+    G4-A's runs start from a later board, after other levers moved it; this pair is never dropped.
+    """
+    return {
+        entity: {"entry_state": "G3_WITNESS_BEFORE_STATE", **dict(readings[entity])}
+        for entity in entities if entity in readings
+    }
 
 
 __all__ = [
@@ -218,6 +244,7 @@ __all__ = [
     "LeverRun",
     "MAX_LIFE_RESTUDIES",
     "RUNNING",
+    "g3_pairs",
     "is_terminal",
     "level_changed",
     "restudy_next_life",

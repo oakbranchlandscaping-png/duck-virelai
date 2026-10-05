@@ -104,6 +104,9 @@ def test_answer_requires_human_use_of_every_exact_channel():
 
 def machine_at_g3():
     machine = CyberneticGateMachine(valid_actions=["ACTION6"], initial_grid=GRID)
+    # This fixture exercises the pre-unification G3 dossier/confirmation
+    # protocol; live CLICK uses first-witness discovery.
+    machine._legacy_confirmation_replay = True
     machine.submit_answer({
         "answer_id": "G0-test",
         "action_metadata": [{"action": "ACTION6", "requires_coordinates": True}],

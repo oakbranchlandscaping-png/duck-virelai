@@ -31,9 +31,10 @@ GAME, LEVEL, TRANSIENT = "GAME", "LEVEL", "TRANSIENT"
 PERSISTENCE: dict[str, dict[str, str]] = {
     "CyberneticGateMachine": {
         "_capability_secret": GAME, "_consumed_capabilities": GAME, "protocol": GAME,
+        "_legacy_confirmation_replay": GAME,
         "transition_index": GAME, "lives": GAME, "levels": GAME, "_adapters": LEVEL, "_issued_capabilities": LEVEL,
         "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL, "carry": LEVEL,
-        "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL,
+        "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL, "mu": LEVEL, "duck_budget": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
     },
     "_ActionSurfaceTarget": {"machine": GAME, "answer": LEVEL, "revision": LEVEL},
@@ -43,9 +44,11 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "machine": GAME, "revision": LEVEL, "entity_ledger": LEVEL, "evidence": LEVEL,
         "lifecycle_journal": LEVEL, "_bounded_ambiguities": LEVEL, "_bounded_coverage_answer": LEVEL,
         "_complete_reason": LEVEL, "_confirmation_records": LEVEL, "_deferred_observations": LEVEL,
+        "_repeat_readings": LEVEL, "_mu_revisit": LEVEL,
         "_dossier_answers": LEVEL, "_eligible_frontier": LEVEL, "_excluded_frontier": LEVEL,
         "_frontier_mask_version": LEVEL, "_inheritance": LEVEL, "_inventory_answer": LEVEL,
         "_navigation_limit": LEVEL, "_observed_transition_ids": LEVEL, "_target_index": LEVEL,
+        "_lever_discoveries": LEVEL,
         "_phase": LEVEL, "_probe_serial": LEVEL, "_reachability_records": LEVEL,
         # Sol, 2026-10-03: persist learned meaning and its topology scope across turns.
         "_reachability_answers": LEVEL, "_reachability_understandings": LEVEL,
@@ -62,19 +65,26 @@ PERSISTENCE: dict[str, dict[str, str]] = {
     },
     "_ReactionTarget": {
         "machine": GAME, "revision": LEVEL, "_anatomies": LEVEL, "_answers": LEVEL, "_ordered_entities": LEVEL,
+        "_seeded_from": LEVEL,
     },
     "_LeverStudyTarget": {
         "machine": GAME, "revision": LEVEL, "_action_count": LEVEL, "_answers": LEVEL, "_completed": LEVEL,
         "_events": LEVEL, "_interruptions": LEVEL, "_interventions": LEVEL, "_level_closed": LEVEL,
         "_life_restudies": LEVEL, "_ordered_entities": LEVEL, "_runs": LEVEL, "_active_run": TRANSIENT,
+        "_seeded_from": LEVEL,
     },
     "LeverRelationsTarget": {
         "machine": GAME, "revision": LEVEL, "_answer": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,
         "_predictions": LEVEL, "_record": LEVEL, "_regions": LEVEL, "_reopened": LEVEL, "_pending": TRANSIENT,
+        "_from_record": LEVEL, "_unresolved": LEVEL,
     },
     "LeverLawTarget": {
         "machine": GAME, "revision": LEVEL, "_certified": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,
-        "_tests": LEVEL, "_pending": TRANSIENT,
+        "_tests": LEVEL, "_pending": TRANSIENT, "_unresolved": LEVEL,
+    },
+    "PlayTarget": {
+        "machine": GAME, "revision": LEVEL, "forced": LEVEL, "_events": LEVEL, "_noops": LEVEL, "_blocked": LEVEL,
+        "_rest_checked": LEVEL,
     },
 }
 

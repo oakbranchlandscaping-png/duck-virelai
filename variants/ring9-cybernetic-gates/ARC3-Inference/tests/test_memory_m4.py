@@ -116,8 +116,8 @@ def test_ft09_reaches_a_satisfied_g4a_with_duck_orienting_and_explaining(tmp_pat
     assert orbits["phase1_status"] == "COMPLETE" and len(orbits["lever_entities"]) == 5
     assert duck.calls == ["orient", *["explain"] * 5]
     log = run.state_path.with_name(f"{run.state_path.stem}_analyzer.txt").read_text()
-    assert "retaining controller ownership after wake: the budget is nearly spent: 2 counter ticks left" in log
-    assert len(run.env_calls) == 92  # G0-G3: 72 actions; G4-A: 20 presses (4 per lever), one Duck's
+    assert "planned stop" not in log
+    assert len(run.env_calls) == 87  # G0-G3: 67 first-witness actions; G4-A: 20 presses
     answers = run.rows("_gate_answers.jsonl")
     anatomy = [row for row in answers if row["gate_id"] == "G4-REACTIONS"]
     assert len(anatomy) == 5 and {row["executor"] for row in anatomy} == {CONTROLLER}
@@ -183,5 +183,5 @@ def test_the_whole_g0_to_g4a_run_replays_offline(tmp_path, monkeypatch):
     out = tmp_path / "record.json.gz"
     record_tool.write_record(record_tool.build_record(run.state_path.parent, "ft09", "ft09-offline"), out)
     result = replay(load_record(out), measure=False)
-    assert (result.steps_replayed, result.answers_used, result.stopped) == (92, 17, None)
+    assert (result.steps_replayed, result.answers_used, result.stopped) == (87, 12, None)
     assert g4a_complete(result.machine) and result.machine.gate_id == "G4-B-LEVER-RELATIONS"

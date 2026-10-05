@@ -73,6 +73,10 @@ from inference.framework.lever_attribution import (
 )
 from inference.framework.entity_observation import EntityLedger, EntityTransition, ObservationScope
 from inference.framework.lever_lifecycle import LifecycleJournal
+from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
+from inference.framework.mu_bucket import MuBucket
+from inference.framework.g3_inventory import check_inventory_claims
+from inference.framework import mu_return
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
@@ -96,6 +100,7 @@ from inference.framework.g4_orbits import G4OrbitError, LeverOrbitAnswer, valida
 from inference.framework.g4_guided import (
     INTERRUPTED,
     LeverRun,
+    g3_pairs,
     is_terminal,
     level_changed,
     restudy_next_life,
@@ -111,6 +116,11 @@ COUNTER_TARGET = (
     "and freeze one prediction about the counter's footprint for an action you choose."
 )
 ACTION_METADATA_GATE_ID = "G0-ACTION-METADATA"
+# Axiom A2 as the rule (R9-R22 D11): with no probe and no acceptable answer, only these states are legal.
+DECLARED_ENDS = frozenset({
+    "WAIT_FOR_NEXT_TARGET", "WAIT_FOR_NEXT_G4_SLICE", "WAIT_FOR_NEXT_SLICE",
+    "G4_LEVEL_STUDY_CLOSED_CROSS_LEVEL_IS_G9", "CONTROLLER_TAKES_PREDICTION",
+})
 GATE_ID = "G1-EGO"
 COUNTER_GATE_ID = "G2-COUNTER"
 COUNTER_BOUNDARY_BATCH_MAX = max(1, int(os.environ.get("VIRELAI_COUNTER_BOUNDARY_BATCH_MAX", "8")))
@@ -119,7 +129,8 @@ REACTION_GATE_ID = "G4-REACTIONS"
 ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
 RELATION_GATE_ID = "G4-B-LEVER-RELATIONS"
 LAW_GATE_ID = "G4-C-LEVER-LAW"
-G4_GATE_IDS = (REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID)
+PLAY_GATE_ID = "PLAY-NORMAL"  # R9-R24 D22: normal play after the gates (play_gate.py)
+G4_GATE_IDS = (REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID)
 
 
 def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
@@ -137,23 +148,6 @@ def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _lever_class(answer: Any) -> str:
-    """Phase-1 classification of a lever from its own consecutive-push orbit.
-
-    Derived only from the orbit stop and period (single-lever data); no
-    cross-lever information. Richer typing is a later refinement.
-    """
-    stop = getattr(answer, "stop_disposition", None)
-    period = getattr(answer, "observed_period", None)
-    if stop == "OBSERVED_STATE_RECURRENCE":
-        if period == 2:
-            return "TOGGLE"
-        if isinstance(period, int) and period > 2:
-            return "CYCLE"
-        return "RECURRENT"
-    if stop == "NULL_AT_OBSERVED_STATE":
-        return "ABSORBING"
-    return "UNCLASSIFIED"
 _OPAQUE_ACTION = re.compile(r"^ACTION([0-9]+)$")
 
 
@@ -523,9 +517,14 @@ class EgoGateMachine:
             if any(item.requires_coordinates for item in additions):
                 self._coordinate_enabled = True
         self._currently_available = refreshed_names
-        if self.status in {"ACTIVE", "ANSWER_REQUIRED", "REOPENED", "UNRESOLVED"}:
+        if self._refresh_settles():
             self._settle_coverage()
         self.revision += 1
+
+    def _refresh_settles(self) -> bool:
+        """A pointer ego closes on the G0 interface axiom, never on coverage (R9-R20 D1)."""
+        pointer = self._control_archetype["world_type"] == "CLICK_GOD_MODE"
+        return not pointer and self.status in {"ACTIVE", "ANSWER_REQUIRED", "REOPENED", "UNRESOLVED"}
 
     def next_probe(self) -> ProbeEnvelope | None:
         item = self._unobserved()
@@ -2156,8 +2155,9 @@ def _target_registry() -> TargetRegistry:
     # G4.3-LEVER-LIMITS is retired (Director ruling 2026-09-27). Persistence and reversal are
     # Duck-frozen predictions in G4-B (R9-R12); G4-C tests the description (R9-R13, g4c_gate.py).
     from inference.framework.g4c_gate import later_contracts
+    from inference.framework.play_gate import play_contract
 
-    for contract in later_contracts():
+    for contract in (*later_contracts(), play_contract()):
         registry.register(contract)
     return registry
 
@@ -2509,13 +2509,15 @@ class _LeverTarget:
         self._confirmation_records: list[dict[str, Any]] = []
         self._reachability_records: list[dict[str, Any]] = []
         self._reachability_answers: dict[str, GateAnswer] = {}
-        # Sol, 2026-10-03: Duck proves a reachability concept once per
-        # reasoning/topology/ego-law key. Per-target geometry remains
-        # controller-certified and is never copied from this semantic cache.
+        # Duck proves a reachability concept once per reasoning/topology/ego-law key.
+        # Per-target geometry remains controller-certified and is never copied from this cache.
         self._reachability_understandings: dict[str, dict[str, Any]] = {}
-        # Sol, 2026-10-03: durable evidence for the explicit G3 target-execution ledger.
         self._nav_contact_records: list[dict[str, Any]] = []
         self._reopened_reachability_indices: set[int] = set()
+        # Retained for replay compatibility with R9-R22 records. New G3 discoveries do not
+        # require a repeat: the first attributed masked response is the durable witness.
+        self._repeat_readings: dict[str, dict[str, Any]] = {}
+        self._mu_revisit: list[str] = []
         self._deferred_observations: list[dict[str, Any]] = []
         self.entity_ledger: EntityLedger | None = None
         self.lifecycle_journal: LifecycleJournal | None = None
@@ -2901,6 +2903,15 @@ class _LeverTarget:
         }
         self._bounded_ambiguities[entity_id] = record
         return record
+
+    def _certify(self, record: Mapping[str, Any], repeat) -> bool:
+        """R9-R22 D7: in the click lane a repeat press types the lever; it never retracts its witness."""
+        if self._phase != "CLICK" or repeat.boundary_state or not record["witness_evidence_ref"]:
+            return record["status"] == "SUPPORTED"
+        witness = next(item for item in self.evidence._attributions.get(record["target_member_id"], ())
+                       if item.evidence_ref == record["witness_evidence_ref"])
+        self._repeat_readings[record["entity_id"]] = repeat_reading(record, witness, repeat)
+        return True
 
     def _ensure_frontier(self) -> tuple[dict[str, Any], ...]:
         """Compile G3's eligible roster from G2's frozen ranking and total mask."""
@@ -3420,6 +3431,8 @@ class _LeverTarget:
                 ),
                 target=target,
             )
+        if self._mu_revisit and self._phase == "CLICK":
+            return mu_return.revisit_probe(self, ledger, self._mu_revisit[0])
         if self._reopened_reachability_indices:
             self._target_index = min(self._reopened_reachability_indices)
             self._reopened_reachability_indices.remove(self._target_index)
@@ -3917,7 +3930,7 @@ class _LeverTarget:
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         event["counter_baseline"] = counter_baseline
         ambiguity_bounded = False
-        nav_discovery_recorded = False
+        discovery_recorded = False
         confirmation_approach = bool(
             is_confirmation and self._phase == "NAV"
             and probe.pilot_intent == "APPROACH"
@@ -3954,39 +3967,14 @@ class _LeverTarget:
             return event
         if is_confirmation:
             pending = self._pending_confirmation
-            predicted_local = set(pending["local_cells"]) if pending else set()
-            predicted_remote = set(pending["remote_cells"]) if pending else set()
-            local_supported = bool(set(attribution.local_residue_cells) & predicted_local)
-            remote_supported = bool(set(attribution.remote_residue_cells) & predicted_remote)
-            confirmation_supported = attribution.positive and (
-                local_supported or remote_supported
+            confirmation_record = grade_confirmation(
+                pending, attribution, evidence_id=evidence_id, target_member_id=target_member_id,
+                entity_id=entity_id, transition_id=int(outcome.get("transition_id") or 0),
             )
-            confirmation_record = {
-                "witness_evidence_ref": pending["witness_evidence_ref"] if pending else None,
-                "confirmation_evidence_ref": evidence_id,
-                "target_member_id": target_member_id,
-                "entity_id": entity_id,
-                "declared_at_transition": (
-                    int(pending["declared_at_transition"]) if pending else None
-                ),
-                "graded_at_transition": int(outcome.get("transition_id") or 0),
-                "frozen_target": dict(pending["target"]) if pending else {},
-                "predicted_local_cells": (
-                    [list(cell) for cell in pending["local_cells"]] if pending else []
-                ),
-                "predicted_remote_cells": (
-                    [list(cell) for cell in pending["remote_cells"]] if pending else []
-                ),
-                "status": (
-                    "SUPPORTED" if confirmation_supported
-                    else "BOUNDARY_DEFERRED" if attribution.boundary_state
-                    else "CONTRADICTED"
-                ),
-            }
             event["confirmation"] = confirmation_record
             self._confirmation_records.append(dict(confirmation_record))
             advance_target = True
-            if entity_id and confirmation_supported:
+            if entity_id and self._certify(confirmation_record, attribution):
                 witness = next(
                     item for item in self.evidence._witnesses.get(target_member_id, ())
                     if item.evidence_ref == pending["witness_evidence_ref"]
@@ -4086,16 +4074,36 @@ class _LeverTarget:
                 pass
             elif (
                 entity_id
-                and self._phase == "NAV"
-                and probe.pilot_intent == "CONTACT_ATTEMPT"
+                and self._phase == "CLICK"
                 and attribution.positive
+                and self.machine._legacy_confirmation_replay
             ):
-                # Sol, 2026-10-04: NAV G3 has the same discovery obligation as
-                # CLICK G3.  One resolved body contact followed by a masked
-                # local or remote residue is the existential lever witness.
-                # Re-contact, repetition, and mechanism typing belong to G4;
-                # requiring them here caused ls20's valid first witness to be
-                # contradicted from a later world state and blocked the sweep.
+                journal.response(entity_id, positive=True, evidence_ref=evidence_id)
+                self._pending_confirmation = {
+                    "probe_id": f"{LEVER_GATE_ID}:CONFIRM:{target_member_id}:{evidence_id}",
+                    "phase": self._phase,
+                    "target": dict(probe.target or {}),
+                    "action": dict(probe.actions[0]) if probe.actions else None,
+                    "target_member_id": target_member_id,
+                    "entity_id": entity_id,
+                    "pre_action_owner_entity_id": scope.pre_action_owner_entity_id,
+                    "witness_evidence_ref": evidence_id,
+                    "declared_at_transition": int(outcome.get("transition_id") or 0),
+                    "local_cells": tuple(attribution.local_residue_cells),
+                    "remote_cells": tuple(attribution.remote_residue_cells),
+                }
+            elif (
+                entity_id
+                and attribution.positive
+                and (
+                    self._phase == "CLICK"
+                    or probe.pilot_intent == "CONTACT_ATTEMPT"
+                )
+            ):
+                # Unified G3 law: one attributed activation with masked world
+                # residue is the durable existential lever witness in either
+                # action channel. Repetition, mechanism and conditions belong
+                # to G4; G3 immediately continues the ranked roster.
                 journal.response(entity_id, positive=True, evidence_ref=evidence_id)
                 witness = next(
                     item
@@ -4116,8 +4124,22 @@ class _LeverTarget:
                 journal.answer(entity_id, answer_ref=discovery_ref)
                 journal.close(entity_id, evidence_ref=evidence_id)
                 journal.ready_for_g4(entity_id, evidence_ref=evidence_id)
-                nav_discovery_recorded = True
+                discovery_recorded = True
                 epoch_record = dict(event.get("contact_epoch") or {})
+                if self._phase == "NAV":
+                    intervention = {
+                        "kind": "NAV",
+                        "entity_id": entity_id,
+                        "procedure_id": epoch_record.get("procedure_id"),
+                        "final_action": {"action": epoch_record.get("final_action")},
+                        "target_cells": [list(cell) for cell in scope.target_cells],
+                    }
+                else:
+                    # CLICK's intervention is the exact action payload for
+                    # the existing G4-A study adapter. Keep channel metadata
+                    # in the discovery envelope rather than nesting the
+                    # action under another ``action`` key.
+                    intervention = dict(action or {}) if isinstance(action, Mapping) else {}
                 discovery = {
                     "schema": "virelai-g3-lever-discovery-v1",
                     "status": "LEVER_FOUND",
@@ -4125,24 +4147,14 @@ class _LeverTarget:
                     "target_member_id": target_member_id,
                     "witness_id": witness.witness_id,
                     "evidence_ref": evidence_id,
-                    "channel": "BODY",
+                    "channel": channel,
                     "local_residue_cells": [
                         list(cell) for cell in attribution.local_residue_cells
                     ],
                     "remote_residue_cells": [
                         list(cell) for cell in attribution.remote_residue_cells
                     ],
-                    "intervention": {
-                        "kind": "NAV",
-                        "entity_id": entity_id,
-                        "procedure_id": epoch_record.get("procedure_id"),
-                        "final_action": {
-                            "action": epoch_record.get("final_action")
-                        },
-                        "target_cells": [
-                            list(cell) for cell in scope.target_cells
-                        ],
-                    },
+                    "intervention": intervention,
                     "effect_summary": lever_effect_summary(
                         attribution, witness_evidence_ref=evidence_id,
                     ),
@@ -4153,20 +4165,14 @@ class _LeverTarget:
                 self._lever_discoveries[target_member_id] = discovery
                 event["lever_discovery"] = discovery
             elif entity_id and attribution.positive:
-                journal.response(entity_id, positive=True, evidence_ref=evidence_id)
-                self._pending_confirmation = {
-                    "probe_id": f"{LEVER_GATE_ID}:CONFIRM:{target_member_id}:{evidence_id}",
-                    "phase": self._phase,
-                    "target": dict(probe.target or {}),
-                    "action": dict(probe.actions[0]) if probe.actions else None,
-                    "target_member_id": target_member_id,
-                    "entity_id": entity_id,
-                    "pre_action_owner_entity_id": scope.pre_action_owner_entity_id,
-                    "witness_evidence_ref": evidence_id,
-                    "declared_at_transition": int(outcome.get("transition_id") or 0),
-                    "local_cells": tuple(attribution.local_residue_cells),
-                    "remote_cells": tuple(attribution.remote_residue_cells),
-                }
+                # A positive route frame that was neither a CLICK activation
+                # nor terminal NAV contact is evidence about traversal, not a
+                # lever activation. Keep it bounded without inventing a G3
+                # confirmation detour.
+                journal.transition(
+                    entity_id, "AMBIGUOUS", evidence_ref=evidence_id,
+                    actor="G3_ATTRIBUTOR", reason="POSITIVE_NON_ACTIVATION_FRAME",
+                )
             elif entity_id and attribution.disposition in {
                 "SCOPED_NULL_RESPONSE", COUNTER_ONLY_DISPOSITION
             }:
@@ -4177,17 +4183,11 @@ class _LeverTarget:
                 journal.close(entity_id, evidence_ref=evidence_id)
             elif entity_id and attribution.disposition in {"AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"}:
                 journal.transition(
-                    entity_id,
-                    "AMBIGUOUS",
-                    evidence_ref=evidence_id,
-                    actor="G3_ATTRIBUTOR",
-                    reason=attribution.disposition,
+                    entity_id, "AMBIGUOUS", evidence_ref=evidence_id, actor="G3_ATTRIBUTOR", reason=attribution.disposition,
                 )
                 if self._phase == "CLICK":
                     event["bounded_ambiguity"] = self._bound_ambiguity(
-                        member_id=target_member_id,
-                        entity_id=entity_id,
-                        evidence_ref=evidence_id,
+                        member_id=target_member_id, entity_id=entity_id, evidence_ref=evidence_id,
                         disposition=attribution.disposition,
                         reason=(
                             "The metadata admits only the same direct coordinate click for this "
@@ -4203,7 +4203,7 @@ class _LeverTarget:
             if boundary_interrupted:
                 self._navigation_steps = 0
             elif (
-                nav_discovery_recorded
+                discovery_recorded
                 and probe.pilot_intent == "CONTACT_ATTEMPT"
             ):
                 # The positive witness is durable and this roster row is done.
@@ -4219,9 +4219,7 @@ class _LeverTarget:
                     "AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"
                 }:
                     event["bounded_ambiguity"] = self._bound_ambiguity(
-                        member_id=target_member_id,
-                        entity_id=entity_id,
-                        evidence_ref=evidence_id,
+                        member_id=target_member_id, entity_id=entity_id, evidence_ref=evidence_id,
                         disposition=attribution.disposition,
                         reason=(
                             "The contact attempt changed the target state without resolving "
@@ -4235,19 +4233,17 @@ class _LeverTarget:
                 and attribution.disposition in {"SCOPED_NULL_RESPONSE", COUNTER_ONLY_DISPOSITION}
                 and self._pending_confirmation is None
             ):
-                # A completed footprint contact with no world residue is the
-                # target's scoped null result.  It closes this G3 attempt; the
-                # route length is irrelevant to the epistemic verdict.
+                # A completed footprint contact with no world residue is the target's scoped null.
                 self._target_index += 1
                 self._navigation_steps = 0
-            elif terminal and self._pending_confirmation is None:
+            elif (
+                terminal or self._navigation_steps >= self._navigation_limit
+            ) and self._pending_confirmation is None:
                 if attribution.disposition in {
                     "AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"
                 }:
                     event["bounded_ambiguity"] = self._bound_ambiguity(
-                        member_id=target_member_id,
-                        entity_id=entity_id,
-                        evidence_ref=evidence_id,
+                        member_id=target_member_id, entity_id=entity_id, evidence_ref=evidence_id,
                         disposition=attribution.disposition,
                         terminal_state="AMBIGUOUS",
                         reason="The embodied contact pursuit was interrupted by a terminal boundary.",
@@ -4265,6 +4261,7 @@ class _LeverTarget:
             )
         ):
             self._target_index += 1
+        mu_return.after_g3_outcome(self, probe, event, lossless, scope.pre_action_owner_entity_id)
         event["scheduler"] = {
             "phase": self._phase,
             "target_index": self._target_index,
@@ -4469,6 +4466,28 @@ class _LeverTarget:
         self.revision += 1
         return answer
 
+    def _expected_entities(self) -> set[str]:
+        ledger = self._ensure_entity_ledger()
+        return {ledger.entity_for_member(str(item["member_id"])) for item in self._ensure_frontier()} - {None}
+
+    def _unbounded_entities(self) -> dict[str, str]:
+        """Roster entities whose G3 result no inventory may report (not closed, ready or bounded)."""
+        journal, settled, bounded = self.lifecycle_journal, {"G3-CLOSED", "G4-READY"}, {"AMBIGUOUS", "BUDGET_STOPPED"}
+        return {
+            entity_id: journal.entities[entity_id].state for entity_id in sorted(self._expected_entities())
+            if journal.entities[entity_id].state not in settled
+            and (journal.entities[entity_id].state not in bounded or entity_id not in self._bounded_ambiguities)
+        }
+
+    def answer_blocked(self) -> str | None:
+        """Axiom A2 (R9-R21 D5): an inventory is demanded that no answer can satisfy."""
+        if self._complete_reason is None or self._pending_confirmation is not None or self._pending_dossier:
+            return None
+        if self._inventory_answer is not None or self._bounded_coverage_answer is not None:
+            return None
+        unbounded = self._unbounded_entities()
+        return f"G3's inventory is demanded but these results are unbounded: {unbounded!r}" if unbounded else None
+
     def _submit_inventory(self, raw: Mapping[str, Any]) -> GateAnswer:
         if self._complete_reason is None or self._pending_confirmation is not None:
             raise GateContractError("G3 inventory requires a completed probe roster with no pending confirmation.")
@@ -4477,28 +4496,10 @@ class _LeverTarget:
                 "G3 aggregate answer is already accepted; do not resubmit it. "
                 "Follow the gate's next_operation."
             )
-        ledger = self._ensure_entity_ledger()
         journal = self.lifecycle_journal
         assert journal is not None
-        ranked = self._ensure_frontier()
-        expected_entities = {
-            ledger.entity_for_member(str(item["member_id"])) for item in ranked
-        }
-        expected_entities.discard(None)
-        unbounded = {
-            entity_id: journal.entities[entity_id].state
-            for entity_id in sorted(expected_entities)
-            if journal.entities[entity_id].state not in {
-                "G3-CLOSED", "G4-READY", "AMBIGUOUS", "BUDGET_STOPPED",
-                "PRESUMED_UNREACHABLE",
-            }
-            or (
-                journal.entities[entity_id].state in {
-                    "AMBIGUOUS", "BUDGET_STOPPED", "PRESUMED_UNREACHABLE",
-                }
-                and entity_id not in self._bounded_ambiguities
-            )
-        }
+        expected_entities = self._expected_entities()
+        unbounded = self._unbounded_entities()
         if unbounded:
             raise GateContractError(
                 f"G3 coverage cannot be reported with unbounded probe results: {unbounded!r}."
@@ -4527,7 +4528,7 @@ class _LeverTarget:
         }
         if set(lever_entities) != witnessed:
             raise GateContractError(
-                "lever_entities must exactly match the witnessed, explained G4-ready entities."
+                "lever_entities must exactly match the witnessed G4-ready entities."
             )
         if set(clean_null_entities) != clean_null:
             raise GateContractError(
@@ -4551,37 +4552,35 @@ class _LeverTarget:
                 "LeverInventory requires explanation, evidence_refs, competing_models, and falsifier."
             )
         required_refs = {
-            ref
-            for entity_id in witnessed
-            for ref in journal.entities[entity_id].witness_refs
+            ref for entity_id in witnessed for ref in journal.entities[entity_id].witness_refs
         } | {
             journal.entities[entity_id].events[-1].evidence_ref
-            for entity_id in clean_null
-            if journal.entities[entity_id].events
+            for entity_id in clean_null if journal.entities[entity_id].events
         } | {
-            self._bounded_ambiguities[entity_id]["evidence_ref"]
-            for entity_id in ambiguous
+            self._bounded_ambiguities[entity_id]["evidence_ref"] for entity_id in ambiguous
         }
         known_refs = {
-            item.evidence_ref
-            for member_id in self.evidence._attributions
-            for item in self.evidence._attributions[member_id]
-        } | required_refs
-        if set(evidence_refs) != required_refs or not set(evidence_refs) <= known_refs:
+            item.evidence_ref for items in self.evidence._attributions.values() for item in items
+        }
+        if set(evidence_refs) != required_refs or not set(evidence_refs) <= (known_refs | required_refs):
             raise GateContractError(
                 "G3 inventory evidence_refs must exactly cover positive witnesses, scoped nulls, "
                 "and bounded ambiguities."
             )
+        explanation = str(raw.get("explanation") or raw.get("mechanism") or "").strip()
+        competing = _strings(raw.get("competing_models"), "competing_models")
+        falsifier = str(raw.get("falsifier") or "").strip()
         answer_id = str(raw.get("answer_id") or "G3-INVENTORY-" + hashlib.sha256(
             _canonical({"entities": lever_entities, "evidence": evidence_refs}).encode()
         ).hexdigest()[:16])
-        answer_kind = "G3_BOUNDED_COVERAGE_REPORT" if ambiguous else "LEVER_INVENTORY"
+        partial = bool(ambiguous and witnessed)  # R9-R23 D13: mystery objects never block (M-2)
+        answer_kind = "G3_BOUNDED_COVERAGE_REPORT" if ambiguous and not partial else "LEVER_INVENTORY"
         answer = GateAnswer(
             answer_id=answer_id,
             answer_kind=answer_kind,
             subjects=(
                 tuple(lever_entities + clean_null_entities + ambiguous_entities)
-                if ambiguous else lever_entities
+                if ambiguous and not partial else lever_entities
             ),
             mechanism=explanation,
             action_laws={"probe_protocol": str(self._complete_reason)},
@@ -4597,11 +4596,12 @@ class _LeverTarget:
             },
             limitations=_strings(raw.get("limitations", []), "limitations", required=False),
         )
-        if ambiguous:
+        if ambiguous and not partial:
             self._bounded_coverage_answer = answer
             self.revision += 1
             return answer
         self._inventory_answer = answer
+        mu_return.settle_after_inventory(self)
         self.machine.target_journal.put(MemoryProduct(
             product_id=answer_id,
             product_type="LeverInventory",
@@ -4612,8 +4612,9 @@ class _LeverTarget:
                 "probe_protocol": self._complete_reason,
                 "lever_entities": list(lever_entities),
                 "clean_null_entities": list(clean_null_entities),
-                "ambiguous_entities": [],
-                "ranked_target_count": len(ranked),
+                "ambiguous_entities": sorted(ambiguous),
+                "closure": "PARTIAL" if partial else "COMPLETE",
+                "ranked_target_count": len(self._ensure_frontier()),
                 "frontier_accounting": self._frontier_snapshot(),
                 "lifecycle_journal": journal.snapshot(),
             },
@@ -4814,6 +4815,7 @@ class _LeverTarget:
                 "explanation": "Explain what this intervention changed and why it is a lever.",
                 "intervention": dict(self._pending_dossier["intervention"]),
                 "effect_summary": dict(self._pending_dossier["effect_summary"]),
+                "repeat": self._repeat_readings.get(self._pending_dossier["entity_id"]),
                 "evidence_refs": [
                     self._pending_dossier["witness_evidence_ref"],
                     self._pending_dossier["confirmation_evidence_ref"],
@@ -5561,6 +5563,7 @@ class _ReactionTarget:
         self._anatomies: dict[str, LeverEffectAnatomy] = {}
         self._answers: dict[str, LeverReactionAnswer] = {}
         self._ordered_entities: tuple[str, ...] = ()
+        self._seeded_from: str | None = None  # R9-R23 D15: a revised G3 inventory adds late levers
 
     def _lever_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(LEVER_GATE_ID)
@@ -5569,7 +5572,7 @@ class _ReactionTarget:
         return product
 
     def _seed(self) -> None:
-        if self._ordered_entities:
+        if mu_return.seeded(self, LEVER_GATE_ID):
             return
         product = self._lever_product()
         entities = tuple(str(item) for item in product.payload.get("lever_entities") or ())
@@ -5585,6 +5588,9 @@ class _ReactionTarget:
         mask = self.machine.counter.mask_law
         anatomies: dict[str, LeverEffectAnatomy] = {}
         for entity_id in entities:
+            if entity_id in self._anatomies:  # kept across a revised inventory (R9-R23 D15)
+                anatomies[entity_id] = self._anatomies[entity_id]
+                continue
             lifecycle = journal.entities.get(entity_id)
             if lifecycle is None or lifecycle.state != "G4-READY":
                 raise GateContractError(f"G4 subject {entity_id!r} is not G4-ready in the G3 lifecycle.")
@@ -5603,31 +5609,28 @@ class _ReactionTarget:
             member_id = members[0]
             dossier = g3._dossier_answers.get(member_id)
             discovery = g3._lever_discoveries.get(member_id)
-            if dossier is not None:
-                confirmations = [
-                    item for item in g3._confirmation_records
-                    if str(item.get("entity_id") or "") == entity_id
-                    and str(item.get("target_member_id") or "") == member_id
-                    and str(item.get("status") or "").upper() == "SUPPORTED"
-                ]
-                if not confirmations:
-                    raise GateContractError(
-                        f"G4 cannot find the G3 confirmation for {entity_id!r}."
-                    )
-                witness_evidence_ref = str(
-                    confirmations[-1].get("witness_evidence_ref") or ""
-                )
-                confirmation_ref = str(
-                    confirmations[-1].get("confirmation_evidence_ref") or ""
-                )
-                intervention = dossier.intervention
-                record_ref = dossier.answer_id
-            else:
-                assert discovery is not None
+            if discovery is not None:
                 witness_evidence_ref = str(discovery.get("evidence_ref") or "")
                 confirmation_ref = None
                 intervention = dict(discovery.get("intervention") or {})
                 record_ref = str(discovery.get("record_ref") or "")
+            else:
+                # Backward-compatible replay of pre-first-witness CLICK records.
+                assert dossier is not None
+                confirmations = [
+                    item for item in g3._confirmation_records
+                    if str(item.get("entity_id") or "") == entity_id
+                    and str(item.get("target_member_id") or "") == member_id
+                    and certified(item, g3._repeat_readings)
+                ]
+                if not confirmations:
+                    raise GateContractError(
+                        f"G4 cannot find the positive G3 witness for {entity_id!r}."
+                    )
+                witness_evidence_ref = str(confirmations[-1].get("witness_evidence_ref") or "")
+                confirmation_ref = str(confirmations[-1].get("confirmation_evidence_ref") or "")
+                intervention = dossier.intervention
+                record_ref = dossier.answer_id
             attributions = [
                 item for item in g3.evidence._attributions.get(member_id, ())
                 if item.positive and item.evidence_ref == witness_evidence_ref
@@ -5646,8 +5649,7 @@ class _ReactionTarget:
                 )
             except G4ReactionError as exc:
                 raise GateContractError(f"G4 anatomy rejected for {entity_id}: {exc}") from exc
-        self._ordered_entities = entities
-        self._anatomies = anatomies
+        self._ordered_entities, self._anatomies, self._seeded_from = entities, anatomies, product.product_id
 
     def _current_entity(self) -> str | None:
         self._seed()
@@ -5655,8 +5657,10 @@ class _ReactionTarget:
 
     def assess(self) -> GateAssessment:
         self._seed()
-        product = self.machine.target_journal.active_product(REACTION_GATE_ID)
         current = self._current_entity()
+        if current is None and self._answers and self.machine.target_journal.active_product(REACTION_GATE_ID) is None:
+            self._emit_anatomy_product()  # every lever explained, the product invalidated upstream (D15)
+        product = self.machine.target_journal.active_product(REACTION_GATE_ID)
         if product is not None:
             disposition = "SATISFIED"
             unmet: tuple[str, ...] = ()
@@ -5701,25 +5705,28 @@ class _ReactionTarget:
         self._answers[current] = answer
         self.revision += 1
         if len(self._answers) == len(self._ordered_entities):
-            product_id = "G4-ANATOMY-" + hashlib.sha256(_canonical({
-                "entities": self._ordered_entities,
-                "answers": [self._answers[item].answer_id for item in self._ordered_entities],
-            }).encode()).hexdigest()[:16]
-            self.machine.target_journal.put(MemoryProduct(
-                product_id=product_id,
-                product_type="LeverEffectAnatomySet",
-                target_id=REACTION_GATE_ID,
-                revision=self.revision,
-                payload={
-                    "scope": "G4.0_BINDING_AND_G4.1_EFFECT_ANATOMY",
-                    "lever_entities": list(self._ordered_entities),
-                    "anatomies": [anatomy_payload(self._anatomies[item]) for item in self._ordered_entities],
-                    "answers": [asdict(self._answers[item]) for item in self._ordered_entities],
-                    "open_questions": list(self._anatomies[self._ordered_entities[0]].open_questions),
-                },
-                dependencies=(LEVER_GATE_ID,),
-            ))
+            self._emit_anatomy_product()
         return answer
+
+    def _emit_anatomy_product(self) -> None:
+        product_id = "G4-ANATOMY-" + hashlib.sha256(_canonical({
+            "entities": self._ordered_entities,
+            "answers": [self._answers[item].answer_id for item in self._ordered_entities],
+        }).encode()).hexdigest()[:16]
+        self.machine.target_journal.put(MemoryProduct(
+            product_id=product_id,
+            product_type="LeverEffectAnatomySet",
+            target_id=REACTION_GATE_ID,
+            revision=self.revision,
+            payload={
+                "scope": "G4.0_BINDING_AND_G4.1_EFFECT_ANATOMY",
+                "lever_entities": list(self._ordered_entities),
+                "anatomies": [anatomy_payload(self._anatomies[item]) for item in self._ordered_entities],
+                "answers": [asdict(self._answers[item]) for item in self._ordered_entities],
+                "open_questions": list(self._anatomies[self._ordered_entities[0]].open_questions),
+            },
+            dependencies=(LEVER_GATE_ID,),
+        ))
 
     def reaction_view(self, entity_id: str) -> dict[str, Any]:
         self._seed()
@@ -5867,6 +5874,7 @@ class _LeverStudyTarget:
         # Set once a level transition occurs; closes this level's G4 study (G9 owns transfer).
         self._level_closed: dict[str, Any] | None = None
         self._life_restudies: dict[str, int] = {}  # D4: same-level deaths per lever
+        self._seeded_from: str | None = None  # R9-R23 D15: a revised G4.1 product adds late levers
 
     def _reaction_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
@@ -5875,7 +5883,7 @@ class _LeverStudyTarget:
         return product
 
     def _seed(self) -> None:
-        if self._ordered_entities:
+        if mu_return.seeded(self, REACTION_GATE_ID):
             return
         product = self._reaction_product()
         interventions: dict[str, dict[str, Any]] = {}
@@ -5896,8 +5904,10 @@ class _LeverStudyTarget:
                 interventions[entity_id] = _normalize_action_payload(intervention)
         if not order:
             raise GateContractError("G4-A requires at least one confirmed lever.")
-        self._ordered_entities = tuple(order)
-        self._interventions = interventions
+        # Studied levers keep their runs; a late lever joins the queue (R9-R23 D15).
+        self._ordered_entities = (*self._ordered_entities, *(item for item in order if item not in self._ordered_entities))
+        self._interventions.update(interventions)
+        self._seeded_from = product.product_id
 
     # ---- state -------------------------------------------------------------------------
 
@@ -5936,6 +5946,13 @@ class _LeverStudyTarget:
             cells = entity.current.cells
         return g3.planned_nav_step({"entity_id": entity_id, "cells": cells})
 
+    def g3_pairs(self) -> dict[str, dict[str, Any]]:
+        self._seed()
+        return g3_pairs(
+            self.machine._adapters[LEVER_GATE_ID]._repeat_readings,
+            self._ordered_entities,
+        )
+
     def _lever_status(self, entity_id: str) -> str:
         if entity_id in self._answers:
             return "EXPLAINED"
@@ -5960,8 +5977,10 @@ class _LeverStudyTarget:
 
     def assess(self) -> GateAssessment:
         self._seed()
-        product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         pending = self._pending()
+        if not pending and self._answers and self.machine.target_journal.active_product(ORBIT_GATE_ID) is None:
+            self._emit_orbit_product()  # every lever studied, the product invalidated upstream (D15)
+        product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         awaiting = self._awaiting_answer()
         if not pending:
             disposition = "SATISFIED" if product is not None else "ANSWER_REQUIRED"
@@ -6220,6 +6239,8 @@ class _LeverStudyTarget:
                 ],
                 "answers": [asdict(self._answers[item]) for item in completed],
                 "lever_classes": {item: self._completed[item].lever_class() for item in completed},
+                "lever_typing": {item: self._completed[item].typing() for item in completed},
+                "g3_pairs": self.g3_pairs(),
                 "life_restudies": dict(self._life_restudies),
                 "action_count": self._action_count,
                 "epistemic_limit": (
@@ -6321,7 +6342,7 @@ class _LeverStudyTarget:
         contract = self.machine.target_registry.get(ORBIT_GATE_ID)
         assessment = self.assess()
         self._seed()
-        awaiting = self._awaiting_answer()
+        awaiting, pairs = self._awaiting_answer(), self.g3_pairs()
         view: dict[str, Any] = {
             "schema": "virelai-g4a-target-card-v1",
             "gate_id": ORBIT_GATE_ID,
@@ -6336,9 +6357,9 @@ class _LeverStudyTarget:
                     "entity_id": item,
                     "click": dict(self._interventions[item]),
                     "status": self._lever_status(item),
-                    "class": (
-                        self._completed[item].lever_class() if item in self._completed else None
-                    ),
+                    "class": self._completed[item].lever_class() if item in self._completed else None,
+                    "typing": self._completed[item].typing() if item in self._completed else None,
+                    "g3_repeat": pairs[item]["repeat_disposition"] if item in pairs else None,
                 }
                 for item in self._ordered_entities
             ],
@@ -6408,10 +6429,15 @@ class CyberneticGateMachine:
         initial_grid: Sequence[Sequence[int]],
         observed_through_step: int = 0,
         g3_inherits_g2_nulls: bool = True,
+        legacy_g3_confirmation_replay: bool = False,
     ) -> None:
         # The recording protocol, stamped on every probe envelope so a record replays under the
         # protocol it was made with (ruling D5 changed G3's sweep in R9-R08).
         self.protocol = {"g3_inherits_g2_nulls": bool(g3_inherits_g2_nulls)}
+        # Historical CLICK fixtures contain a second G3 confirmation action.
+        # Live machines leave this false; record_replay enables it only for a
+        # record that actually contains legacy G3 dossier answers.
+        self._legacy_confirmation_replay = bool(legacy_g3_confirmation_replay)
         self._build_level(valid_actions, initial_grid, observed_through_step)
         self.lives = LifeRecord()  # lives, levels and the high-water transition (R9-R16)
         self.levels: list[dict[str, Any]] = []  # each finished level's frozen model (R9-R17)
@@ -6424,6 +6450,7 @@ class CyberneticGateMachine:
     def _build_level(self, valid_actions: Iterable[Any], grid: Sequence[Sequence[int]], step: int, prior: Any = None) -> None:
         """Every LEVEL-tier field, fresh (R9-R17); ``prior``'s levers become this level's carry predictions (R9-R18)."""
         self.carry = CarryLedger(prior, grid, step)
+        self.mu = MuBucket()  # R9-R23: this level's mystery objects (RULING_MU_BUCKET_v1)
         self.annotations = AnnotationLane()  # Duck's UNCERTIFIED notes (D6); never read by a gate
         self.ego = EgoGateMachine(valid_actions=valid_actions, initial_grid=grid, observed_through_step=step)
         self.counter = CounterGateMachine(affordances=self.ego.affordances, initial_grid=grid, observed_through_step=step)
@@ -6432,11 +6459,13 @@ class CyberneticGateMachine:
         self.target_router = TargetRouter(self.target_registry, self.target_journal)
         self._g0 = _ActionSurfaceTarget(self)
         from inference.framework.g4c_gate import later_adapters
+        from inference.framework.play_gate import DuckTurnBudget, PlayTarget
 
+        self.duck_budget = DuckTurnBudget()  # R9-R24 D20: Duck's G4-B/G4-C turns, fresh each level
         self._adapters = {
             ACTION_METADATA_GATE_ID: self._g0, GATE_ID: _EgoTarget(self), COUNTER_GATE_ID: _CounterTarget(self),
             LEVER_GATE_ID: _LeverTarget(self), REACTION_GATE_ID: _ReactionTarget(self),
-            ORBIT_GATE_ID: _LeverStudyTarget(self), **later_adapters(self),
+            ORBIT_GATE_ID: _LeverStudyTarget(self), **later_adapters(self), PLAY_GATE_ID: PlayTarget(self),
         }
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
         self._counter_prepared_from_ego = False
@@ -6482,6 +6511,8 @@ class CyberneticGateMachine:
         return self._g0.revision
 
     def _effective_target_id(self) -> str:
+        if self._adapters[PLAY_GATE_ID].forced is not None:  # R9-R24 D22: rested without a legal move
+            return PLAY_GATE_ID
         picked = self.target_router.current_or_last().target_id
         orbit = self.target_journal.active_product(ORBIT_GATE_ID)
         if orbit is not None and _phase1_hold_reason(orbit.payload) is not None:
@@ -6622,6 +6653,7 @@ class CyberneticGateMachine:
                 )
             intent = str(decision.get("intent") or "").strip()[:240] or None
             admitted_probe = replace(probe, actions=supplied_actions, intent=intent)
+            getattr(self._active_adapter(), "admit", lambda _probe: None)(admitted_probe)  # R9-R24 R-8
         elif probe.admissible_actions:
             if len(supplied_actions) != 1 or supplied_actions[0]["action"] not in probe.admissible_actions:
                 raise GateContractError(
@@ -6747,37 +6779,25 @@ class CyberneticGateMachine:
     def legal_move_status(self) -> dict[str, Any]:
         """Axiom A2 (DOCTRINE_FRICTION_AXIOMS_v1): every gate state admits a move or declares an end.
 
-        Legal means an admissible probe is offered, or an answer is asked for with a template
-        to fill, or the gate declares a terminal/waiting state that asks nothing of Duck. The two
-        illegal signatures are the ones three live runs deadlocked on: an answer demanded with no
-        template (ft09 G2, 2026-09-27), and a probe demanded with none offered (vc33 G4.2,
-        2026-09-27; ls20 G2, 2026-09-22).
+        Legal means an admissible probe is offered, or an answer is asked for that the gate can
+        accept, or the gate declares an end (``DECLARED_ENDS``). Anything else is no legal move,
+        whatever the operation is called (R9-R22 D11): the vc33 v4 and v5 runs idled for hours in
+        waits that named no probe and no answer.
         """
         view = self.gate_view()
         operation = str(view.get("next_operation") or "")
-        base = {
-            "gate_id": self.gate_id,
-            "status": view.get("status"),
-            "next_operation": operation,
-        }
+        base = {"gate_id": self.gate_id, "status": view.get("status"), "next_operation": operation}
         if self.next_probe_capability() is not None:
             return {**base, "legal": True, "move": "PROBE"}
         if operation == "SUBMIT_GATE_ANSWER":
-            has_template = view.get("answer_template") is not None or bool(
-                view.get("answer_templates")
-            )
+            has_template = view.get("answer_template") is not None or bool(view.get("answer_templates"))
+            blocked = getattr(self._adapters.get(self.gate_id), "answer_blocked", lambda: None)()
             if "answer_template" in view and not has_template:
-                return {
-                    **base, "legal": False,
-                    "reason": "an answer is demanded but the card supplies no answer template",
-                }
-            return {**base, "legal": True, "move": "ANSWER"}
-        if operation in {"QUERY_NEXT_PROBE", "QUERY_NEXT_G3_TARGET"}:
-            return {
-                **base, "legal": False,
-                "reason": "a probe is demanded but no admissible probe is offered",
-            }
-        return {**base, "legal": True, "move": "DECLARED_STATE"}
+                blocked = "an answer is demanded but the card supplies no answer template"
+            return {**base, "legal": False, "reason": blocked} if blocked else {**base, "legal": True, "move": "ANSWER"}
+        if operation in DECLARED_ENDS:
+            return {**base, "legal": True, "move": "DECLARED_STATE"}
+        return {**base, "legal": False, "reason": f"{operation or 'no operation'} offers no probe, answer or end"}
 
     def gate_view(self) -> dict[str, Any]:
         contract = self.target_registry.get(self._effective_target_id())
@@ -7114,12 +7134,12 @@ class CyberneticGateMachine:
         return self._adapters[REACTION_GATE_ID].reaction_view(entity_id)
 
     def orbit_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID}:
+        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID}:
             raise GateContractError("orbit detail queries open at G4.2.")
         return self._adapters[ORBIT_GATE_ID].orbit_view(entity_id)
 
     def relations_view(self) -> dict[str, Any]:
-        if self.gate_id not in {RELATION_GATE_ID, LAW_GATE_ID}:
+        if self.gate_id not in {RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID}:
             raise GateContractError("the G4-B prediction ledger opens at G4-B.")
         return self._adapters[RELATION_GATE_ID].relations_view()
 

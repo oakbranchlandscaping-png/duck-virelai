@@ -33,8 +33,10 @@ from inference.framework.g4_relations import (
     validate_prediction,
     validate_relations_answer,
 )
+from inference.framework.level_record import level_boards, presses, region_histories, split_outcomes
 from inference.framework.masked_world_state import grids_from_probe_outcome
 from inference.framework.probe_evidence import compact_probe_outcome
+from inference.framework.record_relations import RECORD_KIND, digest_lines, record_relations
 from inference.framework.virelai_gates import (
     ORBIT_GATE_ID,
     REACTION_GATE_ID,
@@ -107,6 +109,8 @@ class LeverRelationsTarget:
         self._events: list[dict[str, Any]] = []
         self._level_closed: dict[str, Any] | None = None
         self._reopened: list[str] = []  # G4-C predictions that contradicted an accepted description
+        self._from_record: dict[str, Any] | None = None  # R9-R24 D19: the controller's answer, from the record
+        self._unresolved: str | None = None  # R9-R24 D21: Duck's per-level budget was spent
 
     # ---- state -------------------------------------------------------------------------------
 
@@ -135,7 +139,25 @@ class LeverRelationsTarget:
         return _current_grid(self.machine)
 
     def _closed(self) -> bool:
-        return self._answer is not None or self._level_closed is not None
+        return self._answer is not None or self._level_closed is not None or self._unresolved is not None
+
+    def record_answer(self) -> dict[str, Any] | None:
+        """D19 (ruling G-1): the relations the level's record certifies, or None while a lever is unpressed."""
+        self._seed()
+        found = presses(self.machine, self._regions, level_boards(self.machine))
+        return record_relations(self._regions, found, split_outcomes(found))
+
+    def tested_from_record(self, action: Mapping[str, Any], before: str) -> list[str]:
+        """Evidence of every recorded press of this action from this masked board (G4-C's 'new')."""
+        return [item.evidence_ref for item in presses(self.machine, self._regions)
+                if item.action == dict(action) and item.before_address == before]
+
+    def close_unresolved(self, reason: str) -> None:
+        """D21 (ruling G-4): Duck's budget is spent; the gate closes with what is certified, a declared end."""
+        if not self._closed():
+            self._unresolved, self._pending = reason, None
+            self.revision += 1
+            self._emit_product()
 
     # ---- gate protocol -----------------------------------------------------------------------
 
@@ -260,6 +282,8 @@ class LeverRelationsTarget:
         if self._closed():
             raise GateContractError("G4-B is closed; no further answers are taken.")
         kind = str(raw.get("answer_kind") or "").strip().upper()
+        if kind == RECORD_KIND:
+            return self._certify_from_record(raw)
         try:
             if kind == PREDICTION_KIND:
                 return self._freeze(raw)
@@ -271,6 +295,22 @@ class LeverRelationsTarget:
         except G4RelationError as exc:
             raise GateContractError(f"G4-B answer rejected: {exc}") from exc
         raise GateContractError(f"G4-B answer_kind must be {PREDICTION_KIND} or {RELATIONS_KIND}.")
+
+    def _certify_from_record(self, raw: Mapping[str, Any]) -> RelationsAnswer:
+        """The controller's answer is accepted only if the gate re-derives it from the record (M7)."""
+        derived = self.record_answer()  # the gate's own derivation is the answer; a stated id must agree with it
+        if derived is None or raw.get("answer_id") not in (None, derived["answer_id"]):
+            raise GateContractError("G4-B answer rejected: the record does not certify these relations now.")
+        self._from_record = derived
+        self._answer = RelationsAnswer(
+            answer_id=derived["answer_id"], answer_kind=RECORD_KIND, description=derived["description"],
+            relations=tuple(derived["relations"]), open_conditions=(), competing_models=(),
+            falsifier="A later press whose recorded effect differs from the effects cited for its lever.",
+            limitations=(derived["epistemic_limit"],),
+        )
+        self.revision += 1
+        self._emit_product()
+        return self._answer
 
     def _freeze(self, raw: Mapping[str, Any]) -> Prediction:
         self._seed()
@@ -310,7 +350,10 @@ class LeverRelationsTarget:
             revision=self.revision,
             payload={
                 "scope": "G4B_LEVERS_TOGETHER",
-                "status": "COMPLETE" if self._answer is not None else "CLOSED_BY_LEVEL_BOUNDARY",
+                "status": "COMPLETE" if self._answer is not None else "UNRESOLVED" if self._unresolved else "CLOSED_BY_LEVEL_BOUNDARY",
+                "certified_by": "RECORD" if self._from_record is not None else "DUCK" if self._answer is not None else None,
+                "from_record": self._from_record,
+                "unresolved_reason": self._unresolved,
                 "lever_entities": list(self._levers()),
                 "pressed_levers": acted,
                 "unpressed_levers": missing,
@@ -333,6 +376,8 @@ class LeverRelationsTarget:
         line = (f"relations: {supported}/{len(graded)} predictions supported · {len(acted)} levers pressed · "
                 f"{len(self._record.conditions)} missing conditions")
         lines = [line]
+        if self._from_record is not None and self._answer is not None and self._answer.answer_id == self._from_record["answer_id"]:
+            return digest_lines(self._from_record)
         if self._answer is not None:
             lines.append(f"described: {self._answer.description[:240]}")
         return lines
@@ -343,9 +388,11 @@ class LeverRelationsTarget:
         """Every lever, unpressed first (the card shows the first LEVERS_ON_CARD)."""
         grid = self._grid()
         _acted, missing = coverage(self._predictions, self._levers())
+        history = region_histories(self._regions, level_boards(self.machine), grid)  # D18
         rows = [
             {"entity_id": region.entity_id, "click": dict(region.click), "bbox": region.bbox(),
-             "class": region.lever_class, "state_now": None if grid is None else region.state_label(grid),
+             "class": region.lever_class,
+             "state_now": None if grid is None else region.state_label(grid, history[region.entity_id]),
              "pressed": region.entity_id not in missing}
             for region in self._regions
         ]

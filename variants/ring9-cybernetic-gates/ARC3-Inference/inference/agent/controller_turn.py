@@ -56,9 +56,15 @@ def run_controller_turn(
     session: ControllerSession = agent._controller
     if not session.enabled or agent._step_env_callback is None:
         return None
-    from inference.framework.controller_executor import ANSWER, DUCK, ladder_end, next_owned_step
+    from inference.framework.controller_executor import ANSWER, DUCK, ladder_end, next_owned_step, return_to_mu_if_stuck
 
     machine = agent._ensure_gate_machine(state_path)
+    retried = return_to_mu_if_stuck(machine)  # R9-R23 D14: the mu bucket before any stop
+    if retried is not None:
+        _log(analyzer_log, retried)
+    rested = rest_if_no_legal_move(machine)  # R9-R24 D22: play on instead of idling
+    if rested is not None:
+        _log(analyzer_log, rested)
     end = ladder_end(machine)
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
@@ -67,10 +73,14 @@ def run_controller_turn(
         if session.wake is not None:
             wake, session.wake = session.wake, None
             if step.owner == DUCK:
+                if not duck_turn_allowed(machine, analyzer_log):
+                    continue  # the budget closed the gate; recompute ownership
                 session.hand_to_duck(f"{wake}; {step.reason}")
                 return None
             _log(analyzer_log, f"retaining controller ownership after wake: {wake}; next: {step.reason}")
         if step.owner == DUCK:
+            if not duck_turn_allowed(machine, analyzer_log):
+                continue  # the gate closed UNRESOLVED; the next step is someone else's
             session.hand_to_duck(step.reason)
             return None
         if step.kind == ANSWER:
@@ -83,6 +93,31 @@ def run_controller_turn(
             agent._virelai_query_callback = None
             agent._current_valid_actions = []
     return None
+
+
+def rest_if_no_legal_move(machine: Any) -> str | None:
+    """R9-R24 D22 (ruling G-5): a gate with no legal move rests the level in normal play, not a stop."""
+    from inference.framework.play_gate import rest_in_play
+
+    status = machine.legal_move_status()
+    if status.get("legal", True):
+        return None
+    reason = f"{status.get('gate_id')} has no legal move ({status.get('reason')}); the level rests in normal play"
+    rest_in_play(machine, reason)
+    return reason
+
+
+def duck_turn_allowed(machine: Any, analyzer_log: Path) -> bool:
+    """R9-R24 D20/D21: a Duck turn on G4-B or G4-C is charged to the level's budget, or the gate closes."""
+    from inference.framework.controller_executor import PREDICTION_GATES
+    from inference.framework.play_gate import charge_or_close
+
+    if machine.gate_id not in PREDICTION_GATES:
+        return True
+    closed = charge_or_close(machine)
+    if closed is not None:
+        _log(analyzer_log, closed)
+    return closed is None
 
 
 def _planned_stop(agent: Any, reason: str, analyzer_log: Path) -> Any:

@@ -9,6 +9,9 @@ GRID = ((0, 0, 0, 0), (0, 2, 0, 3), (0, 0, 0, 0))
 
 def _machine():
     machine = CyberneticGateMachine(valid_actions=["ACTION6"], initial_grid=GRID)
+    # These checkpoint fixtures certify the historical prospective-confirmation
+    # trace. The live contract is covered by the first-witness scheduler test.
+    machine._legacy_confirmation_replay = True
     machine.submit_answer({
         "answer_id": "G0-test",
         "action_metadata": [{"action": "ACTION6", "requires_coordinates": True}],

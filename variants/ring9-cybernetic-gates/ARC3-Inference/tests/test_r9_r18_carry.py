@@ -14,7 +14,7 @@ from inference.framework.carry import RECONFIRMED, UNCONFIRMED, scale_normalized
 from inference.framework.card_builder import world_model_digest
 from inference.framework.controller_executor import next_owned_step
 from inference.framework.memory_store import MemoryStore
-from inference.framework.record_replay import load_record, lossless_outcome, replay
+from inference.framework.record_replay import load_record, lossless_outcome, replay, record_like_live
 from test_r9_r15_replay_fidelity import FT09_EXIT, VC33_EXIT
 
 SQUARE = [9, [1, 1], [1]]
@@ -74,7 +74,7 @@ def test_the_levels_own_probes_grade_the_carry_and_g3_still_certifies_on_its_own
         probe = machine.validate_probe({"probe_token": step.probe_token}, [step.action])
         transition += 1
         grid, outcome = lossless_outcome(grid, transition, step.action, _stand_in(step.action, grid, transition))
-        machine.record_outcome(probe, outcome)
+        record_like_live(machine, probe, outcome, ["ACTION6"])  # with the live metadata refresh (R9-R20)
     grades = {item["anchor"][0]: (item["status"], item["evidence"]) for item in machine.carry.view()["candidates"]}
     assert grades[16][0] == grades[24][0] == RECONFIRMED and grades[16][1]["observed_locality"] == ["REMOTE"]
     assert grades[36] == ("FALSIFIED", {"transition_id": grades[36][1]["transition_id"], "observed_locality": [],

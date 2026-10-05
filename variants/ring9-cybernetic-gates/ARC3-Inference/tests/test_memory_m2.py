@@ -116,24 +116,24 @@ def test_t6_ft09_g0_to_g3_closure_with_zero_model_calls(ft09_run):
     assert len(ft09_run.model_prompts) == 1  # exactly one attempted call: Duck's orientation turn
     assert "CONTROLLER HANDOFF" in ft09_run.model_prompts[0]
     assert "SUBMIT_ORIENTATION" in ft09_run.model_prompts[0]
-    assert len(ft09_run.env_calls) == 72  # the v2 run spent 121 and never closed G3
+    assert len(ft09_run.env_calls) == 67  # first-witness G3 removes five confirmation actions
 
 
 def test_one_action_per_turn_and_every_artifact_says_who_acted(ft09_run):
     envelopes = ft09_run.rows("_probe_envelopes.jsonl")
-    assert len(envelopes) == len(ft09_run.env_calls) == 72
+    assert len(envelopes) == len(ft09_run.env_calls) == 67
     assert all(len(call["actions"]) == 1 for call in ft09_run.env_calls)
     assert {row["executor"] for row in envelopes} == {CONTROLLER}
     assert {row["schema"] for row in envelopes} == {"virelai-cybernetic-gates-v1"}
     assert {json.dumps(row["protocol"]) for row in envelopes} == {'{"g3_inherits_g2_nulls": true}'}
     answers = ft09_run.rows("_gate_answers.jsonl")
     assert [row["gate_id"] for row in answers] == [
-        "G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", *["G3-LEVERS"] * 6, *["G4-REACTIONS"] * 5,
+        "G0-ACTION-METADATA", "G1-EGO", "G2-COUNTER", "G3-LEVERS", *["G4-REACTIONS"] * 5,
     ]
     assert {row["executor"] for row in answers} == {CONTROLLER}
     ledger = ft09_run.rows("_turn_ledger.jsonl")
     controller_rows = [row for row in ledger if row["executor"] == CONTROLLER]
-    assert len(controller_rows) == 72
+    assert len(controller_rows) == 67
     assert all(row["request_count"] == 0 and row["step_executed"] for row in controller_rows)
 
 
@@ -156,7 +156,7 @@ def test_the_run_replays_offline_under_its_recorded_protocol(ft09_run, tmp_path)
     out = tmp_path / "record.json.gz"
     record_tool.write_record(record, out)
     result = replay(load_record(out), measure=False)
-    assert (result.steps_replayed, result.stopped) == (72, None)
+    assert (result.steps_replayed, result.stopped) == (67, None)
     assert result.machine.gate_id == "G4.2-LEVER-ORBITS"  # the anatomy answers replay too
 
 

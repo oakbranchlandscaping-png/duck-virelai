@@ -54,7 +54,8 @@ def test_a_supported_new_prediction_certifies_the_law_set_and_ends_the_ladder(g4
     law = machine.target_journal.active_product(LAW).payload
     assert law["status"] == "COMPLETE" and law["law_test"]["status"] == "SUPPORTED"
     assert law["relations"][0]["prediction_refs"] == ["P1"] and law["law_test"]["from_relations"] == [0]
-    assert ladder_end(machine) == "every built gate is satisfied, through G4-C; the next slice is not built"
+    # R9-R24 D22 (RULING_G4_CONTROLLER_FIRST_v2): the closed ladder hands the level to normal play, not a stop
+    assert ladder_end(machine) is None and machine.gate_id == "PLAY-NORMAL"
     assert any(line.startswith(f"[{LAW}] law: 1 relations · new test SUPPORTED") for line in world_model_digest(machine))
 
 

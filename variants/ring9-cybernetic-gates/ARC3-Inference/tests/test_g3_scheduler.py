@@ -72,7 +72,7 @@ def submit_pending_dossier(machine, *, explanation=None):
     })
 
 
-def test_click_scheduler_owns_ranked_target_and_keeps_probe_token_stable():
+def test_click_first_positive_witness_certifies_lever_and_advances_roster():
     machine = machine_for(["ACTION6"], "POINTER_GOD_MODE")
     first = machine.next_probe_capability()
     assert machine.gate_id == "G3-LEVERS"
@@ -92,36 +92,19 @@ def test_click_scheduler_owns_ranked_target_and_keeps_probe_token_stable():
         "shape_before": [3, 4], "shape_after": [3, 4],
         "boundary_event": {"state": "PLAYING"},
     })
-    assert event["scheduler"]["target_index"] == 0
+    assert event["scheduler"]["target_index"] == 1
     assert event["scheduler"]["target_changed"] is True
     assert event["attribution"]["disposition"] == "LOCAL_LEVER_WITNESS"
-    confirmation = machine.next_probe_capability()
-    assert confirmation["purpose"] == "CONFIRM_LEVER_WITNESS"
-    confirmation_probe = machine.validate_probe(
-        {"probe_token": confirmation["probe_token"]}, confirmation["actions"]
-    )
-    confirmed = machine.record_outcome(confirmation_probe, {
-        "transition_id": 2,
-        "action": confirmation["actions"][0],
-        "changed_cells": [{"row": 1, "col": 1}],
-        "site_transitions": [
-            {"row": row, "col": col, "before": GRID[row][col], "after": GRID[row][col]}
-            for row in range(3) for col in range(4)
-        ],
-        "shape_before": [3, 4], "shape_after": [3, 4],
-        "boundary_event": {"state": "PLAYING"},
-    })
-    assert confirmed["confirmation"]["status"] == "SUPPORTED"
-    assert confirmed["scheduler"]["target_index"] == 0
-    evidence = machine.evidence_view(confirmed["evidence_id"])
+    assert event["lever_discovery"]["status"] == "LEVER_FOUND"
+    assert event["lever_discovery"]["channel"] == "POINTER"
+    assert machine._adapters["G3-LEVERS"]._pending_confirmation is None
+    entity_id = event["lever_discovery"]["entity_id"]
+    assert machine._adapters["G3-LEVERS"].lifecycle_journal.entities[entity_id].state == "G4-READY"
+    evidence = machine.evidence_view(event["evidence_id"])
     assert evidence["gate_id"] == "G3-LEVERS"
-    assert evidence["evidence_id"] == confirmed["evidence_id"]
+    assert evidence["evidence_id"] == event["evidence_id"]
     assert evidence["observation"]["target_member_id"] == first["target"]["member_id"]
     assert evidence["observation"]["changed_cells"]
-    assert machine.gate_view()["status"] == "ANSWER_REQUIRED"
-    assert machine.gate_view()["next_operation"] == "SUBMIT_GATE_ANSWER"
-    answer = submit_pending_dossier(machine)
-    assert answer.answer_kind == "LEVER_DOSSIER"
     assert machine.next_probe_capability()["target"]["rank"] == 2
 
 
@@ -240,6 +223,7 @@ def test_nav_scheduler_binds_one_target_and_requires_intent():
 
 def test_boundary_interrupted_confirmation_defers_to_g4_and_retries_target():
     machine = machine_for(["ACTION6"], "POINTER_GOD_MODE")
+    machine._legacy_confirmation_replay = True
     first = machine.next_probe_capability()
     probe = machine.validate_probe({"probe_token": first["probe_token"]}, first["actions"])
     machine.record_outcome(probe, {
@@ -355,6 +339,7 @@ def test_system_reset_keeps_g3_target_identity_bound_to_spawn_slot():
 
 def test_boundary_reset_retry_can_attribute_the_same_rank_after_respawn():
     machine = machine_for(["ACTION6"], "POINTER_GOD_MODE")
+    machine._legacy_confirmation_replay = True
     first = machine.next_probe_capability()
     entity_id = first["target"]["entity_id"]
     probe = machine.validate_probe({"probe_token": first["probe_token"]}, first["actions"])
@@ -407,6 +392,7 @@ def test_boundary_reset_retry_can_attribute_the_same_rank_after_respawn():
 
 def test_completed_probe_roster_requires_and_accepts_evidence_bound_inventory():
     machine = machine_for(["ACTION6"], "POINTER_GOD_MODE")
+    machine._legacy_confirmation_replay = True
     lever = machine._adapters["G3-LEVERS"]
     lever.machine.counter._ranked_visual_targets = lever.machine.counter._ranked_visual_targets[:1]
     first = machine.next_probe_capability()
@@ -536,6 +522,7 @@ def test_g3_excludes_wholly_masked_counter_member_and_preserves_source_ranks():
 
 def test_typed_dossier_rejects_scalar_competitor_and_counter_causal_reintroduction():
     machine = machine_for(["ACTION6"], "POINTER_GOD_MODE")
+    machine._legacy_confirmation_replay = True
     machine.counter.mask_law = MaskLaw(
         law_id="MASK-test", law_version_id="MASK-test", revision=2, status="LOCKED",
         cells=((0, 0),), rewrite="0->1",

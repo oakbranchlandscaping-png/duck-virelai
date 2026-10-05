@@ -52,9 +52,8 @@ def v2_in_g2():
 def test_a_duck_that_reads_only_the_card_completes_the_ladder(ladders):
     """M5: the card carries everything each step needs, from the counter to every lever's orbit."""
     for levers, run in ladders.items():
-        assert run.gates == LADDER_GATES, levers
-        assert run.machine.gate_id == "G4-C-LEVER-LAW"  # the ladder's last built gate (R9-R13)
-        assert run.machine.status == "SATISFIED", (levers, run.stopped)
+        assert run.gates == [*LADDER_GATES, "PLAY-NORMAL"], levers  # R9-R24 D22: normal play follows the ladder
+        assert run.machine._adapters["G4-C-LEVER-LAW"].assess().disposition == "SATISFIED", (levers, run.stopped)
         orbits = run.machine.target_journal.active_product("G4.2-LEVER-ORBITS").payload
         assert len(orbits["lever_entities"]) == levers
         assert orbits["phase1_status"] == "COMPLETE"

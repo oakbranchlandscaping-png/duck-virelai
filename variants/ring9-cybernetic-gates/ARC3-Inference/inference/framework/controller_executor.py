@@ -19,19 +19,22 @@ What the controller owns:
 - G2 search: the first untried ranked object (Duck followed this order exactly, live, twice).
 - G2 label and frozen prediction, when the record's trigger class is EVERY_TRANSITION or
   EFFECTIVE_TRANSITIONS_ONLY: a COUNTER_REWRITE on the template's certified action.
-- Every bound G2 and G3 probe action (demonstration, sweep, confirmation).
+- Every bound G2 and G3 probe action (demonstration, route and sweep).
 - G3 dossiers and the inventory, when nothing is ambiguous.
 - G4.1 anatomy answers (M-4): the channels are certified; the prose is rendered from them.
 - G4-A lever runs (D3): each lever is pressed, one press per step, until its run is confirmed,
   diverged or ended; a same-level death returns it to the study (D4, in the gate).
 - An extra run Duck asks for (D3): up to 8 CLICK activations or routed NAV contacts with one lever.
 
+- G4-B's relations, from the level's record (R9-R24 D19, RULING_G4_CONTROLLER_FIRST_v2 G-1).
+
 Duck owns: the orientation turn (M-3; due once G4.1 is certified), every G4-A orbit explanation,
 an OPEN or IRREGULAR trigger record (the discriminating prediction is a choice, not a
-computation), ambiguity, unbound or multi-action probes, and the predictions and descriptions past
-G4-A. Their bound test actions remain controller-owned. A semantic stop-and-wake condition
-(``wake_reason``) is delivered when the next step independently requires judgment; a wake never
-transfers a computable action or certified answer to Duck.
+computation), ambiguity, unbound or multi-action probes, G4-C's test and any G4-B prediction the
+record cannot answer (both within Duck's per-level budget, R9-R24 D20), normal play after the gates
+(D22), and semantic stop-and-wake conditions (``wake_reason``). Bound tests and certified answers
+remain controller-owned even after a wake; the wake is delivered when the next step independently
+requires judgment.
 
 The prose in a controller answer is rendered deterministically from the certified fields; the
 certified content is the structured part (M7). It is marked as controller-rendered.
@@ -43,6 +46,7 @@ from typing import Any, Mapping
 
 from inference.framework.annotation_lane import orientation_due
 from inference.framework.card_builder import world_budgets
+from inference.framework.lever_repeat import certified
 from inference.framework.memory_store import cell_bbox as _bbox
 from inference.framework.virelai_gates import control_archetype_prior
 
@@ -100,6 +104,18 @@ def ladder_end(machine: Any) -> str | None:
     return None
 
 
+def return_to_mu_if_stuck(machine: Any) -> str | None:
+    """M-4 (RULING_MU_BUCKET_v1): before a planned stop or a dead state, retry mu on a changed board."""
+    from inference.framework.mu_return import return_to_mu
+
+    from inference.framework.virelai_gates import PLAY_GATE_ID
+
+    resting = machine.gate_id == PLAY_GATE_ID and machine._adapters[PLAY_GATE_ID].rest_check_due()  # R9-R24
+    stuck = resting or machine.target_router.current() is None or not machine.legal_move_status().get("legal", True)
+    retry = return_to_mu(machine) if stuck else []
+    return f"mu return on a changed board: retrying {', '.join(retry)}" if retry else None
+
+
 def next_owned_step(
     machine: Any, *, refused: frozenset | set = frozenset(), rerun: Mapping[str, Any] | None = None,
 ) -> OwnedStep:
@@ -130,7 +146,7 @@ def _ordinary_step(
     """Controller ownership shared by CLICK and world-independent exact capabilities."""
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
     if machine.gate_id in PREDICTION_GATES:
-        return _relations_step(machine, capability)
+        return _relations_step(machine, capability, refused)
     view = machine.gate_view()
     if machine.gate_id == ORBITS:
         return _orbit_step(machine, capability, view, rerun)
@@ -230,7 +246,9 @@ def _nav_step(
     if machine.gate_id in PREDICTION_GATES:
         capability = machine.next_probe_capability()
         if capability is None:
-            return _duck(machine, f"{machine.gate_id} needs Duck to freeze or explain a prediction")
+            # R9-R24 D19 is world-independent: if the level record already
+            # certifies G4-B, NAV must consume that answer without waking Duck.
+            return _relations_step(machine, capability, refused)
         entity = str((capability.get("target") or {}).get("entity_id") or "")
         planned = machine._adapters[ORBITS].planned_nav_step(entity)
         if planned is None:
@@ -276,9 +294,16 @@ def _certified_answer_step(
     return OwnedStep(CONTROLLER, machine.gate_id, reason, ANSWER, answer=answer, refusal_key=key)
 
 
-def _relations_step(machine: Any, capability: Mapping[str, Any] | None) -> OwnedStep:
-    """G4-B and G4-C: Duck freezes each prediction and writes the description; the controller takes the action."""
+def _relations_step(machine: Any, capability: Mapping[str, Any] | None, refused: frozenset | set = frozenset()) -> OwnedStep:
+    """G4-B from the record (R9-R24 D19); Duck's frozen predictions are taken by the controller."""
     gate = machine.gate_id
+    if gate == RELATIONS and capability is None:
+        adapter = machine._adapters[RELATIONS]
+        key = (gate, adapter.revision, machine.lives.level)
+        answer = None if key in refused else adapter.record_answer()
+        if answer is not None:
+            return OwnedStep(CONTROLLER, gate, "G4-B: the level's record certifies the relations (ruling G-1)",
+                             ANSWER, answer=answer, refusal_key=key)
     if capability is not None:
         target = capability.get("target") or {}
         return OwnedStep(
@@ -412,16 +437,24 @@ def _counter_answer(machine: Any, template: Mapping[str, Any]) -> tuple[dict[str
     }, f"G2 label and prediction ({trigger})"
 
 
+REPEAT_TEXT = {  # R9-R22 D7: the repeat press, said as observed (a typing input for G4, never a retraction)
+    "NULL_AT_OBSERVED_STATE": "; a repeat press then changed nothing (it moved, then held).",
+    "OBSERVED_STATE_RECURRENCE": "; a repeat press then undid it exactly.",
+    "NOVEL_STATE_REVEALED": "; a repeat press then changed the board again, to a third state.",
+}
+
+
 def _dossier_answer(template: Mapping[str, Any]) -> dict[str, Any]:
     summary = template["effect_summary"]
+    repeat = (template.get("repeat") or {}).get("repeat_disposition")
     action = template["intervention"]
     site = f"({action.get('row')}, {action.get('col')})" if "row" in action else str(action.get("action"))
     remote = int(summary.get("remote_changed_cell_count") or 0)
     text = (
-        f"Clicking {template['target_member_id']} at {site} rewrote {summary.get('local_changed_cell_count')} "
+        f"Activating {template['target_member_id']} via {site} rewrote {summary.get('local_changed_cell_count')} "
         f"of its own cells (bbox {summary.get('local_changed_bbox')}) and {remote} cells elsewhere"
         + (f" (bbox {summary.get('remote_changed_bbox')})" if remote else "")
-        + ", and the prospective repeat reproduced that residue."
+        + REPEAT_TEXT.get(repeat, "; this is the preserved first attributed witness.")
     )
     if int(summary.get("counter_masked_cell_count") or 0):
         text += (
@@ -432,7 +465,7 @@ def _dossier_answer(template: Mapping[str, Any]) -> dict[str, Any]:
         **template,
         "explanation": text,
         "competing_models": ["A hidden process changed the object at the same moment as the click."],
-        "falsifier": "The same click from the same masked state leaves the object unchanged.",
+        "falsifier": "The same activation from the same masked state leaves the object unchanged.",
         "limitations": [RENDERED],
     }
 
@@ -455,15 +488,18 @@ def _anatomy_answer(template: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _inventory_answer(template: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:
-    if template.get("ambiguous_entities"):
-        return None, "G3 has bounded ambiguity: the coverage report is Duck's"
     levers, nulls = list(template["lever_entities"]), list(template.get("clean_null_entities") or ())
+    mu = list(template.get("ambiguous_entities") or ())
+    if mu and not levers:
+        return None, "G3 has bounded ambiguity and no certified lever: the coverage report is Duck's"
     return {
         **template,
-        "explanation": (
-            f"The complete click roster found {len(levers)} levers that rewrite their own cells when "
-            f"clicked ({', '.join(levers)}), and {len(nulls)} objects closed with scoped null "
-            "evidence; counter changes were excluded by the mask as bookkeeping."
+        "explanation": (  # R9-R23 D17: levers here may act locally or remotely
+            f"The complete probe roster found {len(levers)} levers whose activations produce attributed "
+            f"changes ({', '.join(levers)}) and {len(nulls)} objects closed with scoped null evidence"
+            + (f"; {len(mu)} mystery objects ({', '.join(mu)}) are set aside in the mu bucket, to retry "
+               "when the board has changed (G3 closes PARTIAL)" if mu else "")
+            + "; counter changes were excluded by the mask as bookkeeping."
         ),
         "competing_models": ["An object closed as null may respond from a different world state."],
         "falsifier": "A clean-null object responds to the same click from the same masked state.",
@@ -492,13 +528,19 @@ def _crossed(before: Any, after: Any, threshold: float) -> bool:
     return after is not None and after <= threshold and (before is None or before > threshold)
 
 
+def _ladder_restarted(machine: Any, boundary: list[str]) -> bool:
+    """A level change that froze the level and restarted the ladder at G0: level entry is the controller's (R9-R21 D6)."""
+    return boundary == ["level_completed"] and bool(getattr(machine, "levels", None)) and machine.gate_id == "G0-ACTION-METADATA"
+
+
 def wake_reason(
     machine: Any, event: Mapping[str, Any] | None, result: Mapping[str, Any],
     before: Mapping[str, int] | None = None,
 ) -> str | None:
     """Why Duck must take the next step after a controller action, or None to continue."""
-    if any(result.get(key) for key in BOUNDARY_KEYS):
-        return "boundary event: " + ", ".join(key for key in BOUNDARY_KEYS if result.get(key))
+    boundary = [key for key in BOUNDARY_KEYS if result.get(key)]
+    if boundary and not _ladder_restarted(machine, boundary):
+        return "boundary event: " + ", ".join(boundary)
     event = event or {}
     comparison = event.get("counter_comparison") or {}
     if comparison.get("outcome") == "CONTRADICTED" and comparison.get("evidence_ref") == event.get("evidence_id"):
@@ -510,7 +552,8 @@ def wake_reason(
     if event.get("gate_status_after") in {"UNRESOLVED", "REOPENED"}:
         return f"{event.get('gate_id')} is {event['gate_status_after']}"
     confirmation = (event.get("confirmation") or {}).get("status")
-    if confirmation in {"CONTRADICTED", "BOUNDARY_DEFERRED"}:
+    readings = getattr((getattr(machine, "_adapters", None) or {}).get("G3-LEVERS"), "_repeat_readings", {})
+    if confirmation in {"CONTRADICTED", "BOUNDARY_DEFERRED"} and not certified(event["confirmation"], readings):
         return f"a G3 confirmation was {confirmation}"
     attribution = event.get("attribution") or {}
     if (
