@@ -105,3 +105,30 @@ Only the source changed.
 4. Run `kaggle kernels push -p kaggle/ring9-carry-vc33-v8/kernel`.
 
 — Claude, Alpha build seat, 2026-10-05
+
+## Upload log (2026-10-05, Director's terminal)
+
+| Step | Result |
+|---|---|
+| Mac verify (`main`'s verifier, `--source-export runs/_cowork_xfer/r9r24/export_c9b246b`) | **9/9**: source manifest 224 files, package manifest 231 files, `src.zip` 215 files, 0 diffs against the commit export |
+| Commit on `main` | `d807d88`: the packager and this record, explicit paths, `kaggle/` not staged |
+| `kaggle datasets create -p kaggle/ring9-carry-vc33-v8/source-dataset -r skip` | 12 files uploaded, the same set as v7 |
+| Sizes | `src.zip` 922 KB (v7: 910 KB; the difference is the 3 new modules), `source-manifest.json` 27 KB, `checkpoint-preflight.json` 11 KB, `setup_commands.json` 10 KB, the rest small |
+| Visibility | private |
+| Kaggle at upload end | "being created" |
+
+**CLI notes, both expected, as in v7:**
+- "Skipping folder: src". The source travels as `src.zip`, which the notebook checks against the manifest before importing anything.
+- "outdated kaggle version (installed 2.0.0, latest 2.2.2)". No upgrade is needed.
+
+**Next:**
+1. `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-carry-vc33-v8` until it says `ready`.
+2. `kaggle kernels push -p kaggle/ring9-carry-vc33-v8/kernel`
+
+**What the log should show if v8 works:**
+- **Setup:** `source manifest verified (224 files)`. That is 3 more than v7, from the 3 new modules.
+- **Levels 1 and 2:** as in v7 (I6).
+- **Level 3, G4-B (I14):** at about t140, G4-B is answered by the controller, `LEVER_RELATIONS_FROM_RECORD`, `certified_by: RECORD`, with no Duck turn. No card row reads `state_now: UNRECORDED`.
+- **Level 3, G4-C (I15):** at most 3 Duck turns, then COMPLETE or UNRESOLVED. Report the time from G4-B opening to `PLAY-NORMAL` (v7: about 163 minutes).
+- **Play (I16):** `PLAY-NORMAL` follows, every play transition receipted `FREE_PLAY`, any refused repeat labelled "Blocked by the harness, not the game". Report play actions, play turns, blocked repeats, and whether level 3 was won and how.
+- **End (I11, I16):** the run ends by its action budget (200) or its time budget (10,800 s), not by a planned stop. Compare the run's end time with the notebook's.
