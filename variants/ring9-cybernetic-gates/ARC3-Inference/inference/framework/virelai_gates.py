@@ -75,7 +75,6 @@ from inference.framework.entity_observation import EntityLedger, EntityTransitio
 from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
 from inference.framework.mu_bucket import MuBucket
-from inference.framework.g3_inventory import check_inventory_claims
 from inference.framework import mu_return
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
@@ -4472,7 +4471,8 @@ class _LeverTarget:
 
     def _unbounded_entities(self) -> dict[str, str]:
         """Roster entities whose G3 result no inventory may report (not closed, ready or bounded)."""
-        journal, settled, bounded = self.lifecycle_journal, {"G3-CLOSED", "G4-READY"}, {"AMBIGUOUS", "BUDGET_STOPPED"}
+        settled, bounded = {"G3-CLOSED", "G4-READY"}, {"AMBIGUOUS", "BUDGET_STOPPED", "PRESUMED_UNREACHABLE"}
+        journal = self.lifecycle_journal  # NAV's released targets are bounded too (main, Sol 2026-10-03)
         return {
             entity_id: journal.entities[entity_id].state for entity_id in sorted(self._expected_entities())
             if journal.entities[entity_id].state not in settled
