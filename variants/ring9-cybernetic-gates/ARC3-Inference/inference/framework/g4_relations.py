@@ -80,10 +80,14 @@ class LeverRegion:
             return UNCHANGED
         return STEPS if mine in self.steps else CHANGES
 
-    def state_label(self, grid: Sequence[Sequence[int]]) -> str:
-        """Which recorded state the region is in now: S0, S1, ... in first-seen order."""
+    def state_label(self, grid: Sequence[Sequence[int]], history: Sequence[tuple[int, ...]] | None = None) -> str:
+        """Which recorded state the region is in now: S0, S1, ... in first-seen order.
+
+        ``history`` is every content the region has shown on the level (R9-R24 D18,
+        ``level_record.region_histories``); without it, only whole-region steps name a state.
+        """
         now = tuple(grid[r][c] for r, c in self.cells)
-        for index, content in enumerate(self._contents()):
+        for index, content in enumerate(self._contents() if history is None else history):
             if content == now:
                 return f"S{index}"
         return "UNRECORDED"

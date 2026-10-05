@@ -177,6 +177,8 @@ def _choose(card: dict[str, Any]) -> dict[str, Any]:
     if probe.get("purpose") != "GUIDED_ACTION":
         return probe["actions"][0]
     target = probe.get("target") or {}
+    if target.get("receipt") == "FREE_PLAY":  # R9-R24 D22: normal play; press the first lever on the card
+        return (card.get("subject") or {}).get("levers", [{}])[0].get("click") or {"action": "ACTION6", "row": 0, "col": 0}
     levers = target.get("levers")
     if levers:  # the controller's own study order (a re-study after a death comes before a new lever)
         from inference.framework.controller_executor import STUDY_ORDER
@@ -219,6 +221,9 @@ def run_ladder(levers: int, *, max_steps: int = 2_000, wide_last: bool = False) 
         run.over_budget.update(card_obj.over_budget)
         if machine.gate_id not in run.gates:
             run.gates.append(machine.gate_id)
+        if machine.gate_id == "PLAY-NORMAL":  # R9-R24 D22: the ladder is closed; the stress ladder ends here
+            run.stopped = "PLAY-NORMAL"
+            return run
         if card["next_operation"] == "SUBMIT_ORIENTATION":
             submit_notes(machine, _orientation_notes(card), source="ORIENTATION")
             continue

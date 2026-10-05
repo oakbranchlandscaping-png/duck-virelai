@@ -70,6 +70,7 @@ def _win(machine: Any, outcome: Mapping[str, Any], level: int | None, levers: li
         "transition_id": won_at, "action": action, "probe_id": row.get("probe_id"), "gate_id": row.get("gate_id"),
         "acted_lever": next((item["entity_id"] for item in levers if item.get("click") == action), None),
         "earlier_same_action": earlier,
+        "receipt": "FREE_PLAY" if row.get("gate_id") == "PLAY-NORMAL" else "GATED",  # R9-R24 D22 (ruling R-2)
         "hypothesis": "WIN_NEEDS_CONTEXT_BEYOND_THE_ACTION" if earlier else "NO_EARLIER_USE_OF_THE_ACTION",
         "status": UNTESTED,
     }
@@ -92,6 +93,7 @@ def freeze_level(machine: Any, outcome: Mapping[str, Any]) -> dict[str, Any]:
         "lives": [item for item in machine.lives.summary() if item.get("level") == level],
         "notes": [note.line() for note in getattr(machine.annotations, "notes", ())],
         "mu": machine.mu.snapshot() if hasattr(machine, "mu") else [],  # R9-R23 D16: the level's open questions
+        "duck_g4_budget": machine.duck_budget.snapshot() if hasattr(machine, "duck_budget") else None,  # R9-R24
     }
 
 

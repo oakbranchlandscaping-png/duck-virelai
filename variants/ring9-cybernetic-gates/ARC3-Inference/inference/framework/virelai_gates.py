@@ -124,7 +124,8 @@ REACTION_GATE_ID = "G4-REACTIONS"
 ORBIT_GATE_ID = "G4.2-LEVER-ORBITS"
 RELATION_GATE_ID = "G4-B-LEVER-RELATIONS"
 LAW_GATE_ID = "G4-C-LEVER-LAW"
-G4_GATE_IDS = (REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID)
+PLAY_GATE_ID = "PLAY-NORMAL"  # R9-R24 D22: normal play after the gates (play_gate.py)
+G4_GATE_IDS = (REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID)
 
 
 def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
@@ -142,23 +143,6 @@ def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _lever_class(answer: Any) -> str:
-    """Phase-1 classification of a lever from its own consecutive-push orbit.
-
-    Derived only from the orbit stop and period (single-lever data); no
-    cross-lever information. Richer typing is a later refinement.
-    """
-    stop = getattr(answer, "stop_disposition", None)
-    period = getattr(answer, "observed_period", None)
-    if stop == "OBSERVED_STATE_RECURRENCE":
-        if period == 2:
-            return "TOGGLE"
-        if isinstance(period, int) and period > 2:
-            return "CYCLE"
-        return "RECURRENT"
-    if stop == "NULL_AT_OBSERVED_STATE":
-        return "ABSORBING"
-    return "UNCLASSIFIED"
 _OPAQUE_ACTION = re.compile(r"^ACTION([0-9]+)$")
 
 
@@ -2071,8 +2055,9 @@ def _target_registry() -> TargetRegistry:
     # G4.3-LEVER-LIMITS is retired (Director ruling 2026-09-27). Persistence and reversal are
     # Duck-frozen predictions in G4-B (R9-R12); G4-C tests the description (R9-R13, g4c_gate.py).
     from inference.framework.g4c_gate import later_contracts
+    from inference.framework.play_gate import play_contract
 
-    for contract in later_contracts():
+    for contract in (*later_contracts(), play_contract()):
         registry.register(contract)
     return registry
 
@@ -4819,11 +4804,13 @@ class CyberneticGateMachine:
         self.target_router = TargetRouter(self.target_registry, self.target_journal)
         self._g0 = _ActionSurfaceTarget(self)
         from inference.framework.g4c_gate import later_adapters
+        from inference.framework.play_gate import DuckTurnBudget, PlayTarget
 
+        self.duck_budget = DuckTurnBudget()  # R9-R24 D20: Duck's G4-B/G4-C turns, fresh each level
         self._adapters = {
             ACTION_METADATA_GATE_ID: self._g0, GATE_ID: _EgoTarget(self), COUNTER_GATE_ID: _CounterTarget(self),
             LEVER_GATE_ID: _LeverTarget(self), REACTION_GATE_ID: _ReactionTarget(self),
-            ORBIT_GATE_ID: _LeverStudyTarget(self), **later_adapters(self),
+            ORBIT_GATE_ID: _LeverStudyTarget(self), **later_adapters(self), PLAY_GATE_ID: PlayTarget(self),
         }
         self._issued_capabilities: dict[str, dict[str, Any]] = {}
         self._counter_prepared_from_ego = False
@@ -4865,6 +4852,8 @@ class CyberneticGateMachine:
         return self._g0.revision
 
     def _effective_target_id(self) -> str:
+        if self._adapters[PLAY_GATE_ID].forced is not None:  # R9-R24 D22: rested without a legal move
+            return PLAY_GATE_ID
         picked = self.target_router.current_or_last().target_id
         orbit = self.target_journal.active_product(ORBIT_GATE_ID)
         if orbit is not None and _phase1_hold_reason(orbit.payload) is not None:
@@ -5005,6 +4994,7 @@ class CyberneticGateMachine:
                 )
             intent = str(decision.get("intent") or "").strip()[:240] or None
             admitted_probe = replace(probe, actions=supplied_actions, intent=intent)
+            getattr(self._active_adapter(), "admit", lambda _probe: None)(admitted_probe)  # R9-R24 R-8
         elif probe.admissible_actions:
             if len(supplied_actions) != 1 or supplied_actions[0]["action"] not in probe.admissible_actions:
                 raise GateContractError(
@@ -5454,12 +5444,12 @@ class CyberneticGateMachine:
         return self._adapters[REACTION_GATE_ID].reaction_view(entity_id)
 
     def orbit_view(self, entity_id: str) -> dict[str, Any]:
-        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID}:
+        if self.gate_id not in {ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID}:
             raise GateContractError("orbit detail queries open at G4.2.")
         return self._adapters[ORBIT_GATE_ID].orbit_view(entity_id)
 
     def relations_view(self) -> dict[str, Any]:
-        if self.gate_id not in {RELATION_GATE_ID, LAW_GATE_ID}:
+        if self.gate_id not in {RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID}:
             raise GateContractError("the G4-B prediction ledger opens at G4-B.")
         return self._adapters[RELATION_GATE_ID].relations_view()
 

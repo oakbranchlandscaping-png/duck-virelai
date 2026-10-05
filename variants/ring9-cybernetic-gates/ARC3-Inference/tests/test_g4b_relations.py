@@ -10,7 +10,6 @@ that the run then ends cleanly, with no model call after the ladder.
 from __future__ import annotations
 
 import importlib.util
-import json
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,11 +85,12 @@ def test_g4b_opens_after_g4a_on_the_real_ft09_levers_and_asks_for_a_prediction(g
     levers = payload["subject"]["levers"]
     assert len(levers) == 6 and payload["subject"]["levers_not_shown"] == 2  # A6: flat in the lever count
     states = {item["entity_id"]: item["state_now"] for item in levers}
-    assert states["E0053"] == "S1" and set(states.values()) == {"S0", "S1"}  # G2 clicked E0053 once
+    # R9-R24 D18: states are numbered from the level's own boards; every tile is back at its first content
+    assert set(states.values()) == {"S0"}
     assert {item["class"] for item in levers} == {"TOGGLE"}
     assert len(card.render()) <= CARD_BUDGET and not card.over_budget
-    owner = next_owned_step(machine)
-    assert owner.owner == "DUCK" and "the next prediction" in owner.reason
+    owner = next_owned_step(machine)  # R9-R24 D19: the record answers G4-B; Duck's prediction path stays open
+    assert (owner.owner, owner.kind) == ("CONTROLLER", "ANSWER") and "record certifies" in owner.reason
 
 
 def test_a_frozen_prediction_is_taken_exactly_by_the_controller_and_graded_on_the_masked_board(g4b):
@@ -108,7 +108,7 @@ def test_a_frozen_prediction_is_taken_exactly_by_the_controller_and_graded_on_th
     assert graded["observed"]["E0053"] == "STEPS" and graded["observed_elsewhere"] == "NO_CHANGE"
     assert graded["transition_id"] > graded["declared_at_transition"]  # graded after it was frozen
     rows = {item["entity_id"]: item["state_now"] for item in machine.relations_view()["levers"]}
-    assert (rows["E0053"], rows["E0054"]) == ("S0", "S0")  # E0053 stepped back to its first state
+    assert (rows["E0053"], rows["E0054"]) == ("S1", "S0")  # E0053 stepped to its second content (D18 numbering)
 
 
 def test_a_wrong_prediction_is_contradicted_and_stays_on_the_record(g4b):
@@ -293,50 +293,44 @@ class Ft09LiveRun:
         return run
 
 
-def test_ft09_offline_follows_the_live_run_then_duck_studies_the_levers_together_and_the_run_stops(tmp_path, monkeypatch):
+def test_ft09_offline_follows_the_live_run_then_the_record_answers_g4b_and_duck_plays_on(tmp_path, monkeypatch):
+    """R9-R24 (RULING_G4_CONTROLLER_FIRST_v2), production path: G4-B with no Duck turn, G4-C within Duck's
+    per-level budget, then normal play receipted FREE_PLAY; the whole run replays from its artifacts."""
     from test_memory_m4 import CardDuck
+    from inference.framework.play_gate import DUCK_G4_TURNS_PER_LEVEL
 
     run = Ft09LiveRun(tmp_path, monkeypatch)
     duck = CardDuck(run)
     monkeypatch.setattr(run.agent, "_chat_completion", duck)
-    stop = None
     for _ in range(600):
-        result = run.turn()
-        if result is not None and getattr(result, "planned_stop", ""):
-            stop = result.planned_stop
+        run.turn()
+        machine = run.agent._gate_machine
+        if machine is not None and machine.gate_id == "PLAY-NORMAL" and machine._adapters["PLAY-NORMAL"]._events:
             break
-    assert stop == "every built gate is satisfied, through G4-C; the next slice is not built"
     live = [step["action"] for step in load_record(V1_RECORD)["steps"] if step.get("kind") != "RESET"]
     offline = [call["actions"][0] for call in run.env_calls]
     assert offline[: len(live)] == live  # the controller repeats the live run exactly, death included
-    machine = run.agent._gate_machine
     product = machine.target_journal.active_product(RELATIONS).payload
-    assert product["status"] == "COMPLETE" and product["unpressed_levers"] == []
-    assert [item["status"] for item in product["predictions"]] == ["SUPPORTED"] * 8
-    assert duck.calls.count("explain") == 8 + 8 + 1 + 1  # 8 orbits, 8 predictions, the description, G4-C's test
+    assert product["status"] == "COMPLETE" and product["certified_by"] == "RECORD" and product["predictions"] == []
     law = machine.target_journal.active_product("G4-C-LEVER-LAW").payload
-    assert law["status"] == "COMPLETE" and law["law_test"]["status"] == "SUPPORTED"
-    assert law["description"] == product["answer"]["description"] and law["law_test"]["from_relations"] == [0]
-    envelopes = run.rows("_probe_envelopes.jsonl")
-    g4b_envelopes = [row for row in envelopes if row["gate_id"] == RELATIONS]
-    assert len(g4b_envelopes) == 8 and {row["executor"] for row in g4b_envelopes} == {"CONTROLLER"}
-    assert [row["executor"] for row in envelopes if row["gate_id"] == "G4-C-LEVER-LAW"] == ["CONTROLLER"]
+    assert law["status"] in {"COMPLETE", "UNRESOLVED"}
+    assert machine.duck_budget.snapshot()["used"] <= DUCK_G4_TURNS_PER_LEVEL
     answers = [row for row in run.rows("_gate_answers.jsonl") if row["gate_id"] == RELATIONS]
-    assert [row["answer_kind"] for row in answers] == ["LEVER_PREDICTION"] * 8 + ["LEVER_RELATIONS"]
-    assert {row["executor"] for row in answers} == {"DUCK"}
-    calls_at_stop = len(duck.calls)
-    assert getattr(run.turn(), "planned_stop", "")  # asked again, it stops again: no model call
-    assert len(duck.calls) == calls_at_stop
+    assert [(row["answer_kind"], row["executor"]) for row in answers] == [("LEVER_RELATIONS_FROM_RECORD", "CONTROLLER")]
+    g4_turns = [row for row in run.rows("_turn_ledger.jsonl")
+                if row["executor"] == "DUCK" and row["gate_before"] in (RELATIONS, "G4-C-LEVER-LAW")]
+    assert 0 < len(g4_turns) <= DUCK_G4_TURNS_PER_LEVEL  # D20: Duck turns, however many tries each holds
+    envelopes = run.rows("_probe_envelopes.jsonl")
+    play = [row for row in envelopes if row["gate_id"] == "PLAY-NORMAL"]
+    assert play and {(row["executor"], row["target"]["receipt"]) for row in play} == {("DUCK", "FREE_PLAY")}
     log = run.state_path.with_name(f"{run.state_path.stem}_analyzer.txt").read_text()
-    assert "planned stop: every built gate is satisfied" in log
-    assert json.dumps(product["answer"]["relations"])  # the description is on the record
+    assert "planned stop" not in log
     tool = _record_tool()  # and the whole run, G4-B included, replays from its artifacts
     record = tool.build_record(run.state_path.parent, "ft09", "ft09-offline")
     replayed = replay(record, measure=False).machine.target_journal.active_product(RELATIONS).payload
-    assert replayed["status"] == "COMPLETE" and [item["status"] for item in replayed["predictions"]] == ["SUPPORTED"] * 8
-    assert replayed["answer"]["description"] == product["answer"]["description"]
-    replayed_law = replay(record, measure=False).machine.target_journal.active_product("G4-C-LEVER-LAW").payload
-    assert replayed_law["status"] == "COMPLETE"
+    assert replayed["certified_by"] == "RECORD"  # the same relations from the same transitions (evidence ids are per run)
+    assert replayed["from_record"]["answer_id"] == product["from_record"]["answer_id"]
+    assert replayed["from_record"]["description"] == product["from_record"]["description"]
 
 
 def test_a_wake_waits_while_the_controller_takes_ducks_own_frozen_prediction(g4b):

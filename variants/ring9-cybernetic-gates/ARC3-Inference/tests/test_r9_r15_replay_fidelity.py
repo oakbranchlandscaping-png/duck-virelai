@@ -65,7 +65,7 @@ def test_f_r2_ft09_exit_replays_through_g4c_with_the_live_grades():
     orbit_order = [a["entity_id"] for a in record["answers"] if a["gate_id"] == "G4.2-LEVER-ORBITS"]
     assert orbit_order.index("E0057") < orbit_order.index("E0056")
     machine = replay(record).machine
-    assert ladder_end(machine) == "every built gate is satisfied, through G4-C; the next slice is not built"
+    assert ladder_end(machine) is None and machine.gate_id == "PLAY-NORMAL"  # R9-R24 D22: normal play, not a stop
     predictions = machine._adapters["G4-B-LEVER-RELATIONS"]._predictions
     assert [(p.prediction_id, p.status, p.declared_at_transition, p.transition_id) for p in predictions] == [
         (f"P{i}", "SUPPORTED", 108 + i, 109 + i) for i in range(1, 9)

@@ -93,4 +93,4 @@ def test_memory_shows_the_frozen_level_and_keeps_level_one_out_of_level_two_reca
 def test_a_game_with_no_level_change_freezes_nothing():
     machine = replay(load_record(FT09_EXIT)).machine
     assert machine.levels == [] and machine.lives.level == 1
-    assert ladder_end(machine) == "every built gate is satisfied, through G4-C; the next slice is not built"
+    assert ladder_end(machine) is None and machine.gate_id == "PLAY-NORMAL"  # R9-R24 D22: normal play, not a stop

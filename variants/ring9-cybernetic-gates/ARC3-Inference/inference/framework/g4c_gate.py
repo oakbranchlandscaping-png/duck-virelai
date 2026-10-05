@@ -35,6 +35,7 @@ from inference.framework.virelai_gates import (
 )
 
 PRODUCT_TYPE = "LeverReactionLawSet"
+CLAIM_CHARS = 90  # a relation's claim on the card (axiom A6); the whole claim by virelai('relations')
 
 
 def law_contract() -> GoalContract:
@@ -92,6 +93,7 @@ class LeverLawTarget:
         self._certified: Prediction | None = None
         self._level_closed: dict[str, Any] | None = None
         self._events: list[dict[str, Any]] = []
+        self._unresolved: str | None = None  # R9-R24 D21: Duck's per-level budget was spent
 
     @property
     def _relations(self) -> LeverRelationsTarget:
@@ -104,7 +106,14 @@ class LeverLawTarget:
         return answer
 
     def _closed(self) -> bool:
-        return self._certified is not None or self._level_closed is not None
+        return self._certified is not None or self._level_closed is not None or self._unresolved is not None
+
+    def close_unresolved(self, reason: str) -> None:
+        """D21 (ruling G-4): Duck's budget is spent; no reopening, a declared end with what is certified."""
+        if not self._closed():
+            self._unresolved, self._pending = reason, None
+            self.revision += 1
+            self._emit_product()
 
     # ---- gate protocol -----------------------------------------------------------------------
 
@@ -168,7 +177,8 @@ class LeverLawTarget:
             raise G4RelationError(f"action: {exc}") from exc
         grid = self._relations._grid()
         if grid is not None:
-            tested = self._relations._record.tested(action, masked_address(grid, self.machine.counter.mask_law))
+            before = masked_address(grid, self.machine.counter.mask_law)
+            tested = self._relations._record.tested(action, before) or self._relations.tested_from_record(action, before)
             if tested:
                 raise G4RelationError(
                     f"this action was already graded from this same board ({tested[0]}); a new "
@@ -201,7 +211,7 @@ class LeverLawTarget:
         return event
 
     def _emit_product(self) -> None:
-        answer = self._description()
+        answer = self._relations._answer  # None only when G4-B itself closed UNRESOLVED (D21)
         certified = self._certified
         identity = {"test": None if certified is None else certified.evidence_ref,
                     "level_closed": None if self._level_closed is None else self._level_closed["evidence_ref"]}
@@ -212,11 +222,12 @@ class LeverLawTarget:
             revision=self.revision,
             payload={
                 "scope": "G4C_LEVER_REACTION_LAW",
-                "status": "COMPLETE" if certified is not None else "CLOSED_BY_LEVEL_BOUNDARY",
+                "status": "COMPLETE" if certified is not None else "UNRESOLVED" if self._unresolved else "CLOSED_BY_LEVEL_BOUNDARY",
+                "unresolved_reason": self._unresolved,
                 "lever_entities": list(self._relations._levers()),
-                "description": answer.description,
-                "relations": [dict(item) for item in answer.relations],
-                "open_conditions": list(answer.open_conditions),
+                "description": None if answer is None else answer.description,
+                "relations": [] if answer is None else [dict(item) for item in answer.relations],
+                "open_conditions": [] if answer is None else list(answer.open_conditions),
                 "law_test": None if certified is None else asdict(certified),
                 "tests": [asdict(item) for item in self._tests],
                 "level_boundary": None if self._level_closed is None else dict(self._level_closed),
@@ -225,8 +236,8 @@ class LeverLawTarget:
                     "boards tested on this level, not universally."
                 ),
                 "digest_lines": [
-                    f"law: {len(answer.relations)} relations · new test "
-                    f"{'SUPPORTED' if certified is not None else 'cut off by a level change'} · "
+                    f"law: {0 if answer is None else len(answer.relations)} relations · new test "
+                    f"{'SUPPORTED' if certified is not None else 'UNRESOLVED (Duck budget spent)' if self._unresolved else 'cut off by a level change'} · "
                     f"{len(self._tests)} tests, {len(self._relations._reopened)} reopenings of G4-B",
                 ],
             },
@@ -262,14 +273,15 @@ class LeverLawTarget:
             "done_when": self.DONE_WHEN,
             "rules": list(self.RULES),
             "unmet_requirements": list(assessment.unmet_requirements),
-            "subject": {
-                "description": None if answer is None else answer.description,
+            "subject": {  # R9-R24: what Duck acts on first; the description also stands in the world model
+                "levers": [{key: row[key] for key in ("entity_id", "click", "class", "state_now")}
+                           for row in self._relations._lever_rows()[:LEVERS_ON_CARD]],
                 "relations": [] if answer is None else [
-                    {"number": index, "levers": item["levers"], "claim": item["claim"]}
+                    {"number": index, "levers": item["levers"], "claim": item["claim"][:CLAIM_CHARS]}
                     for index, item in enumerate(answer.relations)
                 ],
-                "levers": self._relations._lever_rows()[:LEVERS_ON_CARD],
                 "last_test": None if last is None else last.compact(),
+                "description": None if answer is None else answer.description,
             },
             "progress": {"tests": len(self._tests), "reopenings": len(self._relations._reopened)},
             "next_operation": (

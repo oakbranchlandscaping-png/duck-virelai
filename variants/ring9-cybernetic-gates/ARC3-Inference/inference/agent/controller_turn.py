@@ -62,16 +62,21 @@ def run_controller_turn(
     retried = return_to_mu_if_stuck(machine)  # R9-R23 D14: the mu bucket before any stop
     if retried is not None:
         _log(analyzer_log, retried)
+    rested = rest_if_no_legal_move(machine)  # R9-R24 D22: play on instead of idling
+    if rested is not None:
+        _log(analyzer_log, rested)
     end = ladder_end(machine)
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
-    if session.wake is not None and not _takes_duck_choice(machine):
+    if session.wake is not None and not _takes_duck_choice(machine) and duck_turn_allowed(machine, analyzer_log):
         session.hand_to_duck(session.wake)
         session.wake = None
         return None
     for _ in range(MAX_ANSWERS_PER_TURN):
         step = next_owned_step(machine, refused=session.refused, rerun=session.rerun)
         if step.owner == DUCK:
+            if not duck_turn_allowed(machine, analyzer_log):
+                continue  # the gate closed UNRESOLVED; the next step is someone else's
             session.hand_to_duck(step.reason)
             return None
         if step.kind == ANSWER:
@@ -84,6 +89,31 @@ def run_controller_turn(
             agent._virelai_query_callback = None
             agent._current_valid_actions = []
     return None
+
+
+def rest_if_no_legal_move(machine: Any) -> str | None:
+    """R9-R24 D22 (ruling G-5): a gate with no legal move rests the level in normal play, not a stop."""
+    from inference.framework.play_gate import rest_in_play
+
+    status = machine.legal_move_status()
+    if status.get("legal", True):
+        return None
+    reason = f"{status.get('gate_id')} has no legal move ({status.get('reason')}); the level rests in normal play"
+    rest_in_play(machine, reason)
+    return reason
+
+
+def duck_turn_allowed(machine: Any, analyzer_log: Path) -> bool:
+    """R9-R24 D20/D21: a Duck turn on G4-B or G4-C is charged to the level's budget, or the gate closes."""
+    from inference.framework.controller_executor import PREDICTION_GATES
+    from inference.framework.play_gate import charge_or_close
+
+    if machine.gate_id not in PREDICTION_GATES:
+        return True
+    closed = charge_or_close(machine)
+    if closed is not None:
+        _log(analyzer_log, closed)
+    return closed is None
 
 
 def _takes_duck_choice(machine: Any) -> bool:

@@ -23,10 +23,14 @@ What the controller owns (D2, CLICK worlds only; NAV is shelved):
   diverged or ended; a same-level death returns it to the study (D4, in the gate).
 - An extra run Duck asks for (D3): up to 8 presses of one lever's click.
 
+- G4-B's relations, from the level's record (R9-R24 D19, RULING_G4_CONTROLLER_FIRST_v2 G-1).
+
 Duck owns: the orientation turn (M-3; due once G4.1 is certified), every G4-A orbit explanation,
 an OPEN or IRREGULAR trigger record (the discriminating prediction is a choice, not a
-computation), ambiguity, unbound or multi-action probes, every gate past G4-A, and every
-stop-and-wake condition (``wake_reason``), including the counter, action and time budgets.
+computation), ambiguity, unbound or multi-action probes, G4-C's test and any G4-B prediction the
+record cannot answer (both within Duck's per-level budget, R9-R24 D20), normal play after the gates
+(D22), and every stop-and-wake condition (``wake_reason``), including the counter, action and time
+budgets.
 
 The prose in a controller answer is rendered deterministically from the certified fields; the
 certified content is the structured part (M7). It is marked as controller-rendered.
@@ -99,7 +103,10 @@ def return_to_mu_if_stuck(machine: Any) -> str | None:
     """M-4 (RULING_MU_BUCKET_v1): before a planned stop or a dead state, retry mu on a changed board."""
     from inference.framework.mu_return import return_to_mu
 
-    stuck = machine.target_router.current() is None or not machine.legal_move_status().get("legal", True)
+    from inference.framework.virelai_gates import PLAY_GATE_ID
+
+    resting = machine.gate_id == PLAY_GATE_ID and machine._adapters[PLAY_GATE_ID].rest_check_due()  # R9-R24
+    stuck = resting or machine.target_router.current() is None or not machine.legal_move_status().get("legal", True)
     retry = return_to_mu(machine) if stuck else []
     return f"mu return on a changed board: retrying {', '.join(retry)}" if retry else None
 
@@ -120,7 +127,7 @@ def next_owned_step(
         return _duck(machine, "the orientation turn is due")
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
     if machine.gate_id in PREDICTION_GATES:
-        return _relations_step(machine, capability)
+        return _relations_step(machine, capability, refused)
     view = machine.gate_view()
     if machine.gate_id == ORBITS:
         return _orbit_step(machine, capability, view, rerun)
@@ -143,9 +150,16 @@ def next_owned_step(
     )
 
 
-def _relations_step(machine: Any, capability: Mapping[str, Any] | None) -> OwnedStep:
-    """G4-B and G4-C: Duck freezes each prediction and writes the description; the controller takes the action."""
+def _relations_step(machine: Any, capability: Mapping[str, Any] | None, refused: frozenset | set = frozenset()) -> OwnedStep:
+    """G4-B from the record (R9-R24 D19); Duck's frozen predictions are taken by the controller."""
     gate = machine.gate_id
+    if gate == RELATIONS and capability is None:
+        adapter = machine._adapters[RELATIONS]
+        key = (gate, adapter.revision, machine.lives.level)
+        answer = None if key in refused else adapter.record_answer()
+        if answer is not None:
+            return OwnedStep(CONTROLLER, gate, "G4-B: the level's record certifies the relations (ruling G-1)",
+                             ANSWER, answer=answer, refusal_key=key)
     if capability is not None:
         target = capability.get("target") or {}
         return OwnedStep(

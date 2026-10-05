@@ -31,7 +31,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_capability_secret": GAME, "_consumed_capabilities": GAME, "protocol": GAME,
         "transition_index": GAME, "lives": GAME, "levels": GAME, "_adapters": LEVEL, "_issued_capabilities": LEVEL,
         "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL, "carry": LEVEL,
-        "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL, "mu": LEVEL,
+        "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL, "mu": LEVEL, "duck_budget": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
     },
     "_ActionSurfaceTarget": {"machine": GAME, "answer": LEVEL, "revision": LEVEL},
@@ -61,10 +61,15 @@ PERSISTENCE: dict[str, dict[str, str]] = {
     "LeverRelationsTarget": {
         "machine": GAME, "revision": LEVEL, "_answer": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,
         "_predictions": LEVEL, "_record": LEVEL, "_regions": LEVEL, "_reopened": LEVEL, "_pending": TRANSIENT,
+        "_from_record": LEVEL, "_unresolved": LEVEL,
     },
     "LeverLawTarget": {
         "machine": GAME, "revision": LEVEL, "_certified": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,
-        "_tests": LEVEL, "_pending": TRANSIENT,
+        "_tests": LEVEL, "_pending": TRANSIENT, "_unresolved": LEVEL,
+    },
+    "PlayTarget": {
+        "machine": GAME, "revision": LEVEL, "forced": LEVEL, "_events": LEVEL, "_noops": LEVEL, "_blocked": LEVEL,
+        "_rest_checked": LEVEL,
     },
 }
 
