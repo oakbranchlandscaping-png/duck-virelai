@@ -25,11 +25,19 @@ from pathlib import Path
 
 HEX = "0123456789abcdef"
 DUCK_FIELDS = {
+    "G0-ACTION-METADATA": ("action_metadata", "semantic_claims", "epistemic_limit"),
+    "G1-EGO": (
+        "answer_kind", "subjects", "mechanism", "action_laws", "conditions", "constraints",
+        "competing_models", "falsifier", "limitations", "novel_prediction",
+    ),
     "G2-COUNTER": (
         "answer_kind", "tracked_variable", "mechanism", "bookkeeping_reason", "competing_models",
         "falsifier", "trigger", "conditions", "limitations", "novel_prediction",
     ),
-    "G3-LEVERS": ("answer_kind", "explanation", "competing_models", "falsifier", "conditions", "limitations"),
+    "G3-LEVERS": (
+        "answer_kind", "explanation", "mechanism", "competing_models", "falsifier", "conditions",
+        "limitations", "novel_prediction",
+    ),
     "G4-REACTIONS": ("answer_kind", "mechanism_explanation", "competing_models", "falsifier", "limitations"),
     "G4.2-LEVER-ORBITS": (
         "answer_kind", "entity_id", "mechanism_explanation", "competing_models", "falsifier", "limitations",
@@ -40,10 +48,15 @@ DUCK_FIELDS = {
     ),
     "G4-C-LEVER-LAW": ("answer_kind", "action", "expected", "named", "elsewhere", "because", "from_relations"),
 }
-PREDICTION_FIELDS = ("action", "predicate", "expected_parameters", "because", "novelty")
+PREDICTION_FIELDS = (
+    "action", "scope", "predicate", "expected_parameters", "because", "novelty",
+    "status", "target_entity_id", "move_to_next_target",
+)
 
 
-def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
+def build_record(
+    artifacts: Path, stem: str, world: str | None, *, legacy_g3_confirmation: bool = False,
+) -> dict:
     outcomes = [
         json.loads(line)
         for line in (artifacts / f"{stem}_probe_outcomes.jsonl").read_text().splitlines() if line.strip()
@@ -53,9 +66,12 @@ def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
         json.loads(line) for line in answers_path.read_text().splitlines() if line.strip()
     ] if answers_path.exists() else []
     envelopes_path = artifacts / f"{stem}_probe_envelopes.jsonl"
-    first_envelope = next((
+    envelopes = [
         json.loads(line) for line in envelopes_path.read_text().splitlines() if line.strip()
-    ), {}) if envelopes_path.exists() else {}
+    ] if envelopes_path.exists() else []
+    first_envelope = envelopes[0] if envelopes else {}
+    if envelopes and len(envelopes) != len(outcomes):
+        raise ValueError(f"probe envelope/outcome count differs: {len(envelopes)} != {len(outcomes)}")
     rows, cols = outcomes[0]["shape_before"]
     grid = [[0] * cols for _ in range(rows)]
     for site in outcomes[0]["site_transitions"]:
@@ -80,15 +96,19 @@ def build_record(artifacts: Path, stem: str, world: str | None) -> dict:
         "world": world,
         "protocol": {
             "g3_inherits_g2_nulls": bool((first_envelope.get("protocol") or {}).get("g3_inherits_g2_nulls")),
+            "replay_from_g0": True,
+            "legacy_g3_confirmation_replay": bool(legacy_g3_confirmation),
         },
         "valid_actions": sorted({str(o["action"]["action"]) for o in outcomes}),
         "initial_grid": ["".join(HEX[value] for value in row) for row in grid],
-        "steps": _steps(outcomes, grid),
+        "steps": _steps(outcomes, grid, envelopes),
         "answers": recorded,
     }
 
 
-def _steps(outcomes: list[dict], grid: list[list[int]]) -> list[dict]:
+def _steps(
+    outcomes: list[dict], grid: list[list[int]], envelopes: list[dict] | None = None,
+) -> list[dict]:
     """Each probe transition, with the harness RESET a probe record leaves out restored (R9-R12).
 
     A reset is not a probe, so it is not in ``probe_outcomes``. It shows as a gap: the next probe's
@@ -96,7 +116,7 @@ def _steps(outcomes: list[dict], grid: list[list[int]]) -> list[dict]:
     """
     grid = [row[:] for row in grid]
     steps: list[dict] = []
-    for o in outcomes:
+    for index, o in enumerate(outcomes):
         before = [row[:] for row in grid]
         for site in o["site_transitions"]:
             before[site["row"]][site["col"]] = site["before"]
@@ -105,10 +125,15 @@ def _steps(outcomes: list[dict], grid: list[list[int]]) -> list[dict]:
             steps.append({"transition_id": int(o["transition_id"]) - 1, "kind": "RESET",
                           "action": {"action": "RESET"}, "changed": jump})
         changed = [[c["row"], c["col"], c["before"], c["after"]] for c in o["changed_cells"]]
+        envelope = (envelopes or [{}] * len(outcomes))[index]
+        decision = {
+            key: envelope[key] for key in ("intent", "pilot_intent") if envelope.get(key) is not None
+        }
         steps.append({
             "transition_id": o["transition_id"],
             "action": o["action"],
             "changed": changed,
+            **({"decision": decision} if decision else {}),
             **({"boundary": o["boundary_event"]} if _boundary_kept(o.get("boundary_event") or {}) else {}),
         })
         grid = before
@@ -135,8 +160,12 @@ def main() -> int:
     parser.add_argument("out", type=Path)
     parser.add_argument("--world", default=None)
     parser.add_argument("--replay", action="store_true")
+    parser.add_argument("--legacy-g3-confirmation", action="store_true")
     args = parser.parse_args()
-    record = build_record(args.artifacts, args.stem, args.world)
+    record = build_record(
+        args.artifacts, args.stem, args.world,
+        legacy_g3_confirmation=args.legacy_g3_confirmation,
+    )
     write_record(record, args.out)
     print(f"wrote {args.out}: {len(record['steps'])} transitions, {len(record['answers'])} written answers")
     if args.replay:

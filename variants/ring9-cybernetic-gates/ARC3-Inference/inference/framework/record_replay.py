@@ -32,7 +32,10 @@ from inference.framework.gate_card import render_binding_gate_context
 from inference.framework.virelai_gates import CyberneticGateMachine
 
 HEX = "0123456789abcdef"
-NOVEL_PREDICTION_FIELDS = ("action", "predicate", "expected_parameters", "because", "novelty")
+NOVEL_PREDICTION_FIELDS = (
+    "action", "scope", "predicate", "expected_parameters", "because", "novelty",
+    "status", "target_entity_id", "move_to_next_target",
+)
 
 
 @dataclass
@@ -73,7 +76,7 @@ def record_protocol(record: Mapping[str, Any]) -> dict[str, bool]:
     protocol = record.get("protocol") or {}
     return {
         "g3_inherits_g2_nulls": bool(protocol.get("g3_inherits_g2_nulls", False)),
-        "legacy_g3_confirmation_replay": any(
+        "legacy_g3_confirmation_replay": bool(protocol.get("legacy_g3_confirmation_replay")) or any(
             str(answer.get("answer_kind") or "").upper() == "LEVER_DOSSIER"
             for answer in record.get("answers") or ()
         ),
@@ -132,6 +135,8 @@ def lossless_outcome(
     action: Mapping[str, Any],
     changed: Sequence[Sequence[int]],
     boundary: Mapping[str, Any] | None = None,
+    *,
+    probe_id: str | None = None,
 ) -> tuple[list[list[int]], dict[str, Any]]:
     """Rebuild the total-coverage outcome a run records from a transition's sparse changes."""
     after = [list(row) for row in grid]
@@ -139,6 +144,10 @@ def lossless_outcome(
         after[row][col] = value
     shape = [len(grid), len(grid[0])]
     return after, {
+        "schema": "virelai-probe-outcome-v1",
+        "probe_id": probe_id,
+        "before_frame_ref": f"REPLAY-BEFORE-{int(transition_id)}",
+        "after_frame_ref": f"REPLAY-AFTER-{int(transition_id)}",
         "transition_id": int(transition_id),
         "shape_before": shape,
         "shape_after": shape,
@@ -150,6 +159,7 @@ def lossless_outcome(
         "board_changed": bool(changed),
         "changed_cell_count": len(changed),
         "changed_cells": [{"row": r, "col": c, "before": b, "after": a} for r, c, b, a in changed],
+        "site_transition_coverage": "TOTAL",
         "site_transitions": [
             {"row": r, "col": c, "before": grid[r][c], "after": after[r][c],
              "outcome": "CHANGED" if grid[r][c] != after[r][c] else "HELD"}
@@ -209,9 +219,17 @@ def replay(
     left marked for the controller to fill), proving an answer written from the card is accepted.
     """
     grid = decode_grid(record["initial_grid"])
-    machine = click_world_machine(
-        grid, record.get("valid_actions") or ["ACTION6"], **record_protocol(record)
-    )
+    protocol = record_protocol(record)
+    if bool((record.get("protocol") or {}).get("replay_from_g0")):
+        machine = CyberneticGateMachine(
+            valid_actions=list(record.get("valid_actions") or ["ACTION6"]),
+            initial_grid=grid,
+            **protocol,
+        )
+    else:
+        machine = click_world_machine(
+            grid, record.get("valid_actions") or ["ACTION6"], **protocol
+        )
     pending = {}
     for answer in record.get("answers") or ():
         pending.setdefault(answer["gate_id"], []).append(answer)
@@ -234,9 +252,11 @@ def replay(
         if capability is None:
             result.stopped = f"no capability at {machine.gate_id} before transition {step['transition_id']}"
             return result
-        probe = machine.validate_probe({"probe_token": capability["probe_token"]}, [step["action"]])
+        decision = {"probe_token": capability["probe_token"], **dict(step.get("decision") or {})}
+        probe = machine.validate_probe(decision, [step["action"]])
         result.grid, outcome = lossless_outcome(
-            result.grid, step["transition_id"], step["action"], step["changed"], step.get("boundary")
+            result.grid, step["transition_id"], step["action"], step["changed"], step.get("boundary"),
+            probe_id=probe.probe_id,
         )
         record_like_live(machine, probe, outcome, record.get("valid_actions") or ["ACTION6"])
         result.steps_replayed += 1
