@@ -34,6 +34,16 @@ def test_live_transition_18_is_a_first_witness_under_the_unified_nav_law():
     assert discovery["remote_residue_cells"]
     assert g3.lifecycle_journal.entities[discovery["entity_id"]].state == "G4-READY"
     assert g3._target_index == 1
+    row = next(row for row in result.machine.transition_index if row["transition_id"] == 18)
+    assert row["intervention"] == {
+        "kind": "NAV",
+        "entity_id": discovery["entity_id"],
+        "procedure_id": discovery["intervention"]["procedure_id"],
+        "final_action": discovery["intervention"]["final_action"]["action"],
+        "contact_outcome": "ENTERED",
+    }
+    assert row["attributed_residue"]["evidence_id"] == discovery["evidence_ref"]
+    assert row["attributed_residue"]["remote_cells"] == discovery["remote_residue_cells"]
 
 
 def test_fixture_preserves_live_reachability_releases_and_nav_intent():

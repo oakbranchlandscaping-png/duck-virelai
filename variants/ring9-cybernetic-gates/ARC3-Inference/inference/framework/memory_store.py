@@ -37,7 +37,7 @@ def transition_index_row(
     if acted is None and "row" in action and "col" in action:
         acted = {"row": action["row"], "col": action["col"]}
     boundary = outcome.get("boundary_event")
-    return {
+    row = {
         "transition_id": int(outcome.get("transition_id") or 0),
         "gate_id": probe.gate_id,
         "probe_id": probe.probe_id,
@@ -54,6 +54,29 @@ def transition_index_row(
             attribution.get("disposition") if isinstance(attribution, Mapping) else None
         ),
     }
+    contact = event.get("contact_epoch") if isinstance(event, Mapping) else None
+    intervention = event.get("intervention") if isinstance(event, Mapping) else None
+    if not isinstance(intervention, Mapping) and isinstance(contact, Mapping):
+        intervention = {
+            "kind": "NAV",
+            "entity_id": contact.get("target_entity_id"),
+            "procedure_id": contact.get("procedure_id"),
+            "final_action": contact.get("final_action"),
+            "contact_outcome": contact.get("outcome"),
+        }
+    if isinstance(intervention, Mapping) and str(intervention.get("kind") or "").upper() == "NAV":
+        row["intervention"] = dict(intervention)
+    residue = event.get("attributed_residue") if isinstance(event, Mapping) else None
+    if not isinstance(residue, Mapping) and isinstance(attribution, Mapping):
+        residue = {
+            "evidence_id": event.get("evidence_id"),
+            "disposition": attribution.get("disposition"),
+            "local_cells": [list(cell) for cell in attribution.get("local_residue_cells") or ()],
+            "remote_cells": [list(cell) for cell in attribution.get("remote_residue_cells") or ()],
+        }
+    if isinstance(residue, Mapping):
+        row["attributed_residue"] = dict(residue)
+    return row
 
 
 def _page(rows: list[Any], offset: int, limit: int) -> dict[str, Any]:

@@ -6055,7 +6055,64 @@ class _LeverStudyTarget:
         ).hexdigest()[:16]
         lossless = dict(outcome)
         lossless["evidence_id"] = evidence_id
-        ledger = self.machine._adapters[LEVER_GATE_ID]._ensure_entity_ledger()
+        nav_entity = None
+        nav_intent = None
+        if probe.intent and probe.intent.startswith("NAV:"):
+            parts = probe.intent.split(":", 2)
+            nav_intent = parts[1] if len(parts) >= 2 else None
+            nav_entity = parts[2] if len(parts) == 3 else None
+        g3 = self.machine._adapters[LEVER_GATE_ID]
+        ledger = g3._ensure_entity_ledger()
+        nav_record: dict[str, Any] = {}
+        if nav_entity and nav_intent == "CONTACT_ATTEMPT":
+            member_id = next((
+                member for member, entity in ledger.member_to_entity.items()
+                if entity == nav_entity
+            ), None)
+            if member_id is not None:
+                scope = g3.observation_scope(
+                    lossless, target_member_id=member_id, target_entity_id=nav_entity,
+                )
+                attribution = attribute_lever_outcome(
+                    lossless,
+                    evidence_ref=evidence_id,
+                    channel="BODY",
+                    target_member_id=member_id,
+                    target_cells=scope.target_cells,
+                    counter_mask_cells=(
+                        () if self.machine.counter.mask_law is None
+                        else self.machine.counter.mask_law.cells
+                    ),
+                    ego_motion_cells=scope.ego_expected_cells,
+                    ego_confounded_cells=scope.ego_confounded_cells,
+                    ground_exchange_cells=scope.ground_exchange_cells,
+                    body_contact_cells=scope.body_contact_cells,
+                    pre_action_owner_member_id=(
+                        member_id if scope.pre_action_owner_entity_id == nav_entity else None
+                    ),
+                    refused_contact=bool(lossless.get("refused_contact")),
+                    target_is_counter=False,
+                )
+                source = self._interventions.get(nav_entity) or {}
+                final_action = str(action.get("action") or "")
+                nav_record = {
+                    "intervention": {
+                        "kind": "NAV", "entity_id": nav_entity,
+                        "procedure_id": source.get("procedure_id"),
+                        "final_action": final_action,
+                        "contact_outcome": (
+                            "BOUNDARY" if attribution.boundary_state else
+                            "REFUSED" if lossless.get("refused_contact") else
+                            "TRANSFORMED" if attribution.positive else "UNRESOLVED"
+                        ),
+                    },
+                    "attributed_residue": {
+                        "evidence_id": evidence_id,
+                        "disposition": attribution.disposition,
+                        "local_cells": [list(cell) for cell in attribution.local_residue_cells],
+                        "remote_cells": [list(cell) for cell in attribution.remote_residue_cells],
+                    },
+                }
         entities_before = set(ledger.entities)
         counter_baseline = self.machine.apply_counter_baseline(lossless)
         entities_after = set(ledger.entities)
@@ -6064,11 +6121,8 @@ class _LeverStudyTarget:
         transition_id = int(outcome.get("transition_id") or 0)
         self._action_count += 1
 
-        nav_entity = None
-        if probe.intent and probe.intent.startswith("NAV:"):
-            parts = probe.intent.split(":", 2)
-            nav_entity = parts[2] if len(parts) == 3 else None
-            if len(parts) >= 2 and parts[1] == "APPROACH":
+        if nav_entity is not None:
+            if nav_intent == "APPROACH":
                 self.revision += 1
                 event = {
                     "schema": SCHEMA_VERSION, "evidence_id": evidence_id,
@@ -6101,6 +6155,7 @@ class _LeverStudyTarget:
             "run": run_event,
             "counter_baseline": counter_baseline,
             "new_visual_entity_ids": sorted(entities_after - entities_before),
+            **nav_record,
         }
         self._events.append(event)
         if is_terminal(boundary_state):
