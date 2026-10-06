@@ -102,3 +102,36 @@ All of v8's checks still apply: the secret scan, the world-name scan, the reques
 v8 (on `c9b246b`) is still running. The canaries queue behind it, or beside it, as the quota allows.
 
 — Claude, Alpha build seat, 2026-10-06
+
+## Upload log (2026-10-06, Director's terminal)
+
+| Step | Result |
+|---|---|
+| Unpacked on the Mac | `kaggle/ring9-unified-vc33-v1` and `kaggle/ring9-unified-ls20-v1` from the canary archive. The export was unpacked to `runs/_cowork_xfer/unify/export_b06fa68` with its `.source-commit` stamp. |
+| Mac verify (`main`'s verifier, `--source-export export_b06fa68`) | **vc33 9/9, ls20 9/9:** source manifest 230 files, package manifest 237, `src.zip` 221 files, output-cap encoding `server_default` on both sides, secret scan clean, 0 differences from the commit export |
+| Commit | `232a502` on `ring9-unified` (the packager and this record, explicit paths). Pushed; `main` fast-forwarded `b06fa68..232a502` and pushed. |
+| `kaggle datasets create -p kaggle/ring9-unified-vc33-v1/source-dataset -r skip` | 12 files uploaded; `src.zip` 964 KB, `source-manifest.json` 28 KB, `checkpoint-preflight.json` 7 KB, `setup_commands.json` 10 KB. Private; "being created". |
+| `kaggle datasets create -p kaggle/ring9-unified-ls20-v1/source-dataset -r skip` | 12 files uploaded; `src.zip` 964 KB, `source-manifest.json` 28 KB, `checkpoint-preflight.json` 5 KB (fewer criteria), `setup_commands.json` 10 KB. Private; "being created". |
+
+**CLI notes, both expected:**
+- "Skipping folder: src": the source travels as `src.zip`, which the notebook checks against the manifest before importing anything.
+- "outdated kaggle version (installed 2.0.0, latest 2.2.2)": no upgrade is needed.
+
+`src.zip` is 964 KB, against v8's 922 KB. The difference is the NAV line's modules, now in the single tree.
+
+**Next, for each dataset:**
+1. `kaggle datasets status` until it says `ready`.
+2. `kaggle kernels push -p kaggle/<package>/kernel`.
+
+**What the logs should show if the canaries work:**
+- **Setup, both:** `source manifest verified (230 files)`, Python 3.12 paths, the 174-wheel install, and vLLM serving `vrfai/Qwen3.6-27B-FP8`.
+- **vc33:**
+  - G3 probes with no `CONFIRM_LEVER_WITNESS` purpose, each lever reported as `LEVER_FOUND` on its first witness;
+  - G4-B answered by the controller on any level that reaches it, and at most 3 Duck G4 turns;
+  - `PLAY-NORMAL` with `FREE_PLAY` receipts;
+  - the run ending on 200 actions or 3,600 s.
+- **ls20:**
+  - G0 to G2 under the controller;
+  - in G3, `LEVER_FOUND` on the first positive contact, and reachability releases as `PRESUMED_UNREACHABLE`;
+  - if the roster completes inside 160 actions and 2,700 s, a G3 inventory or coverage report, then G4 opening;
+  - no `PLAY-NORMAL` caused by G3 having no legal move.
