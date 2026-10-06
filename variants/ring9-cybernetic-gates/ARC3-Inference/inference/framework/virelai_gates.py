@@ -3431,7 +3431,9 @@ class _LeverTarget:
                 ),
                 target=target,
             )
-        if self._mu_revisit and self._phase == "CLICK":
+        if self._mu_revisit and (
+            self._phase == "CLICK" or self._world_type == "HYBRID"
+        ):
             return mu_return.revisit_probe(self, ledger, self._mu_revisit[0])
         if self._reopened_reachability_indices:
             self._target_index = min(self._reopened_reachability_indices)

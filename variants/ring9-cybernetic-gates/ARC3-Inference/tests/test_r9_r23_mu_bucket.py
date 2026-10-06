@@ -26,6 +26,7 @@ from inference.framework.record_replay import (
     _answer_index, click_world_machine, decode_grid, load_record, lossless_outcome, merge_recorded_answer,
     record_like_live, record_protocol,
 )
+from test_g3_scheduler import machine_for
 
 from tests.test_r9_r21_g3_contradicted import FIXTURES
 
@@ -172,3 +173,28 @@ def test_each_level_model_freezes_its_mu_bucket():
     assert [model["mu"] for model in machine.levels] == [[], []]
     model = freeze_level(machine, {"transition_id": 110, "boundary_event": {"level_before": 3, "level_after": 4}})
     assert [(item["entity_id"], item["status"]) for item in model["mu"]] == [("E0028", "OPEN")]
+
+
+def test_hybrid_world_can_click_a_mu_object_after_switching_to_nav():
+    """A HYBRID keeps its pointer channel when the main sweep changes from CLICK to NAV."""
+    machine = machine_for(
+        ["ACTION1", "ACTION2", "ACTION3", "ACTION4", "ACTION6"], "EMBODIED_EGO"
+    )
+    g3 = machine._adapters[LEVERS]
+    first = machine.next_probe_capability()["target"]
+    entity_id, member_id = first["entity_id"], first["member_id"]
+    record = g3._bound_ambiguity(
+        member_id=member_id,
+        entity_id=entity_id,
+        evidence_ref="E-HYBRID-MU",
+        disposition="UNRESOLVED_ATTRIBUTION",
+        reason="hybrid pointer result stayed ambiguous",
+    )
+    machine.mu.file(record, gate_id=LEVERS, tried_address="earlier-board", transition_id=1)
+    g3._mu_revisit = [entity_id]
+    g3._phase = "NAV"
+
+    probe = g3.next_probe()
+    assert probe.purpose == "MU_REVISIT"
+    assert probe.target["entity_id"] == entity_id
+    assert probe.actions[0]["action"] == "ACTION6"
