@@ -16,7 +16,7 @@ Fixture format (``virelai-recorded-world-v1``, gzip JSON): ``initial_grid`` (hex
 with ``kind: RESET`` is a harness reset between probes, since R9-R12),
 ``answers`` [{gate_id, ...Duck-written fields}] in acceptance order (an entity's answer is matched to
 the entity the gate asks about, since R9-R15), and ``protocol``: the gate
-machine's recording protocol (``{"g3_inherits_g2_nulls": bool}``). A record without ``protocol``
+machine's recording protocol. A record without ``protocol``
 predates R9-R08 and was made with G3 re-clicking G2's nulls, so it replays that way.
 """
 from __future__ import annotations

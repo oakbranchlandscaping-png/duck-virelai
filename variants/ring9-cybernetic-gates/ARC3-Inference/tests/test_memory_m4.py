@@ -183,5 +183,7 @@ def test_the_whole_g0_to_g4a_run_replays_offline(tmp_path, monkeypatch):
     out = tmp_path / "record.json.gz"
     record_tool.write_record(record_tool.build_record(run.state_path.parent, "ft09", "ft09-offline"), out)
     result = replay(load_record(out), measure=False)
-    assert (result.steps_replayed, result.answers_used, result.stopped) == (87, 12, None)
+    # The self-contained record now consumes the G0 and G1 answers as well as
+    # the 12 answers used by the former G2-start replay.
+    assert (result.steps_replayed, result.answers_used, result.stopped) == (87, 14, None)
     assert g4a_complete(result.machine) and result.machine.gate_id == "G4-B-LEVER-RELATIONS"

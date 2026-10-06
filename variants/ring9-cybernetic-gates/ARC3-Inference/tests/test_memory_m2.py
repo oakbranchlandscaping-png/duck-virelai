@@ -152,7 +152,11 @@ def test_the_controller_repeats_ducks_live_g2_search_and_inherits_its_nulls(ft09
 
 def test_the_run_replays_offline_under_its_recorded_protocol(ft09_run, tmp_path):
     record = record_tool.build_record(ft09_run.state_path.parent, "ft09", "ft09-offline")
-    assert record["protocol"] == {"g3_inherits_g2_nulls": True}
+    assert record["protocol"] == {
+        "g3_inherits_g2_nulls": True,
+        "replay_from_g0": True,
+        "legacy_g3_confirmation_replay": False,
+    }
     out = tmp_path / "record.json.gz"
     record_tool.write_record(record, out)
     result = replay(load_record(out), measure=False)
