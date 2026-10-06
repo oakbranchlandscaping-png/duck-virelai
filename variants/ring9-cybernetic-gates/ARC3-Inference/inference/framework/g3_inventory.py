@@ -29,10 +29,12 @@ def check_inventory_claims(
     }
     ambiguous = {
         entity_id for entity_id in expected
-        if journal.entities[entity_id].state in {"AMBIGUOUS", "BUDGET_STOPPED"}
+        if journal.entities[entity_id].state in {
+            "AMBIGUOUS", "BUDGET_STOPPED", "PRESUMED_UNREACHABLE",
+        }
     }
     if set(lever_entities) != witnessed:
-        raise error("lever_entities must exactly match the witnessed, explained G4-ready entities.")
+        raise error("lever_entities must exactly match the witnessed G4-ready entities.")
     if set(clean_null_entities) != clean_null:
         raise error("clean_null_entities must exactly match entities closed by scoped null evidence.")
     if set(ambiguous_entities) != ambiguous:

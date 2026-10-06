@@ -75,6 +75,7 @@ from inference.framework.entity_observation import EntityLedger, EntityTransitio
 from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
 from inference.framework.mu_bucket import MuBucket
+from inference.framework.g3_inventory import check_inventory_claims
 from inference.framework import mu_return
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
@@ -4504,69 +4505,16 @@ class _LeverTarget:
             raise GateContractError(
                 f"G3 coverage cannot be reported with unbounded probe results: {unbounded!r}."
             )
-        lever_entities = _strings(raw.get("lever_entities", []), "lever_entities", required=False)
-        clean_null_entities = _strings(
-            raw.get("clean_null_entities", []), "clean_null_entities", required=False
-        )
-        ambiguous_entities = _strings(
-            raw.get("ambiguous_entities", []), "ambiguous_entities", required=False
-        )
-        witnessed = {
-            entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state == "G4-READY"
-        }
-        clean_null = {
-            entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state == "G3-CLOSED"
-            and not journal.entities[entity_id].witness_refs
-        }
-        ambiguous = {
-            entity_id for entity_id in expected_entities
-            if journal.entities[entity_id].state in {
-                "AMBIGUOUS", "BUDGET_STOPPED", "PRESUMED_UNREACHABLE",
-            }
-        }
-        if set(lever_entities) != witnessed:
-            raise GateContractError(
-                "lever_entities must exactly match the witnessed G4-ready entities."
-            )
-        if set(clean_null_entities) != clean_null:
-            raise GateContractError(
-                "clean_null_entities must exactly match entities closed by scoped null evidence."
-            )
-        if set(ambiguous_entities) != ambiguous:
-            raise GateContractError(
-                "ambiguous_entities must exactly match explicitly bounded unresolved entities."
-            )
-        if not witnessed and not ambiguous:
-            raise GateContractError(
-                "The completed interaction record contains no witnessed lever; G3 remains unanswered "
-                "and the probe roster, contact execution, or attribution must be repaired."
-            )
-        explanation = str(raw.get("explanation") or raw.get("mechanism") or "").strip()
-        evidence_refs = _strings(raw.get("evidence_refs"), "evidence_refs")
-        competing = _strings(raw.get("competing_models"), "competing_models")
-        falsifier = str(raw.get("falsifier") or "").strip()
-        if not explanation or not evidence_refs or not competing or not falsifier:
-            raise GateContractError(
-                "LeverInventory requires explanation, evidence_refs, competing_models, and falsifier."
-            )
-        required_refs = {
-            ref for entity_id in witnessed for ref in journal.entities[entity_id].witness_refs
-        } | {
-            journal.entities[entity_id].events[-1].evidence_ref
-            for entity_id in clean_null if journal.entities[entity_id].events
-        } | {
-            self._bounded_ambiguities[entity_id]["evidence_ref"] for entity_id in ambiguous
-        }
         known_refs = {
             item.evidence_ref for items in self.evidence._attributions.values() for item in items
         }
-        if set(evidence_refs) != required_refs or not set(evidence_refs) <= (known_refs | required_refs):
-            raise GateContractError(
-                "G3 inventory evidence_refs must exactly cover positive witnesses, scoped nulls, "
-                "and bounded ambiguities."
-            )
+        (
+            lever_entities, clean_null_entities, ambiguous_entities,
+            witnessed, _clean_null, ambiguous, evidence_refs,
+        ) = check_inventory_claims(
+            raw, journal, expected_entities, self._bounded_ambiguities,
+            known_refs, _strings, GateContractError,
+        )
         explanation = str(raw.get("explanation") or raw.get("mechanism") or "").strip()
         competing = _strings(raw.get("competing_models"), "competing_models")
         falsifier = str(raw.get("falsifier") or "").strip()
