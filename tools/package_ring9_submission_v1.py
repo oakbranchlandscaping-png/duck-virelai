@@ -83,7 +83,10 @@ PASSES = 1
 SOURCE_COMMIT = os.environ.get("VIRELAI_SOURCE_COMMIT", "")
 if not re.fullmatch(r"[0-9a-f]{40}", SOURCE_COMMIT):
     raise SystemExit("Set VIRELAI_SOURCE_COMMIT to the full 40-character commit of the single tree.")
-REVISIONS = "Ring 9 single tree: R9-R06 to R9-R24 (click) and N1 to N5.3 (NAV), merged 501a6e6, F1 fa9617b"
+REVISIONS = (
+    "Ring 9 single tree: R9-R06 to R9-R24 (click) and N1 to N5.3 (NAV), merged 501a6e6, F1 fa9617b, "
+    "step 4' NAV record b04ad10..e8d1f92, SUB-1 d751a5b"
+)
 TEST_RESULTS = (
     f"Source commit {SOURCE_COMMIT} ({REVISIONS}).\n"
     "Unification (Sol, 501a6e6): a true merge of main 130a374 (NAV line) and r9-r20-level-entry c9b246b "
@@ -94,8 +97,15 @@ TEST_RESULTS = (
     "record, tools/check_mu_partial_close_from_record.py on the v6 record). F1 (a released NAV target "
     "PRESUMED_UNREACHABLE counted as unbounded, so a completed NAV roster had no legal move): fixed in "
     "fa9617b, 2 fail-first tests (both fail at 501a6e6).\n"
-    "Cloud Python 3.12, full suite at the fixed tree: 607 passed, 1 skipped. Director-run Mac pytest at "
-    "f86d6ef (same source as this commit): 607 passed, 1 skipped.\n"
+    "At f86d6ef (the merge plus F1): cloud and Director-run Mac pytest, 607 passed, 1 skipped.\n"
+    "Step 4' (Sol, b04ad10..e8d1f92): the ls20 N5.1 live record as a replay fixture "
+    "(test_ring9_nav_live_replay.py); NAV intervention and attributed residue on record rows; "
+    "check_inventory_claims restored with PRESUMED_UNREACHABLE; record_replay replay_from_g0.\n"
+    "SUB-1 (Claude, d751a5b): test_s1_concurrent_replay.py (5 live records replayed serially and on a "
+    "thread pool, identical game for game; a fail-first shared-cache leak is seen) and "
+    "test_s2_run_deadline.py (soft end, per-game slice, action cap, request timeout), 2 + 5 passed.\n"
+    "At d751a5b: Director-run Mac pytest 617 passed, 1 skipped; cloud Python 3.12 full suite on the "
+    "d751a5b export: 617 passed, 1 skipped (618 collected; run in two parts after a session time limit).\n"
 )
 TEST_RESULTS += (
     "Self-hosted dependencies (v2): tools/kaggle_kit committed 86fa9ed, kit tests 6 passed on the Mac. "
