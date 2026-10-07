@@ -135,3 +135,38 @@ This review will be amended in a later version once they are read.
 | `kaggle kernels output stephenkaskin/taaf-virelai-ring9-submission-dryrun-v1 -p runs/kaggle-ring9-submission-dryrun-v1/output` | First page: `.per_game_cards.pkl`, `artifacts/k000…k055` (499 files), the kernel log (468,559 bytes). 3.0 GB on disk. It printed `Next page token: eyJHY3NQYWdlVG9rZW4iOi…`. |
 
 — Claude, Alpha build seat (click line), 2026-10-07
+
+## Amendment, 2026-10-07: complete download and final grades
+
+The output is now complete for grading: every clone's artifacts, the execution receipt, `benchmark.json`, `git_status.txt` and each clone's request log are on disk (5.6 GB). Only the per-game replay movies (`movies/gk*.mp4` and `.html`) remain on Kaggle; see "Not downloaded" below. Everything above stands. This amendment completes the counts and settles the pending items.
+
+| Item | First page (§1) | Final, all 110 games |
+|---|---|---|
+| **I2** receipt | PENDING | **PASS.** The downloaded `execution_receipt.json` is byte-identical to the package's: sha256 `f84b0634…13aded17`, equal to `kaggle/ring9-submission-dryrun-v1/execution_receipt.json` and its source-dataset copy. `git_status.txt` names the isolated export of `d751a5bce79e…`. |
+| **C-3** cross-game mixing | PASS, 55 games | **PASS, 110 games.** 1,046 files (the artifacts under 40 MB, plus every request log): no `game_id` and no file stem names another clone. |
+| **C-5** turns cut by the clock | 122 of 254 (48%) | **231 of 501 Duck turns (46%)** |
+| **C-6** largest prompt | 40,819 | **44,399 tokens**, under 65,536 |
+| **D-2** refusal spin | k001, k003, k011, k014 and their clones | **18 games exactly:** every clone of lf52, bp35, ar25 and sk48. None of the 18 has a request log, which confirms no model call was made. |
+| Run timing | from the log | `benchmark.json`: start 00:17:29.99, end 01:55:30.12 UTC. That is 5,880 s of play inside the 7,200-s window. |
+
+**A data point for Sol** (P4, the 256-token route checkpoint). In this dry run, every ls20 clone's final route-checkpoint response finished with `finish_reason = tool_calls`, not `length`. Each still ended "without an action". So here the model did emit a tool call within 256 tokens, but its Python produced no action. That differs from the unified ls20 canary, where the response was cut at `length`. Both runs predate the cell-site repair. The request records (`k019_p0_requests.jsonl` and the k044, k069 and k094 equivalents) keep the request and its metadata, but not the response body. So the tool call's content is not recoverable from these artifacts.
+
+**Not downloaded, and recommended to stay that way.** The remaining pages hold `movies/gk*_p0.mp4` and `.html`: rendered replays of every game's frames. The movies for gk000 to gk010 arrived with page 4. One of those 11 is a held-out clone; none of them has been opened, and they should stay unopened. Grading does not need them. Their clones include the three held-out worlds, so downloading or opening them would be a visual exposure the custody rule exists to prevent (§3). If movies are ever wanted, fetch them for named development clones only, with `--file-pattern`.
+
+**Download log (continued)**
+
+| Step | Result |
+|---|---|
+| `python3 -m pip install --upgrade kaggle` | Refused by Homebrew's externally managed Python (PEP 668). Nothing changed. |
+| `python3 -m venv ~/.venvs/kaggle222 && ~/.venvs/kaggle222/bin/pip install "kaggle==2.2.2"` | Installed `kaggle-2.2.2`, `kagglesdk-0.1.37`. `kernels output -h` lists `--page-size` and `--page-token`. The system CLI (2.0.0) is untouched. |
+| Page 2 (`--page-size 200`, token from page 1) | `artifacts/k055` (remainder) to `k078`, partway through |
+| Page 3 | `artifacts/k078` (remainder) to `k100` |
+| Page 4 | `artifacts/k101…k109`, `benchmark.json`, `diagnostics.html`, `execution_receipt.json`, `games.pkl`, `git_status.txt`, `intermediate_states.pkl`, 95 `kNNN_p0_requests.jsonl`, `movies/gk000…gk010`. It printed a next-page token (`…bW92aWVzL2drMDEwX3AwLm1wNCJ9`): movies only. |
+
+**Final verdict, unchanged.**
+- **The submission machinery passes:** C-1, C-2 (with its note), C-3, C-4, C-6, C-7, I0, I2, I3, I5, I8 and U-SRC.
+- **I11 fails** on D-2.
+- **D-1 and D-2 must be fixed before the scored package** (SUB-2, §4).
+- **D-3 awaits the Director's ruling.**
+
+— Claude, Alpha build seat (click line), 2026-10-07
