@@ -1,6 +1,6 @@
 # Build report: Ring 9 NAV branch, from ego discovery through lever law
 
-**Type:** `ALPHA_BUILD_REPORT`
+**Type:** `BUILD_REPORT_RING9_NAV_BRANCH`
 
 **Version:** v1
 
@@ -39,7 +39,7 @@ read opaque action metadata
 
 The branch is substantially implemented and has a broad local regression floor. It is not fully validated live.
 
-The most important recent repair closed the production gap between G1 and G3. The first unified ls20 canary showed that Duck could correctly describe four movement laws while leaving `action_law_specs` empty and naming only two representative ego sites. The old controller therefore had no bearing map, issued zero G3 actions, and stopped. The repaired controller derives the movement product from lossless cell-site flow. On the same recorded Kaggle evidence it recovers all four bearings, reconstructs the complete 25-site ego, resolves G3's first stable entity to its current full cell set, and emits a controller-owned approach action.
+The most important recent repair narrowed the production gap between G1 and G3. The first unified ls20 canary showed that Duck could correctly describe four movement laws while leaving `action_law_specs` empty and naming only two representative ego sites. The old controller therefore had no bearing map, issued zero G3 actions, and stopped. After Duck supplies a **supported G1 demonstration**, the repaired controller derives the complete movement product from lossless cell-site flow rather than depending on Duck to serialize every bearing and body site. On the same recorded Kaggle evidence it recovers all four bearings, reconstructs the complete 25-site ego, resolves G3's first stable entity to its current full cell set, and emits a controller-owned approach action. A missing or unsupported Duck demonstration still prevents this compilation and remains an open dependency.
 
 This repair is locally proven. Its bounded live canary is uploaded and currently queued. No claim in this report treats that queued run as completed evidence.
 
@@ -84,6 +84,10 @@ This report separates four classes of evidence:
 Source variants, packaged source copies, and executed artifacts remain distinct. A packaged marker proves what was shipped. Only a completed execution artifact proves what ran and what behavior occurred.
 
 No downloaded game-engine implementation was inspected to derive game mechanics.
+
+### Declared world exposure
+
+The production-shaped replay fixture intentionally contains observed ls20 specifics: integers 9 and 12 in the composite ego, a five-cell movement stride, and the 84-site counter evidence. ls20 is an exposed development canary rather than a held-out evaluation world. These values are used to test faithful replay of an already observed run; they are not executable world-name branches or universal NAV assumptions.
 
 ## 4. Architecture of the NAV branch
 
@@ -157,6 +161,10 @@ The repair in `4970953` treats the lossless grid evidence as authoritative:
 8. cache the compiled control product by G1 revision and comparison identity.
 
 The compiler never parses words such as “up,” “left,” or “right.” It does not infer semantics from action numbers.
+
+The compiler is not yet independent of Duck. `_demonstrated_family` requires a supported prospective G1 comparison to select which translated component family is the ego. If Duck fails to submit or support that demonstration, the family and bearing map remain empty. G3 then has no terrain context and falls to the bounded 256-token route request. The 110-game dry run shows that G1 stalls and controlled stops are submission-relevant, so this dependency must remain explicit.
+
+The bearing product is also frozen from G1's opening evidence. If a movement action is blocked or ambiguous at spawn, `unresolved_actions` records it, but no later code currently consumes that field or promotes a bearing from subsequent G3 motion. A direction can therefore remain unavailable for the entire level even after later state would permit a clean demonstration. This is unbuilt work, not a property proven safe by the ls20 fixture.
 
 On the completed unified ls20 record, the repaired compiler recovers:
 
@@ -357,7 +365,7 @@ The current branch preserves:
 2. Replaying its 12 transitions under `4970953` yields all four bearings and a complete 25-site ego.
 3. The active G3 target's emitted sites equal its current ledger sighting and identify `CURRENT_ENTITY_SIGHTING`.
 4. The next owned step is a controller action with `APPROACH` or `CONTACT_ATTEMPT`, not a Duck turn.
-5. Targeting-focused floor: 63 passed.
+5. Targeting-focused floor: 63 passed at `4970953` plus the source-label compatibility repair. Command: `python -m pytest -q tests/test_virelai_gates.py::test_structured_qwen_answer_normalizes_and_demonstrates_multicolor_ego tests/test_ring9_nav_cell_site_targeting.py tests/test_nav_branch_foundations.py tests/test_g3_scheduler.py tests/test_ring9_nav_live_replay.py tests/test_g3_recolor_identity.py`.
 6. Full repository floor: 619 passed, 1 skipped.
 7. Frozen cell-site canary package: 9/9 static checks, zero differences from its commit export, clean secret scan.
 
@@ -406,7 +414,41 @@ Its preregistered exit is deliberately below full G3 completion:
 - geometry refresh after frames;
 - at least one terminal G3 target result and appropriate roster advance.
 
+Two thresholds govern this run and must not be conflated after seeing its result:
+
+1. **Diagnostic pass:** CS-1 through CS-5 grade the frozen 48-action canary. CS-5 permits any legitimate terminal G3 disposition, including a scoped null, evidence-backed `PRESUMED_UNREACHABLE`, boundary disposition, or bounded ambiguity.
+2. **Scored-commit promotion:** the stricter test-floor record controls which source may enter the first scored package. The repair must show a **real attributed contact**. A run that only releases the first target as unreachable may pass the bounded diagnostic but does not qualify `4970953` as the scored package's source.
+
+This distinction resolves the differing wording in the build plan, frozen package, test-floor record, and state document without retroactively changing the frozen canary criteria.
+
 ## 10. Known risks and open engineering work
+
+### Submission deadline and controlled stops
+
+The 110-game dry-run review landed after the first version of this report and supersedes its development-first order for the immediate calendar. Direct dry-run observations include 34 controlled stops among 110 games, eight at zero actions, and ls20 ending at `g3_route_retry_exhausted` on pre-repair source. Most games stalled in G1. The scored package is due in about five days.
+
+The immediate NAV obligation is therefore narrower than completing all of G4: ensure that NAV sessions use their slice productively and do not forfeit the remaining time after a bounded stop. The Director must rule whether submission-mode controlled stops end the game or close/file the current gate product and hand the level to `PLAY-NORMAL`. The dry-run reviewer recommends `PLAY-NORMAL`; this report records that recommendation but does not treat it as a ruling or implemented behavior.
+
+### Unsupported G1 demonstration
+
+The cell-site compiler selects the ego family only after Duck's prospective demonstration is supported. A missing, truncated, or unsupported G1 answer can still yield no bearings and reach the 256-token route fallback. The dry run's concentration of G1 stalls makes this a submission risk, not a rare theoretical case.
+
+Required next code evidence:
+
+- a fail-first test in which the deterministic opening contains usable motion evidence but Duck's demonstration is absent or unsupported;
+- an explicit policy for whether code can nominate and prospectively verify the ego family without Duck, or whether G1 must remain open for a bounded repair turn;
+- no silent transition into G3 with an empty control product.
+
+### Unresolved action after a blocked opening
+
+An action that is blocked or ambiguous during G1's paired opening probes can remain in `unresolved_actions` for the level. Later G3 observations do not currently feed new control-law evidence back into the compiler.
+
+Required next code evidence:
+
+- a fail-first wall-at-spawn fixture;
+- a later state change that makes the action demonstrable;
+- promotion of the new repeated translation into the bearing map without changing already certified bearings;
+- cache invalidation and route replanning after the control product changes.
 
 ### Immediate validation work
 
@@ -449,16 +491,21 @@ HYBRID scheduling exists, including CLICK-to-NAV handoff and mu return, but lack
 
 Life records, reset back-edges, level freeze, and carry infrastructure exist. The full claim that mechanism knowledge survives death and appropriately transfers to the next level still requires live NAV evidence. Carry should preserve causal laws and uncertainty, not blindly preserve stale geometry.
 
-## 11. Recommended build order after the canary
+## 11. Recommended build order after the dry run
 
-1. **Grade the bounded cell-site canary.** Repair only observed failures in the G1-to-first-target loop.
-2. **Prove the integrated roster drain locally.** Include null, positive, provisional release, reopen, and birth.
-3. **Run the longer ls20 G3 canary.** Exit on complete roster accounting and G4 opening.
-4. **Finish NAV record-derived G4-B.** Use target-bound contact epochs and attributed residue.
-5. **Run a bounded NAV G4 canary.** Prove one lever's anatomy and repeated orbit before asking for all of G4.
-6. **Add ft09 as the second NAV/HYBRID canary only after ls20's branch is coherent.** Do not compare scores across unlike worlds or model stacks.
-7. **Validate death and level carry.** Demonstrate that laws persist while current geometry is rebuilt.
-8. **Connect observed-win products.** Reuse the NAV intervention boundary for later goal-directed action only after the win has been observed and recorded.
+The submission deadline temporarily takes precedence over deeper NAV completion:
+
+1. **Grade the bounded cell-site canary.** Apply both thresholds above: CS-1 through CS-5 for the diagnostic, real attributed contact for scored-commit promotion.
+2. **Obtain the Director's controlled-stop ruling.** In submission mode, decide whether a bounded stop ends the game or files its product and hands the remaining slice to `PLAY-NORMAL`.
+3. **Repair only demonstrated submission blockers.** For NAV these are the empty/unsupported G1 control product, unresolved action recovery, and any canary failure in the first-target loop. Coordinate with the shared fixes for refusal spin and other dry-run defects.
+4. **Build and floor the first scored package from the ruled source.** Do not wait for the complete NAV G4 program.
+5. **Prove the integrated roster drain locally.** Include null, positive, provisional release, reopen, and birth.
+6. **Run the longer ls20 G3 canary.** Exit on complete roster accounting and G4 opening.
+7. **Finish NAV record-derived G4-B.** Use target-bound contact epochs and attributed residue.
+8. **Run a bounded NAV G4 canary.** Prove one lever's anatomy and repeated orbit before asking for all of G4.
+9. **Use a second exposed NAV or HYBRID world selected from its action metadata.** ft09 is a CLICK canary and must not be described as NAV/HYBRID. Do not compare scores across unlike worlds or model stacks.
+10. **Validate death and level carry.** Demonstrate that laws persist while current geometry is rebuilt.
+11. **Connect observed-win products.** Reuse the NAV intervention boundary for later goal-directed action only after the win has been observed and recorded.
 
 ## 12. Exit definition for the NAV branch
 
