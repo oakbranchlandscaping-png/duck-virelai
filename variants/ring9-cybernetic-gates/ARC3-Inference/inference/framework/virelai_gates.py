@@ -690,6 +690,19 @@ class EgoGateMachine:
         """Return Duck's demonstrated ego footprint and its evidence strength."""
         if self._control_archetype["world_type"] == "CLICK_GOD_MODE":
             return (), "POINTER_EGO_HAS_NO_GRID_FOOTPRINT"
+        # The complete moving object is the union of its observed cell-site
+        # components. Duck's prediction scope may contain only representative
+        # sites, so deterministic G1 flow takes precedence when it is available.
+        from inference.framework.nav_control import compile_nav_control_map
+
+        control = compile_nav_control_map(self)
+        if control.ego_cells:
+            if (
+                self.last_comparison is not None
+                and set(control.ego_cells) == set(self.last_comparison.after_footprint)
+            ):
+                return control.ego_cells, "DEMONSTRATED_AFTER_FOOTPRINT"
+            return control.ego_cells, control.binding_source
         if self.last_comparison is not None and self.last_comparison.after_footprint:
             return tuple(self.last_comparison.after_footprint), "DEMONSTRATED_AFTER_FOOTPRINT"
         if self.pending_prediction is not None and self.pending_prediction.scope.cells:
@@ -3460,17 +3473,37 @@ class _LeverTarget:
             return None
         frontier_item = candidates[self._target_index]
         entity_id = ledger.entity_for_member(frontier_item["member_id"])
+        hypothesis = ledger.entities.get(str(entity_id or ""))
+        current_sighting = None if hypothesis is None else hypothesis.current
+        current_cells = tuple(
+            frontier_item["cells"]
+            if current_sighting is None or not current_sighting.cells
+            else current_sighting.cells
+        )
+        current_anchor = min(current_cells)
+        current_rows = [row for row, _ in current_cells]
+        current_cols = [col for _, col in current_cells]
+        current_bbox = (
+            min(current_rows), min(current_cols), max(current_rows), max(current_cols)
+        )
         target = {
             "rank": self._target_index + 1,
             "eligible_rank": frontier_item["eligible_rank"],
             "source_rank": frontier_item["source_rank"],
             "member_id": frontier_item["member_id"],
             "entity_id": entity_id,
-            "anchor": list(frontier_item["anchor"]),
-            "bbox": list(frontier_item["bbox"]),
-            "cells": [list(cell) for cell in frontier_item["cells"]],
-            "integer": frontier_item["integer"],
-            "cell_count": frontier_item["cell_count"],
+            "anchor": list(current_anchor),
+            "bbox": list(current_bbox),
+            "cells": [list(cell) for cell in current_cells],
+            "integer": (
+                frontier_item["integer"]
+                if current_sighting is None else current_sighting.integer
+            ),
+            "cell_count": len(current_cells),
+            "entity_version": None if hypothesis is None else hypothesis.version,
+            "geometry_source": (
+                "FROZEN_G2_SITES" if current_sighting is None else "CURRENT_ENTITY_SIGHTING"
+            ),
             "shape_family": frontier_item["shape_family"],
             "mask_relation": frontier_item["mask_relation"],
         }
@@ -3482,8 +3515,8 @@ class _LeverTarget:
                 question="Does clicking this ranked entity produce an attributable local or remote response?",
                 actions=({
                     "action": "ACTION6",
-                    "row": frontier_item["anchor"][0],
-                    "col": frontier_item["anchor"][1],
+                    "row": current_anchor[0],
+                    "col": current_anchor[1],
                 },),
                 live_alternatives=("local target response", "remote response", "counter-only change", "no visible response", "ambiguous ego effect"),
                 outcome_partition=("changed", "unchanged", "boundary event"),
