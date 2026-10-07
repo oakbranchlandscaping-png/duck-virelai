@@ -1,9 +1,39 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-10-05
-**Active source:** `variants/ring9-cybernetic-gates/`
+**Updated:** 2026-10-07
+**Active source:** `variants/ring9-cybernetic-gates/ARC3-Inference/` on branch `ring9-unified` (one tree since 2026-10-05)
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
+
+## START HERE (2026-10-07)
+
+**The build is one tree.** The click line (`r9-r20-level-entry`) and the NAV line (the old `main`) were merged into
+`ring9-unified` on 2026-10-05. All work commits there; `main` fast-forwards only after a Mac floor passes; Kaggle
+packages are built from `main`. Current floor: **619 passed, 1 skipped** at `c5e8ff6`; `main` = `ring9-unified` =
+`f333919`.
+
+| Read | For |
+|---|---|
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-10-07.md` | Seats, the branch rule, the read order, the path from a change to a Kaggle run, the rules never bent |
+| `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md` | The cursor, open questions, horizon, honest ledger, build-status table and floor |
+| `RECORD_RING9_SINGLE_TREE_AGREEMENT_v1_2026-10-05.md`, `UNIFICATION_RING9_SINGLE_TREE_v1_2026-10-05.md` | The merge and the shared first-witness law (G3 discovers, G4 types) |
+| `REPORT_SOL_SINGLE_TREE_NAV_AND_NEXT_WORK_v1_2026-10-06.md`, `REVIEW_SOL_SINGLE_TREE_REPORT_v1_2026-10-06.md` | The whole tree read at source, and where the two Alpha seats agree and differ |
+| `RECORD_RING9_TEST_FLOOR_v1_2026-10-07.md` | Every floor since the merge, reconciled |
+
+Sections 2, 5 and 10 below are kept as they stood on their dates; where they disagree with the documents above,
+the documents above govern. The dated callouts that follow are the running log, newest first.
+
+> **2026-10-06/07 THE SINGLE TREE: MERGE, SUBMISSION MODE, NAV CELL-SITE REPAIR, LEARN-TO-WIN SLICE (Claude and
+> Sol, Alpha build seats) — signed.** Sol merged the two Ring 9 lines (`501a6e6`); Claude reviewed it
+> (`REVIEW_RING9_UNIFICATION_v1`) and F1 was fixed (`fa9617b`); the Director ruled first-witness CLICK G3 (F2a), keep
+> Qwen3.6, and the branch rule (`RECORD_RING9_SINGLE_TREE_AGREEMENT_v1`). Unified canaries: vc33 queued (no review
+> yet); ls20 stopped at the G1→G3 boundary because G1 kept prose bearings (`REVIEW_RING9_UNIFIED_LS20_V1_KAGGLE`),
+> repaired by Sol in `4970953` (`BUILD_PLAN_RING9_CELL_SITE_TARGETING_v1`; short live canary pushed). v8 validated
+> controller-first G4 live (`REVIEW_RING9_CARRY_VC33_V8_KAGGLE`). Submission mode SUB-1 (`d751a5b`): ten concurrent
+> games, slices, caps, the run deadline, and the fix for the world-allowlist check that would have failed a
+> competition rerun; the 110-game dry run has executed (`UPLOAD_STATUS_RING9_SUBMISSION_DRYRUN_v1`), grade pending.
+> Learn to win: `BUILD_SLICE_LW_1_RELATIONS_REFEREE_LEDGER_v1` (W-1, W-2, W-4), rulings Q-1 to Q-5 owed.
+> State: `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md`.
 
 > **2026-10-05 R9-R24 LANDED: G4 CONTROLLER-FIRST (Claude, Alpha build seat) — signed.** v7 spent about 163 minutes
 > of Duck time in G4-B/G4-C and certified nothing (`REVIEW_RING9_CARRY_VC33_V7_KAGGLE_2026-10-04.md`). The Director ruled
@@ -185,7 +215,9 @@ Never rewrite an old run record to resemble the current source. A frozen package
 record describe the bytes that were packaged or executed. Current-source improvements apply only
 after a new package, hashes, receipt, and notebook version are created.
 
-## 2. Read these first
+## 2. Read these first (as of 2026-09-29; historical)
+
+*Superseded for current reading by START HERE above. Kept as the read-first list of its date.*
 
 | Document | Role |
 |---|---|
@@ -356,7 +388,9 @@ when the two explicitly online/native suites are excluded and the vendored TAAF 
 Kaggle reliability package confirmed prompt delivery. The later local OpenRouter `ls20` pilot
 confirmed that the served Duck used the gated protocol through G1 closure and G2 entry.
 
-## 5. Current gate status
+## 5. Gate status (as of 2026-09-28; historical)
+
+*Superseded by `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md` §6, the current build-status table.*
 
 | Gate/layer | Status | Evidence boundary |
 |---|---|---|
@@ -433,9 +467,10 @@ in the executed package.
 The following classes are retained for provenance and mining, not current status:
 
 - `BUILD_PLAN_CYBERNETIC_GATED_DUCK_v1_2026-09-17.md` and the dated G0/G1 plans and status maps;
-- `CURRENT_BUILD_MAP_CYBERNETIC_DUCK_2026-09-19.md` and
-  `CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-20.md`, which predate the completed ls20 diagnostic
-  and G1 closure repair;
+- `CURRENT_BUILD_MAP_CYBERNETIC_DUCK_2026-09-19.md`,
+  `CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-20.md` and `-2026-09-22.md`, which predate the completed ls20
+  diagnostic and G1 closure repair (and the single tree);
+- `STATE_OF_THE_HYBRID_BUILD_v3.md` (Ring 6.3 era) and every `handoff/` file dated before 2026-10-07;
 - Ring 8 and earlier North Stars, work orders, reports, and handoffs;
 - `variants/ring8-*`, `variants/ring7*`, `variants/ring6*`, and packaged copies beneath
   `kaggle/` and `runs/`;
@@ -467,6 +502,12 @@ when model, world set, budgets, passes, concurrency, package identity, and evalu
 explicitly controlled or the differences are clearly stated.
 
 ## 10. Next execution decision
+
+**Current (2026-10-07):** grade the 110-game submission dry run and Sol's ls20 cell-site canary; then build
+`ring9-submission-v1` from `main` for the first scored submission (about 12 October). Learn to win (W-1, W-2, W-4)
+proceeds in new files once rulings Q-1 to Q-5 are given. See `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md` §1 to §3.
+
+*The paragraph below records the decision as of 2026-09-25 (historical).*
 
 The bounded local OpenRouter G1 pilot is reviewed at
 `REVIEW_G1_CLOSURE_LOCAL_LS20_V2_2026-09-22.md`. The completed G2 counter-lock pilot is reviewed
