@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze a unified Ring 9 canary: ring9-unified-vc33-v1 or ring9-unified-ls20-v1 (pinned image).
+"""Freeze a unified Ring 9 canary (pinned image).
 
 Author: Claude (Alpha build seat), 2026-10-05. RECORD_RING9_SINGLE_TREE_AGREEMENT_v1 (Director-approved)
 §4 step 4 and §5: one short live canary per action channel, from the single tree on ``main``.
@@ -49,6 +49,12 @@ BASE_PACKAGE_SHA256 = "80fac5e2ab427385ce39f15b9f48d849530dc5539dfecc8076cc2cd2e
 CANARIES = {  # RECORD_RING9_SINGLE_TREE_AGREEMENT_v1 §5; ls20 budget: Director, 2026-10-05
     "vc33": {"world": "vc33-5430563c", "channel": "CLICK", "max_actions": 200, "max_runtime_seconds": 3600},
     "ls20": {"world": "ls20-9607627b", "channel": "NAV", "max_actions": 160, "max_runtime_seconds": 2700},
+    # Sol, 2026-10-07: bounded proof of the repaired G1-to-G3 cell-site handoff.
+    # This is deliberately not a roster-completion or score run.
+    "ls20-cellsite": {
+        "world": "ls20-9607627b", "channel": "NAV",
+        "max_actions": 48, "max_runtime_seconds": 1200,
+    },
 }
 CANARY = os.environ.get("VIRELAI_CANARY", "")
 if CANARY not in CANARIES:
@@ -214,6 +220,27 @@ CANARY_CRITERIA = {
         "earlier ls20 runs (N5, N5.1) served Qwen/Qwen3.8-27B-FP8 from third-party mounts; this run serves "
         "vrfai/Qwen3.6-27B-FP8 from the Director's own datasets, so Duck's turns are not comparable with them.",
     ],
+    "ls20-cellsite": [
+        "One world, ls20, NAV. This short canary tests only the repaired cell-site targeting handoff. It is "
+        "not a roster-completion, level-clear, score, or generalisation run.",
+        "CS-1: G1's retained control product contains ACTION1 through ACTION4 with the four repeated observed "
+        "displacements, no unresolved movement action, and the complete 25-site composite ego rather than "
+        "Duck's two representative prediction sites.",
+        "CS-2: G3 opens with an accounting-complete, nonempty counter-masked ranked roster. The active row is "
+        "a stable entity identity whose emitted cells equal its current EntityLedger sighting; geometry_source "
+        "is CURRENT_ENTITY_SIGHTING.",
+        "CS-3: after G3 opens, the next owned step is CONTROLLER ACTION with pilot_intent APPROACH or "
+        "CONTACT_ATTEMPT. No Duck turn is spent selecting a direction that the bearing map and route planner "
+        "can compute.",
+        "CS-4: after every NAV action the next route decision uses the newly observed ego and target sites. "
+        "No attempt addresses a target only by its frozen G2 anchor.",
+        "CS-5: at least one ranked target receives a terminal G3 result inside the bounded run: first-witness "
+        "LEVER_FOUND, scoped null contact, evidence-backed PRESUMED_UNREACHABLE, boundary disposition, or "
+        "bounded ambiguity. The roster advances immediately when the disposition permits it.",
+        "CS-R (reported): G0-G2 actions and Duck turns; recovered bearings and ego site count; roster count; "
+        "every G3 action with target entity, entity version, geometry source and pilot intent; first terminal "
+        "target result; final gate and target rank. A budget stop before CS-5 is diagnostic, not a pass.",
+    ],
 }
 LIVE_CRITERIA = CANARY_CRITERIA[CANARY]
 INFRA_CRITERIA = COMMON_INFRA
@@ -374,6 +401,19 @@ def _copy_source(bundle: Path, variant: Path) -> None:
     for path, marker in unified:
         if not path.is_file() or marker not in path.read_text():
             raise RuntimeError(f"Packaged source is not the single tree: no {marker!r} in {path.name}.")
+    if CANARY == "ls20-cellsite":
+        cellsite = (
+            (framework / "nav_control.py", "DETERMINISTIC_CELL_SITE_TRANSLATION"),
+            (framework / "nav_control.py", "def _moved_components"),
+            (framework / "nav_control.py", "ego_cells"),
+            (framework / "virelai_gates.py", '"geometry_source"'),
+            (framework / "virelai_gates.py", '"CURRENT_ENTITY_SIGHTING"'),
+        )
+        for path, marker in cellsite:
+            if not path.is_file() or marker not in path.read_text():
+                raise RuntimeError(
+                    f"Packaged source lacks the cell-site targeting repair: no {marker!r} in {path.name}."
+                )
     _world_content_guard(src / "ARC3-Inference")
 
 
