@@ -79,3 +79,28 @@ These are in the package's `RUN.md` and `checkpoint-preflight.json`, and are gra
 - **Before the submission,** the Kaggle facts must be confirmed on the competition's Rules tab: the runtime limit (9 h assumed), submissions per day, the GPU quota, and whether a failed rerun counts against the day.
 
 — Claude, Alpha build seat, 2026-10-06
+
+## Upload log (2026-10-06, Director's terminal)
+
+| Step | Result |
+|---|---|
+| Unpacked on the Mac | `kaggle/ring9-submission-dryrun-v1` from `sub1dry/ring9-submission-dryrun-v1.tar.gz`. The export went to `runs/_cowork_xfer/unify/export_d751a5b` with its `.source-commit` stamp (`d751a5bce79eb76603403b7721034536d4fe145d`). |
+| Mac verify (`main`'s verifier, `--source-export export_d751a5b`) | **9/9:** source manifest 230 files, package manifest 237, `src.zip` 221 files, output-cap encoding `server_default` on both sides, secret scan clean, 0 differences from the commit export |
+| Commit | `b1a4d71` on `ring9-unified`: this record and the amended packager, explicit paths, 2 files, +94 −3. Pushed `d751a5b..b1a4d71`. `main` fast-forwarded `d751a5b..b1a4d71` and pushed. The solver source is unchanged, so the floor (617 passed, 1 skipped at `d751a5b`) stands. |
+| `kaggle datasets create -p kaggle/ring9-submission-dryrun-v1/source-dataset -r skip` | 12 files uploaded: `src.zip` 965 KB, `source-manifest.json` 28 KB, `setup_commands.json` 10 KB, `checkpoint-preflight.json` 5 KB, `execution_receipt.json`, `benchmark_initial.pkl`, `deploy_target.pkl` and 5 small files. Private. |
+| `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-submission-dryrun-v1` | `ready` |
+
+**CLI notes, both expected:**
+- "Skipping folder: src": the source travels as `src.zip`, which the notebook checks against the manifest before it imports anything.
+- "outdated kaggle version (installed 2.0.0, latest 2.2.2)": no upgrade is needed.
+
+| Step | Result |
+|---|---|
+| `kaggle kernels push -p kaggle/ring9-submission-dryrun-v1/kernel` | Pushed by the Director. The notebook `stephenkaskin/taaf-virelai-ring9-submission-dryrun-v1` is **running** (Director's report, 2026-10-06; the push output was not pasted). |
+
+**Expected:** about 2.3 GPU-hours (about 14 min of setup, the 2-h window, then teardown).
+
+**Graded after download:**
+- C-1 to C-7, I0 to I11 and U-SRC, per §4;
+- per clone: the gate where its ladder rests, and its product;
+- whether the NAV and HYBRID clones end with `G3_ROUTE_RETRY_EXHAUSTED`. That is the G1 bearing defect from the unified ls20 canary (`REVIEW_RING9_UNIFIED_LS20_V1_KAGGLE`; `REVIEW_SOL_SINGLE_TREE_REPORT_v1` §4). This package predates the fix, so here it is measured, not graded as a regression.

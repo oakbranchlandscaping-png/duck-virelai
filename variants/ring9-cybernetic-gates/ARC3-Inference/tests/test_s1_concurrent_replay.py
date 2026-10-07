@@ -6,8 +6,12 @@ A submission plays many games as threads of one process (``HarnessSolver.concurr
 ``ThreadPoolExecutor``). DIAG_R5 §3 audited the package statically and found no cross-game state.
 This is the runtime proof: the recorded live worlds are replayed once one after another, then all at
 once on a thread pool with their order interleaved, and every game's machine state must be
-identical. The second test shows the check can see a leak: a deliberately shared cache, injected only
-here, makes one game decode another game's board.
+identical. The worlds cover both actuators: CLICK (ft09, vc33) and NAV (ls20, the N5.1 live record
+replayed from G0), so the NAV G3 state (entities, scheduler, terrain, reachability, contacts) is
+compared as well as the click products (amended 2026-10-06 after Sol's report §4.4).
+
+The second test shows the check can see a leak: a deliberately shared cache, injected only here,
+makes one game decode another game's board (it changes the vc33 and the ls20 digests).
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ import pytest
 
 from inference.framework import record_replay
 from inference.framework.record_replay import load_record, replay
+from inference.framework.virelai_gates import LEVER_GATE_ID, GateContractError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RECORDS = (  # the live records: two worlds, several runs each; each replays in 5-15 s
@@ -28,11 +33,12 @@ RECORDS = (  # the live records: two worlds, several runs each; each replays in 
     "vc33_kaggle_exit_v1_record.json.gz",
     "vc33_kaggle_carry_v6_record.json.gz",
     "ft09_kaggle_exit_v1_record.json.gz",
+    "ls20_kaggle_n5_1_record.json.gz",  # NAV: replay() starts it at G0 (protocol.replay_from_g0)
 )  # v7 is left out: its level 1 is v6's, action for action, so its replayed state is the same
 
 
 def _digest(name: str) -> str:
-    """Everything a game's machine certified, as one hash: its record rows, products and gate.
+    """Everything a game's machine certified, as one hash: rows, products, gate, G3 state, lives, levels.
 
     A replay that raises is a result too (a leak can crash a game instead of changing it).
     """
@@ -48,8 +54,22 @@ def _digest(name: str) -> str:
         "gate": machine.gate_id,
         "transitions": machine.transition_index,
         "products": machine.target_journal.snapshot(),
+        "g3": _g3_state(machine),  # NAV: entities, scheduler, terrain, reachability, contacts
+        "lives": machine.lives.summary(),
+        "levels": machine.levels,
     }
     return hashlib.sha256(json.dumps(state, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _g3_state(machine) -> object:
+    """The current level's G3 adapter state; a level whose G2 has not closed has no G3 yet."""
+    g3 = machine._adapters.get(LEVER_GATE_ID)
+    if g3 is None:
+        return None
+    try:
+        return g3.snapshot()
+    except GateContractError as exc:  # G3 not open on this level: that is the state
+        return f"UNOPENED {exc}"
 
 
 @pytest.fixture(scope="module")
