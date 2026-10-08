@@ -11,6 +11,9 @@ ENGINE_TO_MODEL_ACTION = {
     "ACTION4": "RIGHT",
     "ACTION5": "SPACE",
     "ACTION6": "MOUSE",
+    # SUB-2 D-1 (2026-10-07): the engine has ACTION7 and some worlds offer it; unmapped, every press was
+    # refused as "Unknown action". Opaque label on purpose: what it does is for the world to show.
+    "ACTION7": "ACTION7",
     "RESET": "RESET",
 }
 

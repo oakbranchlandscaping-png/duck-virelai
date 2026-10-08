@@ -56,6 +56,8 @@ from inference.utils.viewer_artifacts import (
 AnalyzerFactory = Callable[[taaf.game.Game, int], Any]
 
 ANALYZER_RETRY_BACKOFF_SECONDS = 1.0
+IDLE_BACKOFF_STEP_SECONDS = 0.05  # SUB-2 D-2: a turn that executed nothing never busy-waits
+IDLE_BACKOFF_MAX_SECONDS = 1.0
 DEFAULT_CANCEL_DRAIN_TIMEOUT_SECONDS = 120.0
 _LOCAL_SERVER_PROCESS_ENV_KEYS = (
     "LOCAL_ANALYZER_API_KEY",
@@ -197,6 +199,7 @@ class _HarnessGameSession:
     analysis_step: int = 0
     last_engine_action: str | None = None
     token_baseline: int = 0
+    idle_turns: int = 0  # SUB-2 D-2: consecutive turns that executed no action
     game_observer: Any = field(default=None, init=False, repr=False)
     observer_initialized: bool = field(default=False, init=False, repr=False)
     virelai_fault: str = field(default="", init=False, repr=False)
@@ -511,6 +514,8 @@ class _HarnessGameSession:
                             analysis_step, transcript_delta
                         )
                         self.write_viewer_payload()
+                if self._rest_after_controlled_stop(result):
+                    continue
                 if _turn_ends_game(result, run):
                     break
                 if result.retryable_failure:
@@ -525,7 +530,9 @@ class _HarnessGameSession:
                     retry_analysis_step = analysis_step
                     continue
                 if not result.step_executed:
+                    self._idle_backoff()
                     continue
+                self.idle_turns = 0
         except Exception as exc:
             if run.final_score is None:
                 run.solver_note = f"error: {type(exc).__name__}: {exc}"
@@ -580,6 +587,36 @@ class _HarnessGameSession:
             self.state_path.unlink(missing_ok=True)
             self._write_analysis_html()
             self.write_viewer_payload()
+
+    def _rest_after_controlled_stop(self, result: Any) -> bool:
+        """Director ruling D-3 (2026-10-07): in submission mode a controlled stop rests the level in play.
+
+        A bounded guard (a tool loop, a repair loop, an exhausted G3 checkpoint) used to end the game,
+        forfeiting the rest of its slice. With ``rest_on_controlled_stop`` it closes the level's gates
+        instead and Duck plays on freely with what was certified (ruling R-2). A second controlled stop
+        while already in normal play still ends the game.
+        """
+        reason = str(getattr(result, "controlled_stop", "") or "")
+        if not reason or getattr(result, "fatal_failure", None):
+            return False
+        if not getattr(self.solver, "rest_on_controlled_stop", False):
+            return False
+        machine = getattr(self.analyzer, "_gate_machine", None)
+        if machine is None or getattr(machine, "gate_id", None) == "PLAY-NORMAL":
+            return False
+        from inference.agent.tool_agent import _append_transcript_section
+        from inference.framework.play_gate import rest_in_play
+
+        note = f"controlled stop ({reason}) at {machine.gate_id}; the level rests in normal play (ruling D-3)"
+        rest_in_play(machine, note)
+        _append_transcript_section(self.transcript_path, "CONTROLLER", note)
+        return True
+
+    def _idle_backoff(self) -> None:
+        """SUB-2 D-2: after consecutive turns that executed nothing, wait a little longer each time."""
+        self.idle_turns += 1
+        if self.idle_turns >= 2:
+            time.sleep(min(IDLE_BACKOFF_STEP_SECONDS * self.idle_turns, IDLE_BACKOFF_MAX_SECONDS))
 
     def _finish_if_needed(self) -> None:
         run = self.game.game_run
@@ -1026,6 +1063,7 @@ class HarnessSolver(Solver):
         default=DEFAULT_WHEELHOUSE_STAMP_TEXT, repr=False
     )
     cancel_drain_timeout_s: float = DEFAULT_CANCEL_DRAIN_TIMEOUT_SECONDS
+    rest_on_controlled_stop: bool = False  # SUB-2 D-3: True in submission mode (Director ruling 2026-10-07)
     analyzer_factory: AnalyzerFactory | None = field(
         default=None, repr=False, compare=False
     )

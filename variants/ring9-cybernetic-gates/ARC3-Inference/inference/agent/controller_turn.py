@@ -23,6 +23,7 @@ from typing import Any
 
 CONTROLLER = "CONTROLLER"  # the executor label; the gate logic lives in controller_executor
 MAX_ANSWERS_PER_TURN = 16
+MAX_STALLED_CONTROLLER_TURNS = 3  # SUB-2 D-2: consecutive controller turns with no executed action
 
 
 @dataclass
@@ -35,6 +36,7 @@ class ControllerSession:
     answers: int = 0
     last_raw: dict[str, Any] = field(default_factory=dict)  # the last step payload (budgets)
     rerun: dict[str, Any] | None = None  # an extra run Duck asked for (D3)
+    stalled: int = 0  # SUB-2 D-2: consecutive controller turns that executed no action
 
     def take_handoff(self) -> str:
         text, self.handoff = self.handoff, ""
@@ -65,6 +67,9 @@ def run_controller_turn(
     rested = rest_if_no_legal_move(machine)  # R9-R24 D22: play on instead of idling
     if rested is not None:
         _log(analyzer_log, rested)
+    stalled = rest_if_stalled(machine, session)  # SUB-2 D-2: never replay a refused step forever
+    if stalled is not None:
+        _log(analyzer_log, stalled)
     end = ladder_end(machine)
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
@@ -103,6 +108,26 @@ def rest_if_no_legal_move(machine: Any) -> str | None:
     if status.get("legal", True):
         return None
     reason = f"{status.get('gate_id')} has no legal move ({status.get('reason')}); the level rests in normal play"
+    rest_in_play(machine, reason)
+    return reason
+
+
+def rest_if_stalled(machine: Any, session: ControllerSession) -> str | None:
+    """SUB-2 D-2 (axiom A2): a controller that executed nothing for several turns rests the level in play.
+
+    The dry run of 2026-10-07 found the controller replaying a bound probe whose token the environment
+    had already consumed (it refused the action), 12,000-18,500 times per game until the slice ended.
+    """
+    from inference.framework.play_gate import rest_in_play
+
+    if session.stalled < MAX_STALLED_CONTROLLER_TURNS:
+        return None
+    reason = (
+        f"{machine.gate_id}: the controller executed no action in {session.stalled} consecutive turns "
+        f"({session.wake or 'no detail'}); the level rests in normal play"
+    )
+    session.stalled = 0
+    session.wake = None
     rest_in_play(machine, reason)
     return reason
 
@@ -179,6 +204,7 @@ def _controller_action(
         )
     except Exception as exc:  # a refused probe is a stop condition, never a crash
         session.wake = f"the gate refused the controller's action: {exc}"
+        session.stalled += 1
         ledger.finish(gate_after=machine.gate_id, step_executed=False, outcome="controller_refused")
         return AnalyzerTurnResult(step_executed=False)
     raw = agent._step_env_callback({"actions": [step.action], "decision": asdict(probe), "actor": CONTROLLER})
@@ -191,6 +217,7 @@ def _controller_action(
     result = agent._apply_step_result(raw, event)
     executed = bool(result.get("executed"))
     session.actions += int(executed)
+    session.stalled = 0 if executed else session.stalled + 1
     session.last_raw = dict(raw)
     session.wake = (
         wake_reason(machine, event, raw, before) if executed

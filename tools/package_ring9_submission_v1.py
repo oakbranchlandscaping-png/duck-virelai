@@ -52,7 +52,7 @@ BASE_PACKAGE_SHA256 = "80fac5e2ab427385ce39f15b9f48d849530dc5539dfecc8076cc2cd2e
 RUN_WALL_SECONDS = 9 * 3600  # D-2: the submission notebook's runtime limit (Kaggle fact to confirm)
 EXIT_MARGIN_SECONDS = 25 * 60  # the soft end leaves this before the wall for teardown and scoring
 MODES = {  # BUILD_SLICE_SUB_1 §3: 10 concurrent games (the server's own figure, DIAG_R5 §1)
-    "dryrun": {"package": "ring9-submission-dryrun-v1", "concurrency": 10, "max_actions": 400,
+    "dryrun": {"package": "ring9-submission-dryrun-v2", "concurrency": 10, "max_actions": 400,
                "max_runtime_seconds": 600, "dry_run_window_seconds": 2 * 3600, "game_count": 110},
     "submit": {"package": "ring9-submission-v1", "concurrency": 10, "max_actions": 400,
                "max_runtime_seconds": 2700, "dry_run_window_seconds": 2 * 3600, "game_count": 110},
@@ -355,6 +355,16 @@ def _copy_source(bundle: Path, variant: Path) -> None:
     for path, marker in unified:
         if not path.is_file() or marker not in path.read_text():
             raise RuntimeError(f"Packaged source is not the single tree: no {marker!r} in {path.name}.")
+    agent = src / "ARC3-Inference" / "inference" / "agent"
+    sub2 = (  # SUB-2 (2026-10-07): the dry run's D-1, D-2 and D-3
+        (agent / "action_names.py", '"ACTION7": "ACTION7"'),
+        (agent / "controller_turn.py", "def rest_if_stalled"),
+        (framework / "solver.py", "def _rest_after_controlled_stop"),
+        (framework / "solver.py", "rest_on_controlled_stop: bool = False"),
+    )
+    for path, marker in sub2:
+        if not path.is_file() or marker not in path.read_text():
+            raise RuntimeError(f"Packaged source does not carry SUB-2 {marker!r} in {path.name}.")
     _world_content_guard(src / "ARC3-Inference")
 
 
@@ -576,7 +586,9 @@ SUBMISSION_EDITS = (  # (label, base text, submission text): each base text must
         '    )\n'
         'print(f"taaf.kaggle: competition games verified: {len(actual_worlds)} unique ids", flush=True)\n',
     ),
-    ("concurrency", "bm.solver.concurrency = 1\n", f"bm.solver.concurrency = {CONCURRENCY}\n"),
+    ("concurrency", "bm.solver.concurrency = 1\n",
+     f"bm.solver.concurrency = {CONCURRENCY}\n"
+     "bm.solver.rest_on_controlled_stop = True  # SUB-2 D-3 (Director, 2026-10-07): free play, not an end\n"),
     ("receipt worlds", '    "worlds": actual_worlds,\n', '    "worlds": "COMPETITION",\n'),
     (
         "soft end",
@@ -626,6 +638,7 @@ def _rewrite_benchmark(bundle: Path, variant: Path) -> None:
     benchmark.solver.max_actions_per_game = MAX_ACTIONS
     benchmark.solver.max_runtime_s_per_game = float(MAX_RUNTIME_SECONDS)
     benchmark.solver.concurrency = CONCURRENCY
+    benchmark.solver.rest_on_controlled_stop = True  # SUB-2 D-3 (Director ruling 2026-10-07)
     benchmark.solver.save_request_logs = True
     _retarget_solver(benchmark.solver, bundle)
     with path.open("wb") as handle:
