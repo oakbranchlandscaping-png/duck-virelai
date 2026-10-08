@@ -94,3 +94,34 @@ The criteria are the dry run's: C-1 to C-7, R, I0, I2, I3, I5, I8, I11 and U-SRC
    The CLI 2.2.2 `-k` and `-v` options were checked against its `competitions submit -h`.
 
 — Claude, Alpha build seat (click line), 2026-10-08
+
+## Upload log (2026-10-08, Director's terminal)
+
+| Step | Result |
+|---|---|
+| Unpacked on the Mac | `kaggle/ring9-submission-v1` from `sub_v1/ring9-submission-v1.tar.gz`. The export went to `runs/_cowork_xfer/unify/export_419f4fd`, stamped `419f4fda8756…`. |
+| Mac verify (`main`'s verifier, `--source-export export_419f4fd`) | **9/9:** source manifest 230 files, package manifest 237, `src.zip` 221 files, output-cap encoding `server_default` on both sides, secret scan clean, 0 differences from the commit export |
+| Commit | `eac248f` on `ring9-unified`: this record and the amended packager, explicit paths, 2 files, +105 −1. Pushed `419f4fd..eac248f`. `main` fast-forwarded `419f4fd..eac248f` and pushed. The runtime source is unchanged, so the 627 floor stands. |
+| `kaggle datasets create -p kaggle/ring9-submission-v1/source-dataset -r skip` | 12 files uploaded: `src.zip` 968 KB, `source-manifest.json` 28 KB, `setup_commands.json` 10 KB, `checkpoint-preflight.json` 6 KB, and 8 small files. Private. |
+| `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-submission-v1` | `ready` |
+
+**CLI notes (expected):** "Skipping folder: src" (the source travels as `src.zip`), and the 2.0.0 version warning.
+
+| Step | Result |
+|---|---|
+| `kaggle kernels push -p kaggle/ring9-submission-v1/kernel` | `Kernel version 1 successfully pushed`. The save run (the rehearsal) is running at `stephenkaskin/taaf-virelai-ring9-submission-v1`. |
+
+**Next:**
+1. When the save run completes, download the output without the replay movies (CLI 2.2.2, `--file-pattern '^(?!movies/).*'`).
+2. Grade the rehearsal (§4).
+3. Submit version 1 only after the rehearsal passes, Sol's ls20 canary is graded, and the Kaggle Rules tab is checked.
+
+## Amendment under RULINGS_CONSOLIDATION_v1_2026-10-08 (Director-ratified 2026-10-08)
+
+Ruling 8 replaces the gate in §5 and in "Next" item 3. **Sol's ls20 canary is not a blocker.** The submission now gates on two things only:
+1. the rehearsal (save run, kernel version 1) passes §4;
+2. the Director confirms the Kaggle facts on the Rules tab: the runtime limit, submissions per day, and whether a failed rerun counts.
+
+Ruling 10 also applies. The rehearsal grade reads the run's logs and receipts against §4. No report compiler runs on the save-run output until the Director's 25 answer keys are committed.
+
+— Claude, Alpha build seat (click line), 2026-10-08
