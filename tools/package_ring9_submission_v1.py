@@ -85,7 +85,7 @@ if not re.fullmatch(r"[0-9a-f]{40}", SOURCE_COMMIT):
     raise SystemExit("Set VIRELAI_SOURCE_COMMIT to the full 40-character commit of the single tree.")
 REVISIONS = (
     "Ring 9 single tree: R9-R06 to R9-R24 (click) and N1 to N5.3 (NAV), merged 501a6e6, F1 fa9617b, "
-    "step 4' NAV record b04ad10..e8d1f92, SUB-1 d751a5b"
+    "step 4' NAV record b04ad10..e8d1f92, SUB-1 d751a5b, NAV cell-site targeting 4970953, SUB-2 a2200c2"
 )
 TEST_RESULTS = (
     f"Source commit {SOURCE_COMMIT} ({REVISIONS}).\n"
@@ -106,6 +106,14 @@ TEST_RESULTS = (
     "test_s2_run_deadline.py (soft end, per-game slice, action cap, request timeout), 2 + 5 passed.\n"
     "At d751a5b: Director-run Mac pytest 617 passed, 1 skipped; cloud Python 3.12 full suite on the "
     "d751a5b export: 617 passed, 1 skipped (618 collected; run in two parts after a session time limit).\n"
+    "NAV cell-site targeting (Sol, 4970953): G1 bearings compiled from recorded cell flow; G3 resolves each "
+    "roster identity to its current sites. At c5e8ff6: Director-run Mac pytest 619 passed, 1 skipped.\n"
+    "Submission dry run (d751a5b, 110 clones): machinery passed; D-1 ACTION7 unmapped, D-2 controller refusal "
+    "spin, D-3 controlled stops ended games (REVIEW_RING9_SUBMISSION_DRYRUN_V1_KAGGLE_2026-10-07).\n"
+    "SUB-2 (Claude, a2200c2): ACTION7 mapped; a stalled controller rests the level in play after 3 turns; idle "
+    "back-off; in submission mode a controlled stop rests the level in free play once (Director ruling D-3, "
+    "2026-10-07). 8 fail-first tests. Cloud full suite 627 passed, 1 skipped; Director-run Mac pytest at the "
+    "same source 627 passed, 1 skipped. 419f4fd adds documents only.\n"
 )
 TEST_RESULTS += (
     "Self-hosted dependencies (v2): tools/kaggle_kit committed 86fa9ed, kit tests 6 passed on the Mac. "
