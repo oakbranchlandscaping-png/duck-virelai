@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import os
 import queue
 import signal
@@ -12,10 +13,13 @@ import tempfile
 import threading
 import textwrap
 import time
+import traceback
 from typing import Any, Callable
 
 from inference.utils import segmentation as _segmentation
 from inference.utils.grid_utils import ARC_COLOR_CHARS
+
+log = logging.getLogger(__name__)
 
 
 _SANDBOX_BOOTSTRAP = textwrap.dedent(
@@ -441,6 +445,14 @@ def _sanitize_host_error_text(text: str) -> str:
     return "Sandbox process exited unexpectedly."
 
 
+def _hidden_error(where: str, exc: BaseException, shown: str) -> str:
+    """SUB-3: log what the host hides from Duck (type, message, raising line), then return Duck's text."""
+    frame = traceback.extract_tb(exc.__traceback__)[-1] if exc.__traceback__ else None
+    site = f" at {os.path.basename(frame.filename)}:{frame.lineno}" if frame is not None else ""
+    log.warning("sandbox host hid %s: %s: %s%s", where, exc.__class__.__name__, exc, site)
+    return shown
+
+
 def _sandbox_env() -> dict[str, str]:
     return {
         "PYTHONUNBUFFERED": "1",
@@ -587,7 +599,7 @@ def run_sandboxed_python(
                     error = (
                         str(exc)
                         if exc.__class__.__name__ == "ControllerContractError"
-                        else "action failed in sandbox host."
+                        else _hidden_error("action", exc, "action failed in sandbox host.")
                     )
                     _send_json_line(
                         process.stdin,
@@ -633,12 +645,12 @@ def run_sandboxed_python(
                     continue
                 try:
                     query_result = virelai_handler(operation, dict(parameters))
-                except Exception:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     _send_json_line(
                         process.stdin,
                         {
                             "type": "virelai_error",
-                            "error": "Virelai query failed in sandbox host.",
+                            "error": _hidden_error(f"virelai('{operation}')", exc, "Virelai query failed in sandbox host."),
                         },
                     )
                     continue

@@ -23,6 +23,8 @@ packages are built from `main`. Current floor: **619 passed, 1 skipped** at `c5e
 Sections 2, 5 and 10 below are kept as they stood on their dates; where they disagree with the documents above,
 the documents above govern. The dated callouts that follow are the running log, newest first.
 
+> **2026-10-08 · Claude Alpha (click) · `eac248f`, `5d0120d` — signed.** Touched: `UPLOAD_STATUS_RING9_SUBMISSION_v1_2026-10-08.md` (kernel push logged; gate amended under rulings 8 and 10), the ratification documents committed (`RULINGS_CONSOLIDATION_v1`, Directive v3, chamber briefs, `THESIS_v1`, `BUILD_PLAN_PAPER_EVIDENCE_v1`). No runtime files.
+
 > **2026-10-06/07 THE SINGLE TREE: MERGE, SUBMISSION MODE, NAV CELL-SITE REPAIR, LEARN-TO-WIN SLICE (Claude and
 > Sol, Alpha build seats) — signed.** Sol merged the two Ring 9 lines (`501a6e6`); Claude reviewed it
 > (`REVIEW_RING9_UNIFICATION_v1`) and F1 was fixed (`fa9617b`); the Director ruled first-witness CLICK G3 (F2a), keep

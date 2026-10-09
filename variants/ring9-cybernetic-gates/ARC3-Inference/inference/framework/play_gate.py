@@ -26,6 +26,7 @@ from typing import Any, Mapping, Sequence
 from inference.framework.cybernetic_targeting import GateAssessment, GoalContract
 from inference.framework.g4_relations import masked_address, masked_changes
 from inference.framework.masked_world_state import grids_from_probe_outcome
+from inference.framework.probe_evidence import EVIDENCE_SCHEMA, compact_probe_outcome
 from inference.framework.virelai_gates import (
     LAW_GATE_ID, PLAY_GATE_ID, RELATION_GATE_ID, SCHEMA_VERSION, GateContractError, ProbeEnvelope, _canonical,
 )
@@ -72,6 +73,13 @@ def rest_in_play(machine: Any, reason: str) -> None:
     if play.forced is None:
         play.forced = reason
         play.revision += 1
+
+
+def _event_outcome(outcome: Mapping[str, Any]) -> dict[str, Any]:
+    """SUB-3: the prompt-facing copy of a free-play outcome, compacted as every gate compacts it."""
+    if outcome.get("schema") == EVIDENCE_SCHEMA and "changed_cells" in outcome:
+        return compact_probe_outcome(outcome)
+    return dict(outcome)
 
 
 def play_contract() -> GoalContract:
@@ -179,7 +187,7 @@ class PlayTarget:
         }
         self._events.append(event)
         self.revision += 1
-        return event
+        return {**event, "outcome": _event_outcome(outcome)}  # SUB-3: the gate-event contract; kept off the snapshot
 
     def submit_answer(self, raw: Mapping[str, Any]) -> Any:
         raise GateContractError("Play takes no gate answer: act with virelai('next_probe').")
