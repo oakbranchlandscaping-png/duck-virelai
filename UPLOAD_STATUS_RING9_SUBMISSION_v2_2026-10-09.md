@@ -89,4 +89,9 @@ The criteria are the v1 set, with these changes:
 |---|---|
 | Unpack on the Mac | `kaggle/ring9-submission-v2` from `sub_v2/ring9-submission-v2.tar.gz`. The export went to `runs/_cowork_xfer/unify/export_fc152e6`, stamped `fc152e6e581d…`. |
 | Mac verify (`main`'s verifier, `--source-export export_fc152e6`) | **9/9.** Source manifest 230 files; package manifest 237; `src.zip` 221 files; output-cap encoding `server_default` on both sides; secret scan clean; 0 differences from the commit export. |
+| Commit | `e917f75` on `ring9-unified`: this record and the amended packager, staged by explicit paths (2 files, +96 −2). Pushed `fc152e6..e917f75`; `main` fast-forwarded to `e917f75` and pushed. The runtime source is unchanged, so the 630 floor stands. |
+| `kaggle datasets create -p kaggle/ring9-submission-v2/source-dataset -r skip` | 12 files uploaded: `src.zip` 968 KB, `source-manifest.json` 28 KB, `setup_commands.json` 10 KB, `checkpoint-preflight.json` 6 KB, and 8 small files. Private. |
+| `kaggle datasets status stephenkaskin/taaf-duck-virelai-ring9-submission-v2` | `ready` |
+
+**CLI notes (expected):** "Skipping folder: src", because the source travels as `src.zip`; and the version warning from CLI 2.0.0.
 
