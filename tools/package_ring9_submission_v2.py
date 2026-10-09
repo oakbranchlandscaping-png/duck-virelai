@@ -91,7 +91,7 @@ if not re.fullmatch(r"[0-9a-f]{40}", SOURCE_COMMIT):
     raise SystemExit("Set VIRELAI_SOURCE_COMMIT to the full 40-character commit of the single tree.")
 REVISIONS = (
     "Ring 9 single tree: R9-R06 to R9-R24 (click) and N1 to N5.3 (NAV), merged 501a6e6, F1 fa9617b, "
-    "step 4' NAV record b04ad10..e8d1f92, SUB-1 d751a5b, NAV cell-site targeting 4970953, SUB-2 a2200c2, SUB-3 (free-play outcome)"
+    "step 4' NAV record b04ad10..e8d1f92, SUB-1 d751a5b, NAV cell-site targeting 4970953, SUB-2 a2200c2, SUB-3 fc152e6"
 )
 TEST_RESULTS = (
     f"Source commit {SOURCE_COMMIT} ({REVISIONS}).\n"
@@ -126,7 +126,9 @@ TEST_RESULTS = (
     "(685 of 685; the play gate's event had no outcome).\n"
     "SUB-3 (Claude, 2026-10-09): the play gate's event carries its compacted outcome; the sandbox host logs the "
     "type, message and raising line of any error it hides. 3 fail-first tests "
-    "(test_sub3_free_play_outcome.py) on the real tool path.\n"
+    "(test_sub3_free_play_outcome.py) on the real tool path. Cloud full suite 630 passed, 1 skipped; "
+    "Director-run Mac pytest at fc152e6 630 passed, 1 skipped (another seat's uncommitted "
+    "test_physics_grammar_contract.py ignored).\n"
 )
 TEST_RESULTS += (
     "Self-hosted dependencies (v2): tools/kaggle_kit committed 86fa9ed, kit tests 6 passed on the Mac. "
