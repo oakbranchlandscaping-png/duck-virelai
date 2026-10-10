@@ -7046,14 +7046,11 @@ class CyberneticGateMachine:
                     if pointer_exit
                     else "Explain what the ego is and how control affects it."
                 ),
-                "action_laws": {
-                    action: (
-                        "selects the supplied grid coordinate"
-                        if pointer_exit
-                        else "Describe its observed transformation."
-                    )
-                    for action in available_actions
-                },
+                "action_laws": (
+                    _pointer_action_laws(available_actions)
+                    if pointer_exit
+                    else {action: "Describe its observed transformation." for action in available_actions}
+                ),
                 "conditions": [],
                 "constraints": [],
                 "evidence_refs": evidence_refs,
@@ -7067,7 +7064,7 @@ class CyberneticGateMachine:
                     if pointer_exit
                     else "State what future observation would refute this model."
                 ),
-                "limitations": [],
+                "limitations": _pointer_open_actions(available_actions) if pointer_exit else [],
             }
             if pointer_exit:
                 # The template already carries every required pointer field;
@@ -7076,7 +7073,8 @@ class CyberneticGateMachine:
                 view["answer_contract"].pop("evidence_refs", None)
                 view["answer_contract"].pop("next_target", None)
                 for optional in ("conditions", "constraints", "limitations"):
-                    view["answer_template"].pop(optional, None)
+                    if not view["answer_template"].get(optional):  # WO-L1a: open actions stay visible
+                        view["answer_template"].pop(optional, None)
             if not pointer_exit:
                 demonstration_action = available_actions[0] if available_actions else "ACTION1"
                 view["answer_contract"].update({
@@ -7356,6 +7354,19 @@ def _normalize_novel_prediction(raw: Any) -> dict[str, Any]:
             expected["displacement"] = [displacement["row"], displacement["col"]]
         prediction["expected_parameters"] = expected
     return prediction
+
+
+def _pointer_action_laws(available_actions: Sequence[str]) -> dict[str, str]:
+    """WO-L1a: the interface axiom explains ACTION6 alone (what submit_answer and the EgoLaw accept)."""
+    return {"ACTION6": "selects the supplied grid coordinate"} if "ACTION6" in available_actions else {}
+
+
+def _pointer_open_actions(available_actions: Sequence[str]) -> list[str]:
+    """WO-L1a: every other available action stays an open question for later gates, with no coordinate meaning."""
+    return [
+        f"{action}: not explained by the interface axiom; its effect is an open obligation for later gates"
+        for action in available_actions if action != "ACTION6"
+    ]
 
 
 def _answer_from_mapping(
