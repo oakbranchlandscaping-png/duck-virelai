@@ -1,10 +1,9 @@
 # Rulings: consolidation of the build (v4, 2026-10-10)
 
 **Type:** `RULINGS_CONSOLIDATION` · **v4** · **2026-10-10**
-**Status:** recorded by Claude, acting with Apex authority granted by the Director on 2026-10-10. Ruling 22 is **Director-ratified in the Director's own wording** (2026-10-10). It was proposed by Apex and revised by the Director before ratification.
-**Supersedes:** v3 (same day). v1–v3 stay in place as history. Rulings 1–21 stand unchanged. v4 adds ruling 22 only.
-**Not settled here:** the proposed rulings 23 (who owns the G3 lifecycle crash) and 24 (SUB-4, free-play restart). The Director ratified 22 only, and those two are separate decisions.
-**Declared conflict.** As in v3, Apex is ruling on its own build seat's proposals. Ruling 22 takes effect on the Director's ratification.
+**Status:** recorded by Claude, acting with Apex authority granted by the Director on 2026-10-10. Rulings 22, 23 and 24 are **Director-ratified in the Director's own wording** (2026-10-10). Each was proposed by Apex and revised by the Director before ratification.
+**Supersedes:** v3 (same day). v1–v3 stay in place as history. Rulings 1–21 stand unchanged. v4 adds rulings 22–24. Each was ratified as a separate decision, and the Director revised the wording of each before ratifying it.
+**Declared conflict.** As in v3, Apex is ruling on its own build seat's proposals. Rulings 22–24 take effect on the Director's ratification.
 
 ---
 
@@ -36,6 +35,53 @@
        - a model choice away from the head of the roster;
        - the controller's choice when Duck's turn times out.
 
+
+23. **The G3 lifecycle failures belong to the NAV line (release blocker).**
+
+    **The two failures** (v2 rehearsal), both on the NAV G3 path:
+    - `k008` crashed: `G3-CLOSED -> AMBIGUOUS` for E0001.
+    - `k013`: the hidden `gate_answer` error `G3-CLOSED -> PRESUMED_UNREACHABLE`, at `lever_lifecycle.py:108`.
+
+    **Owner:** Sol, as a release blocker, with the click line consulted, because the lifecycle table is shared.
+
+    **The fix:**
+    - Reproduce both sequences from the saved records.
+    - **Fix the premature close or the reassessment path at its source.** The investigation decides which is wrong.
+    - Preserve the existing lifecycle invariants, and **do not widen the allowed-transition table.**
+
+    **Exit:** replays of `k008` and of the hidden reachability error complete with no crash and no false lever certification.
+
+    **Return:** if Sol's slice cannot take it by 13 October, it returns to Apex.
+
+24. **SUB-4: a free-play loop restarts Duck instead of ending the game (submission mode only).**
+
+    **Owner:** Claude Alpha.
+
+    **The behaviour:**
+    - **What it resets:** Duck's conversation context only. The card is rebuilt from the same persistent world record and library. Gate dispositions and GATED/FREE_PLAY receipts are preserved.
+    - **What triggers it:** only a controlled no-progress loop or contract loop in `PLAY-NORMAL`, capped at 3 per level. A single refused action is not a restart.
+    - **When:** only when enough world time remains for another turn.
+    - **Each restart records:** its reason, the remaining time, the restart number, and whether Duck then executed an action.
+    - **Where:** rehearsed through the submission-mode path. Outside submission mode the existing behaviour is kept.
+
+    **Graded on:**
+    - useful actions after a restart;
+    - time remaining;
+    - restart counts.
+
+    **Priority:** behind ruling 23 and the library path.
+
+    **The evidence, corrected when the ruling was recorded.** `final_wallclock_seconds` in `benchmark.json` counts from the shared launch time (every game's `started_at` is 09:21:56), not from each game's own start. The slot schedule, checked against each game's first action, gives the time each game actually ran:
+
+    | Game | Ran for | Recoverable slice time |
+    |---|---|---|
+    | `k005` | about 2,184 s | about 366 s |
+    | `k013` | about 2,575 s | none (reached the slice limit) |
+    | `k019` | about 1,976 s | about 574 s |
+    | `k026` | about 773 s | about 1,777 s |
+
+    Three of the four games, not one, left slice time unused.
+
 ---
 
 **Evidence on record when 22 was ratified** (the v2 rehearsal, `REPORT_RING9_SUBMISSION_V2_REHEARSAL_2026-10-10.md`, and its turn ledgers):
@@ -50,4 +96,4 @@
 
 **Not established when 22 was ratified:** who made the move at each level clear. No claim about which actor produced the clears rests on this ruling.
 
-— Claude, Apex authority (granted by the Director 2026-10-10), signed. Ruling 22 ratified by the Director in his wording, 2026-10-10.
+— Claude, Apex authority (granted by the Director 2026-10-10), signed. Rulings 22–24 ratified by the Director in his wording, 2026-10-10.
