@@ -2865,18 +2865,30 @@ class _LeverTarget:
                 lifecycle = journal.entities[entity_id]
             if lifecycle.state == "NO_RESPONSE_YET":
                 journal.close(entity_id, evidence_ref=ref, actor="NAV_TERRAIN_MAP")
+                self._bounded_ambiguities.pop(entity_id, None)  # the close supersedes a CLICK bound
 
     def _advance_accounted_terrain_rows(self, candidates: Sequence[Mapping[str, Any]]) -> None:
-        """Skip current roster rows whose terrain interaction already typed them."""
+        """Skip current roster rows whose terrain interaction already typed them, or whose G3 work is settled."""
         ledger = self._ensure_entity_ledger()
         while self._target_index < len(candidates):
             entity_id = ledger.entity_for_member(str(candidates[self._target_index]["member_id"]))
-            if entity_id not in self._terrain_roles:
+            if entity_id not in self._terrain_roles and not self._g3_settled(entity_id):
                 break
             self._target_index += 1
             self._navigation_steps = 0
             self._nav_route_evidence.clear()
             self._last_nav_plan = None
+
+    def _close_completed_null(self, entity_id: str, *, evidence_ref: str) -> None:
+        """Close a scoped-null row, unless a HYBRID world's NAV pass still owes it body contact (G3 lifecycle slice)."""
+        if not (self._phase == "CLICK" and self._world_type == "HYBRID"):
+            self.lifecycle_journal.close(entity_id, evidence_ref=evidence_ref)
+
+    def _g3_settled(self, entity_id: str | None) -> bool:
+        """The row's G3 work is done (G3-CLOSED or G4-READY), so NAV must not pursue it again (G3 lifecycle slice)."""
+        journal = self.lifecycle_journal
+        lifecycle = None if journal is None or not entity_id else journal.entities.get(entity_id)
+        return lifecycle is not None and lifecycle.state in {"G3-CLOSED", "G4-READY"}
 
     def _bound_ambiguity(
         self,
@@ -4215,7 +4227,7 @@ class _LeverTarget:
                 # The target-specific contact has completed.  Close this row
                 # now; waiting for the whole roster made finished targets look
                 # perpetually in progress and blocked reliable handoff.
-                journal.close(entity_id, evidence_ref=evidence_id)
+                self._close_completed_null(entity_id, evidence_ref=evidence_id)
             elif entity_id and attribution.disposition in {"AMBIGUOUS_EGO_MASKED", "UNRESOLVED_ATTRIBUTION"}:
                 journal.transition(
                     entity_id, "AMBIGUOUS", evidence_ref=evidence_id, actor="G3_ATTRIBUTOR", reason=attribution.disposition,
