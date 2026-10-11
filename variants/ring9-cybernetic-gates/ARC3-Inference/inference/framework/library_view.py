@@ -122,7 +122,12 @@ def _current(model: Mapping[str, Any]) -> Mapping[str, Any]:
     return next((level for level in levels if level["state"] == "OPEN"), levels[-1])
 
 
-def _goal(level: Mapping[str, Any]) -> dict[str, Any]:
+def _goal(level: Mapping[str, Any], target: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The digest's goal: the agenda's selected question when the live view supplies it (Sol's review,
+    finding 1: the card, the digest and the capability name one question), else the gate in progress."""
+    if target is not None:
+        return {"question_id": target.get("question_id"), "gate_id": target.get("gate_id"),
+                "question": str(target.get("question") or ""), "level": target.get("level", level["level"])}
     gates = level["certified"]["gates"]
     active = next((gate["gate_id"] for gate in gates if gate["disposition"] == "IN_PROGRESS"), None)
     if active is None:
@@ -224,10 +229,11 @@ def _objects(level: Mapping[str, Any]) -> dict[str, int]:
 DIGEST_TIERS = ((8, 3, 6, 6, 6), (6, 2, 4, 4, 6), (5, 1, 3, 3, 3), (4, 0, 2, 2, 3), (3, 0, 0, 1, 1), (2, 0, 0, 0, 1))
 
 
-def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int]) -> dict[str, Any]:
+def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int],
+               target: Mapping[str, Any] | None = None) -> dict[str, Any]:
     groups, subjects, id_limit, earlier, handles = tier
     level = _current(model)
-    goal = _goal(level)
+    goal = _goal(level, target)
     gap_groups = _gap_groups(level["gaps"], goal["gate_id"])
     shown = [
         _clip_text(f"{group['reason']} x{group['count']}: {group['question']}"
@@ -256,9 +262,9 @@ def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int]) -
     }
 
 
-def _minimal_digest(model: Mapping[str, Any]) -> dict[str, Any]:
+def _minimal_digest(model: Mapping[str, Any], target: Mapping[str, Any] | None = None) -> dict[str, Any]:
     level = _current(model)
-    goal = _goal(level)
+    goal = _goal(level, target)
     return {"schema": DIGEST_SCHEMA, "revision": model["content_sha256"][:12],
             "goal": {**goal, "question": _clip_text(goal["question"], 160)},
             "open_gaps": {"total": len(level["gaps"])}, "accounting": {"status": level["accounting"]["status"]},
@@ -269,25 +275,29 @@ def _render(digest: Mapping[str, Any]) -> str:
     return HEADER + json.dumps(digest, sort_keys=True, default=str)
 
 
-def library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET) -> dict[str, Any]:
+def library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET, *,
+                   target: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The compact view: goal, certified findings, typed open gaps, retrieval handles.
 
     Its whole rendered section, header included, fits ``budget``: each tier shows less, the last keeps only
     the goal, the counts and one handle. A budget too small even for that is refused, never exceeded.
+    ``target`` is the gate agenda's selected question (``library_agenda.selected_target``); without it the
+    goal is the gate in progress, as for a saved record read with no live machine.
     """
     validate(model)
     for tier in DIGEST_TIERS:
-        digest = _digest_at(model, tier)
+        digest = _digest_at(model, tier, target)
         if len(_render(digest)) <= budget:
             return digest
-    digest = _minimal_digest(model)
+    digest = _minimal_digest(model, target)
     if len(_render(digest)) > budget:
         raise ValueError(f"a digest budget of {budget} characters cannot hold the goal and the counts")
     return digest
 
 
-def render_library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET) -> str:
-    return _render(library_digest(model, budget))
+def render_library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET, *,
+                          target: Mapping[str, Any] | None = None) -> str:
+    return _render(library_digest(model, budget, target=target))
 
 
 # ---- retrieval -------------------------------------------------------------------------------------

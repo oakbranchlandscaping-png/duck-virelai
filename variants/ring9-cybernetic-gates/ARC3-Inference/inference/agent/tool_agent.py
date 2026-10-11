@@ -1237,10 +1237,11 @@ def _library_digest_section(machine: Any) -> str:
     It has its own budget (``library_view.DIGEST_BUDGET``) beside the card's. It never raises: a census
     failure leaves the card, which stays binding, and says the library is unavailable this turn.
     """
+    from inference.framework.library_agenda import selected_target
     from inference.framework.library_view import live_model, render_library_digest
 
     try:
-        return "\n" + render_library_digest(live_model(machine))
+        return "\n" + render_library_digest(live_model(machine), target=selected_target(machine))
     except Exception as exc:  # noqa: BLE001 - the library is a read view; it never costs Duck the turn
         return f"\nVIRELAI LIBRARY unavailable this turn ({type(exc).__name__}); the card above is binding."
 

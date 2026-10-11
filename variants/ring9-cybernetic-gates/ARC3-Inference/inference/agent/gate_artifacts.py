@@ -49,6 +49,20 @@ def _g3_target_items(gate_machine: Any) -> tuple[list[dict[str, Any]], Any]:
     return items, world_type
 
 
+def flush_g3_selection_events(state_path: Path, gate_machine: Any) -> None:
+    """WO-G3-DIRECTED (Sol's review, 2026-10-11): every G3 choice event (admitted, refused, handoff, coverage
+    resumed, stale, finished) is appended once to ``{stem}_g3_selection_events.jsonl``, so a rehearsal can
+    measure choices and declined handoffs, including those that executed no action."""
+    events = getattr(gate_machine, "g3_selection_events", None)
+    if not events or gate_machine.g3_selection_flushed >= len(events):
+        return
+    path = state_path.with_name(state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_g3_selection_events.jsonl"))
+    with path.open("a", encoding="utf-8") as handle:
+        for row in events[gate_machine.g3_selection_flushed:]:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+    gate_machine.g3_selection_flushed = len(events)
+
+
 def record_probe_outcome(
     state_path: Path,
     gate_machine: Any,
@@ -85,6 +99,7 @@ def record_probe_outcome(
     # Keep the lossless H2 outcome visible to the scoped verifier.
     # The gate compacts only the copy stored in its prompt-facing event.
     gate_event = gate_machine.record_outcome(gate_probe, full_outcome)
+    flush_g3_selection_events(state_path, gate_machine)
     full_outcome["evidence_id"] = gate_event["evidence_id"]
     event_path = state_path.with_name(
         state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_gate_events.jsonl")

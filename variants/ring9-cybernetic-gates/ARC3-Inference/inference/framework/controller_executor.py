@@ -118,10 +118,12 @@ def return_to_mu_if_stuck(machine: Any) -> str | None:
 
 def next_owned_step(
     machine: Any, *, refused: frozenset | set = frozenset(), rerun: Mapping[str, Any] | None = None,
+    g3_choice_handoff: bool = False,
 ) -> OwnedStep:
     """Who owns the next step, and, for the controller, exactly what it is.
 
     ``rerun`` is an extra run Duck asked for (D3): ``{"entity_id", "click", "left"}``.
+    ``g3_choice_handoff`` (WO-G3-DIRECTED, the live session only) offers Duck one bounded G3 choice per phase.
     """
     # G0 is metadata-derived in every world.  Test it before the world branch: the earlier NAV
     # dispatcher returned Duck here and accidentally bypassed the generic controller answer.
@@ -136,15 +138,18 @@ def next_owned_step(
         return _duck(machine, f"unsupported controller world type {world}")
     if machine.gate_id not in CONTROLLER_GATES:
         return _duck(machine, f"{machine.gate_id} needs judgment")
-    return _ordinary_step(machine, refused=refused, rerun=rerun)
+    return _ordinary_step(machine, refused=refused, rerun=rerun, g3_choice_handoff=g3_choice_handoff)
 
 
 def _ordinary_step(
     machine: Any, *, refused: frozenset | set = frozenset(),
-    rerun: Mapping[str, Any] | None = None,
+    rerun: Mapping[str, Any] | None = None, g3_choice_handoff: bool = False,
 ) -> OwnedStep:
     """Controller ownership shared by CLICK and world-independent exact capabilities."""
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
+    if g3_choice_handoff and capability is not None and _g3_choice_due(machine):
+        return _duck(machine, "G3 choice: several rows are eligible; choose one with "
+                              "virelai('next_probe', question_id=...), or the controller takes the coverage head")
     if machine.gate_id in PREDICTION_GATES:
         return _relations_step(machine, capability, refused)
     view = machine.gate_view()
@@ -161,6 +166,20 @@ def _ordinary_step(
         CONTROLLER, machine.gate_id, reason, ACTION, action=action,
         probe_token=str(capability["probe_token"]),
     )
+
+
+def _g3_choice_due(machine: Any) -> bool:
+    """Sol, 2026-10-11: at most one bounded handoff per G3 phase per level, only for a genuine choice."""
+    from inference.framework import g3_selection
+
+    if machine.gate_id != "G3-LEVERS":
+        return False
+    adapter = machine._adapters["G3-LEVERS"]
+    if not g3_selection.choice_handoff_due(adapter):
+        g3_selection.note_coverage_resumed(adapter)
+        return False
+    g3_selection.note_choice_handoff(adapter)
+    return True
 
 
 def _nav_step(

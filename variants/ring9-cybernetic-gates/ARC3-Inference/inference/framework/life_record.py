@@ -33,6 +33,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_capability_secret": GAME, "_consumed_capabilities": GAME, "protocol": GAME,
         "_legacy_confirmation_replay": GAME,
         "transition_index": GAME, "lives": GAME, "levels": GAME, "level_censuses": GAME, "_adapters": LEVEL, "_issued_capabilities": LEVEL,
+        "g3_selection_events": GAME, "g3_selection_flushed": GAME,
         "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL, "carry": LEVEL,
         "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL, "mu": LEVEL, "duck_budget": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
@@ -62,6 +63,8 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_terrain_palette": TRANSIENT, "_terrain_hypotheses": TRANSIENT,
         "_pending_confirmation": TRANSIENT, "_pending_dossier": TRANSIENT,
         "_pending_reachability": TRANSIENT,
+        # WO-G3-DIRECTED (2026-10-11): a choice is in flight until its row finishes; what was chosen stays.
+        "_selection": TRANSIENT, "_chosen_members": LEVEL, "_selection_events": LEVEL, "_choice_handoffs": LEVEL,
     },
     "_ReactionTarget": {
         "machine": GAME, "revision": LEVEL, "_anatomies": LEVEL, "_answers": LEVEL, "_ordered_entities": LEVEL,

@@ -44,7 +44,7 @@ class ModelCalled(AssertionError):
 class Run:
     """The production agent on the ft09 world, driven the way ``solver.play`` drives it."""
 
-    def __init__(self, tmp_path: Path, monkeypatch) -> None:
+    def __init__(self, tmp_path: Path, monkeypatch, *, g3_choice_handoff: bool = False) -> None:
         self.world = Ft09World()
         self.state_path = tmp_path / f"ft09_{RUNTIME_STATE_FILENAME}"
         self.history: list[HistoryEntry] = []
@@ -57,6 +57,10 @@ class Run:
         )
         monkeypatch.setattr(self.agent, "_ensure_session", lambda _path: None)
         monkeypatch.setattr(self.agent, "_chat_completion", self._model)
+        # WO-G3-DIRECTED (Sol, 2026-10-11, D3): the live session offers Duck one bounded G3 choice per phase.
+        # These tests pin ruling D2's controller-only closure, so the fixture turns that handoff off; the
+        # handoff run is pinned separately below.
+        self.agent._controller.g3_choice_handoff = g3_choice_handoff
 
     def _frame(self) -> Frame:
         return Frame(grid=tuple(tuple(row) for row in self.world.grid), step=self.world.transition_id, level=1)
@@ -308,3 +312,18 @@ def test_a_nearly_spent_counter_wakes_duck(monkeypatch):
     monkeypatch.setattr(executor, "world_budgets", lambda _machine: {"counter_ticks_remaining": 2})
     assert "2 counter ticks left" in wake_reason(machine, {}, {}, {"ticks": 3})
     assert wake_reason(machine, {}, {}, {"ticks": 2}) is None  # a budget wake fires once, on crossing
+
+
+def test_with_the_live_g3_choice_handoff_the_first_model_call_is_that_one_choice(tmp_path):
+    """WO-G3-DIRECTED (D3): the live default hands Duck exactly one G3 choice per phase; nothing before it."""
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        run = Run(tmp_path, monkeypatch, g3_choice_handoff=True)
+        run.until_duck()
+        machine = run.agent._gate_machine
+        assert machine.gate_id == "G3-LEVERS" and len(run.model_prompts) == 1
+        assert "G3 choice" in run.model_prompts[0]
+        assert [event["event"] for event in machine._adapters["G3-LEVERS"]._selection_events] == ["HANDOFF"]
+        assert len(run.env_calls) < 67 and all(len(call["actions"]) == 1 for call in run.env_calls)
+    finally:
+        monkeypatch.undo()

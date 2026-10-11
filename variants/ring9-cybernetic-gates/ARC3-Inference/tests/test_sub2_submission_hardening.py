@@ -57,7 +57,7 @@ class _Probe:
 
 
 def _stub_executor(monkeypatch) -> None:
-    def next_owned_step(machine, *, refused=frozenset(), rerun=None):
+    def next_owned_step(machine, *, refused=frozenset(), rerun=None, g3_choice_handoff=False):
         if machine.gate_id == PLAY:
             return OwnedStep(owner=DUCK, gate_id=PLAY, reason="normal play")
         return OwnedStep(owner="CONTROLLER", gate_id=machine.gate_id, reason="bound PROBE action",

@@ -37,6 +37,7 @@ class ControllerSession:
     last_raw: dict[str, Any] = field(default_factory=dict)  # the last step payload (budgets)
     rerun: dict[str, Any] | None = None  # an extra run Duck asked for (D3)
     stalled: int = 0  # SUB-2 D-2: consecutive controller turns that executed no action
+    g3_choice_handoff: bool = True  # WO-G3-DIRECTED: one bounded G3 choice per phase per level for Duck
 
     def take_handoff(self) -> str:
         text, self.handoff = self.handoff, ""
@@ -54,7 +55,20 @@ class ControllerSession:
 def run_controller_turn(
     agent: Any, state_path: Path, action_num: int, analysis_step: int | None, analyzer_log: Path,
 ) -> Any | None:
-    """Take the controller's step, or return None to let Duck take it."""
+    """Take the controller's step, or return None to let Duck take it; then write any G3 choice events."""
+    try:
+        return _run_controller_turn(agent, state_path, action_num, analysis_step, analyzer_log)
+    finally:
+        machine = getattr(agent, "_gate_machine", None)
+        if machine is not None:
+            from inference.agent.gate_artifacts import flush_g3_selection_events
+
+            flush_g3_selection_events(state_path, machine)
+
+
+def _run_controller_turn(
+    agent: Any, state_path: Path, action_num: int, analysis_step: int | None, analyzer_log: Path,
+) -> Any | None:
     session: ControllerSession = agent._controller
     if not session.enabled or agent._step_env_callback is None:
         return None
@@ -74,7 +88,8 @@ def run_controller_turn(
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
     for _ in range(MAX_ANSWERS_PER_TURN):
-        step = next_owned_step(machine, refused=session.refused, rerun=session.rerun)
+        step = next_owned_step(machine, refused=session.refused, rerun=session.rerun,
+                               g3_choice_handoff=session.g3_choice_handoff)
         if session.wake is not None:
             wake, session.wake = session.wake, None
             if step.owner == DUCK:

@@ -576,9 +576,12 @@ def build_card(machine: Any) -> Card:
     slot_chars = {name: _chars(value) for name, value in slots.items() if value}
     over = sorted(name for name, size in slot_chars.items() if size > SLOT_BUDGETS[name])
     template = slots.pop("template")
+    from inference.framework.library_agenda import selected_question
+
     payload: dict[str, Any] = {
         "schema": SCHEMA,
         "gate_id": gate_id,
+        "question_id": selected_question(machine),  # WO-G3-DIRECTED: the question this card's action serves
         "revision": view.get("revision"),
         "status": view.get("status"),
         "next_operation": next_operation,

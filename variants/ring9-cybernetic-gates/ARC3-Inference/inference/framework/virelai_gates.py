@@ -76,7 +76,7 @@ from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
 from inference.framework.mu_bucket import MuBucket
 from inference.framework.g3_inventory import check_inventory_claims
-from inference.framework import mu_return
+from inference.framework import g3_selection, mu_return
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
@@ -2532,6 +2532,11 @@ class _LeverTarget:
         self._repeat_readings: dict[str, dict[str, Any]] = {}
         self._mu_revisit: list[str] = []
         self._deferred_observations: list[dict[str, Any]] = []
+        # WO-G3-DIRECTED: a choice among selectable rows binds the next probe (Sol, 2026-10-11).
+        self._selection: dict[str, Any] | None = None
+        self._chosen_members: set[str] = set()
+        self._selection_events: list[dict[str, Any]] = []
+        self._choice_handoffs: set[str] = set()
         self.entity_ledger: EntityLedger | None = None
         self.lifecycle_journal: LifecycleJournal | None = None
         self._observed_transition_ids: set[int] = set()
@@ -3470,6 +3475,10 @@ class _LeverTarget:
             terrain_context = self._terrain_context()
             self._classify_terrain_rows(terrain_context)
             self._advance_accounted_terrain_rows(candidates)
+        chosen = g3_selection.selected_click_probe(self, candidates)  # WO-G3-DIRECTED: an admitted choice
+        if chosen is not None:
+            return chosen
+        g3_selection.advance_past_chosen_rows(self, candidates)
         if self._phase == "CLICK" and self._target_index >= len(candidates):
             if self._world_type == "HYBRID":
                 self._phase = "NAV"
@@ -3483,7 +3492,25 @@ class _LeverTarget:
             self._close_scoped_null_entities()
             self._complete_reason = "NAV_ENUMERATION_COMPLETE"
             return None
-        frontier_item = candidates[self._target_index]
+        target = self._probe_target(candidates[self._target_index], self._target_index)
+        if self._phase == "CLICK":
+            return self._click_probe(f"{LEVER_GATE_ID}:CLICK:{self._target_index + 1}", target)
+        return ProbeEnvelope(
+            probe_id=f"{LEVER_GATE_ID}:NAV:{self._target_index + 1}:{self._navigation_steps + 1}",
+            gate_id=LEVER_GATE_ID,
+            purpose="PILOT_TO_LEVER_CONTACT",
+            question="Pilot the demonstrated ego toward the ranked entity; declare approach or contact attempt.",
+            actions=(),
+            live_alternatives=("approach continues", "target responds on contact", "contact refused", "boundary during pursuit", "pilot budget exhausted"),
+            outcome_partition=("approach", "contact response", "refused contact", "boundary event", "budget exhausted"),
+            declared_at_transition=self.machine.observed_through_step,
+            admissible_actions=tuple(item.action for item in self.machine.ego.affordances if _action_number(item.action) in {1, 2, 3, 4, 5}),
+            target=target,
+        )
+
+    def _probe_target(self, frontier_item: Mapping[str, Any], position: int) -> dict[str, Any]:
+        """The target of a G3 probe at roster ``position`` (moved unchanged out of ``next_probe``)."""
+        ledger = self._ensure_entity_ledger()
         entity_id = ledger.entity_for_member(frontier_item["member_id"])
         hypothesis = ledger.entities.get(str(entity_id or ""))
         current_sighting = None if hypothesis is None else hypothesis.current
@@ -3499,7 +3526,7 @@ class _LeverTarget:
             min(current_rows), min(current_cols), max(current_rows), max(current_cols)
         )
         target = {
-            "rank": self._target_index + 1,
+            "rank": position + 1,
             "eligible_rank": frontier_item["eligible_rank"],
             "source_rank": frontier_item["source_rank"],
             "member_id": frontier_item["member_id"],
@@ -3519,32 +3546,24 @@ class _LeverTarget:
             "shape_family": frontier_item["shape_family"],
             "mask_relation": frontier_item["mask_relation"],
         }
-        if self._phase == "CLICK":
-            return ProbeEnvelope(
-                probe_id=f"{LEVER_GATE_ID}:CLICK:{self._target_index + 1}",
-                gate_id=LEVER_GATE_ID,
-                purpose="RANKED_CLICK_TARGET",
-                question="Does clicking this ranked entity produce an attributable local or remote response?",
-                actions=({
-                    "action": "ACTION6",
-                    "row": current_anchor[0],
-                    "col": current_anchor[1],
-                },),
-                live_alternatives=("local target response", "remote response", "counter-only change", "no visible response", "ambiguous ego effect"),
-                outcome_partition=("changed", "unchanged", "boundary event"),
-                declared_at_transition=self.machine.observed_through_step,
-                target=target,
-            )
+        return target
+
+    def _click_probe(self, probe_id: str, target: Mapping[str, Any]) -> ProbeEnvelope:
+        """The CLICK probe for ``target`` (moved unchanged out of ``next_probe``)."""
+        current_anchor = tuple(target["anchor"])
         return ProbeEnvelope(
-            probe_id=f"{LEVER_GATE_ID}:NAV:{self._target_index + 1}:{self._navigation_steps + 1}",
+            probe_id=probe_id,
             gate_id=LEVER_GATE_ID,
-            purpose="PILOT_TO_LEVER_CONTACT",
-            question="Pilot the demonstrated ego toward the ranked entity; declare approach or contact attempt.",
-            actions=(),
-            live_alternatives=("approach continues", "target responds on contact", "contact refused", "boundary during pursuit", "pilot budget exhausted"),
-            outcome_partition=("approach", "contact response", "refused contact", "boundary event", "budget exhausted"),
+            purpose="RANKED_CLICK_TARGET",
+            question="Does clicking this ranked entity produce an attributable local or remote response?",
+            actions=({
+                "action": "ACTION6",
+                "row": current_anchor[0],
+                "col": current_anchor[1],
+            },),
+            live_alternatives=("local target response", "remote response", "counter-only change", "no visible response", "ambiguous ego effect"),
+            outcome_partition=("changed", "unchanged", "boundary event"),
             declared_at_transition=self.machine.observed_through_step,
-            admissible_actions=tuple(item.action for item in self.machine.ego.affordances if _action_number(item.action) in {1, 2, 3, 4, 5}),
             target=target,
         )
 
@@ -4094,7 +4113,7 @@ class _LeverTarget:
                 )
             self._pending_confirmation = None
             if advance_target:
-                self._target_index += 1
+                g3_selection.finish_target(self, target_member_id)
             self._navigation_steps = 0
         else:
             if entity_id and attribution.boundary_state:
@@ -4307,7 +4326,7 @@ class _LeverTarget:
                 }
             )
         ):
-            self._target_index += 1
+            g3_selection.finish_target(self, target_member_id)
         mu_return.after_g3_outcome(self, probe, event, lossless, scope.pre_action_owner_entity_id)
         event["scheduler"] = {
             "phase": self._phase,
@@ -4367,7 +4386,7 @@ class _LeverTarget:
                     entity_id, evidence_ref=required_refs[-1]
                 )
         self._pending_dossier = None
-        self._target_index += 1
+        g3_selection.finish_target(self, member_id)
         self._navigation_steps = 0
         self._nav_route_evidence.clear()
         self._last_nav_plan = None
@@ -6492,6 +6511,8 @@ class CyberneticGateMachine:
         self.lives = LifeRecord()  # lives, levels and the high-water transition (R9-R16)
         self.levels: list[dict[str, Any]] = []  # each finished level's frozen model (R9-R17)
         self.level_censuses: list[dict[str, Any]] = []  # WO-L2a H1: each ended level's census, check pending
+        self.g3_selection_events: list[dict[str, Any]] = []  # WO-G3-DIRECTED: every choice event, game-long
+        self.g3_selection_flushed = 0  # how many of them the run has written to disk
         self._capability_secret = secrets.token_bytes(32)
         self._consumed_capabilities: set[str] = set()
         # The record tier's in-memory index (DESIGN_VIRELAI_MEMORY_v1 §5.1): one sparse, lossless
@@ -6651,7 +6672,16 @@ class CyberneticGateMachine:
             }
         if probe.target is not None:
             capability["target"] = dict(probe.target)
+        from inference.framework.library_agenda import selected_question
+
+        capability["question_id"] = selected_question(self)  # the card, the agenda and the probe agree
         return capability
+
+    def select_g3_question(self, question_id: str, *, actor: str = "DUCK") -> dict[str, Any]:
+        """WO-G3-DIRECTED: admit a choice among G3's selectable rows; the next capability binds it."""
+        if self.gate_id != LEVER_GATE_ID:
+            raise GateContractError(f"G3 choice not admissible: the active gate is {self.gate_id}.")
+        return g3_selection.select(self._adapters[LEVER_GATE_ID], str(question_id), actor=str(actor))
 
     def validate_probe(
         self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]

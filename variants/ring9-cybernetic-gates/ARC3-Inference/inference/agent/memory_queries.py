@@ -65,6 +65,24 @@ def _library_query(machine: Any, parameters: dict[str, Any]) -> dict[str, Any]:
     return _reply("library", data, truncated=bool(data.get("truncated")))
 
 
+def _chosen_probe(agent: Any, state_path: Path, machine: Any, question_id: str) -> dict[str, Any]:
+    """``virelai('next_probe', question_id=Q)`` (WO-G3-DIRECTED): admit Duck's G3 choice, then return the freshly
+    bound capability. A refusal is the reply's error, with the current question; the coverage head is unchanged."""
+    from inference.framework.library_agenda import selected_question
+    from inference.framework.virelai_gates import GateContractError
+
+    from inference.agent.gate_artifacts import flush_g3_selection_events
+
+    try:
+        machine.select_g3_question(question_id, actor="DUCK")
+    except GateContractError as exc:
+        return _reply("next_probe", {**_refused_state(machine), "question_id": selected_question(machine)}, str(exc))
+    finally:
+        flush_g3_selection_events(state_path, machine)
+    capability = machine.next_probe_capability()
+    return _reply("next_probe", capability, None if capability is not None else "No probe is admissible now.")
+
+
 def gated_memory_query(
     agent: Any, state_path: Path, machine: Any, operation: str, parameters: dict[str, Any]
 ) -> dict[str, Any] | None:
@@ -88,6 +106,8 @@ def gated_memory_query(
         return _reply(operation, data, None if data is not None else "Nothing is recorded under that key.")
     if operation == "library":
         return _library_query(machine, parameters)
+    if operation == "next_probe" and parameters.get("question_id"):
+        return _chosen_probe(agent, state_path, machine, str(parameters["question_id"]))
     if operation in {"orient", "annotate"}:
         return _submit(agent, state_path, machine, operation, parameters.get("notes"))
     if operation == "rerun":
