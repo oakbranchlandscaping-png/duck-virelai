@@ -1231,6 +1231,20 @@ class AnalyzerRequestTooLarge(requests.RequestException):
     """The provider says this request can never fit its token limit."""
 
 
+def _library_digest_section(machine: Any) -> str:
+    """WO-L2a library view: the validated library's digest after the binding card, on Duck's turn only.
+
+    It has its own budget (``library_view.DIGEST_BUDGET``) beside the card's. It never raises: a census
+    failure leaves the card, which stays binding, and says the library is unavailable this turn.
+    """
+    from inference.framework.library_view import live_model, render_library_digest
+
+    try:
+        return "\n" + render_library_digest(live_model(machine))
+    except Exception as exc:  # noqa: BLE001 - the library is a read view; it never costs Duck the turn
+        return f"\nVIRELAI LIBRARY unavailable this turn ({type(exc).__name__}); the card above is binding."
+
+
 class ToolAgent:
     """Direct tool-calling analyzer compatible with OpenAI-style endpoints."""
 
@@ -1535,7 +1549,7 @@ class ToolAgent:
             raise RuntimeError(
                 "binding gate context exceeds its 24000-character budget; compact the model-facing view"
             )
-        return rendered
+        return rendered + _library_digest_section(machine)
 
     def _history_after_turn(
         self,

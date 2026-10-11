@@ -212,6 +212,7 @@ class _HarnessGameSession:
     _viewer_events_flushed: int = field(default=0, init=False, repr=False)
     _l2a_entry: Any = field(default=None, init=False, repr=False)  # WO-L2a: the observed entry board
     _l2a_frozen_written: int = field(default=0, init=False, repr=False)  # level censuses already written
+    _l2a_end_reason: str = field(default="", init=False, repr=False)  # why a turn ended the run (WO-L2a)
 
     def _public_action_names(self) -> list[str]:
         names = _engine_action_names(self.game)
@@ -354,10 +355,21 @@ class _HarnessGameSession:
             return "CRASH"
         if state == "cancelled":
             return "CANCELLED"
+        if self._l2a_end_reason:
+            return self._l2a_end_reason
         cap = self.solver.max_actions_per_game
         if self.runtime_limit_reached() or (cap is not None and self.action_count >= cap):
             return "BUDGET_STOP"
         return "RUN_END"
+
+    def _note_turn_end(self, result: Any) -> None:
+        """WO-L2a (Sol, 2026-10-11): a controlled stop that ends the run is its final reason.
+
+        Only a turn that ends the game reaches here; a controlled stop that rests the gates and resumes
+        play returns earlier, through ``_rest_after_controlled_stop``.
+        """
+        if getattr(result, "controlled_stop", ""):
+            self._l2a_end_reason = "CONTROLLED_STOP"
 
     def _write_l2a_world_model(self, *, final: bool) -> None:
         """WO-L2a: compile and write the canonical v2 world model. Never raises; a failure is an event.
@@ -593,6 +605,7 @@ class _HarnessGameSession:
                 if self._rest_after_controlled_stop(result):
                     continue
                 if _turn_ends_game(result, run):
+                    self._note_turn_end(result)
                     break
                 if result.retryable_failure:
                     retry_analysis_step = analysis_step

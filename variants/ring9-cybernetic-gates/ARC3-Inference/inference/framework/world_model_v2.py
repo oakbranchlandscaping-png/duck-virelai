@@ -37,7 +37,9 @@ V1_SCHEMA = "virelai-world-model-v1"
 CANONICAL_NAME = "world_model.json"
 
 MANIFEST_STATUSES = frozenset({"ACTIVE", "OBSERVED_NEVER_ACTED"})
-PERSIST_REASONS = frozenset({"LEVEL_ADVANCE", "RUN_END", "BUDGET_STOP", "CONTROLLED_STOP", "CRASH", "CANCELLED"})
+PERSIST_REASONS = frozenset({"LEVEL_ADVANCE", "RUN_END", "BUDGET_STOP", "CONTROLLED_STOP", "CRASH", "CANCELLED",
+                             "LIVE_VIEW"})
+LIVE_VIEW = "LIVE_VIEW"  # the in-memory library Duck reads (library_view); validated, never written to disk
 ENTRY_SOURCES = frozenset({"INITIAL_FRAME", "LEVEL_ENTRY"})
 GAP_REASONS = frozenset({
     "NOT_REACHED", "BUDGET", "FOUNDATION_UNRESOLVED", "CLASS_CHANGED", "NOT_BUILT",
@@ -258,6 +260,8 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
     temporary: Path | None = None
     try:
         sealed = seal(payload) if "content_sha256" not in payload else dict(payload)
+        _require((sealed.get("manifest") or {}).get("persist_reason") != LIVE_VIEW,
+                 "a live view is never written as the canonical model")
         data = canonical_bytes(sealed)
         target.parent.mkdir(parents=True, exist_ok=True)
         # A unique sibling in the same directory: never a fixed name another write could share or clobber.
@@ -279,6 +283,6 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
 
 
 __all__ = [
-    "CANONICAL_NAME", "GAP_REASONS", "SCHEMA", "WorldModelV2Error", "WriteResult", "canonical_bytes",
+    "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "WorldModelV2Error", "WriteResult", "canonical_bytes",
     "content_sha256", "read_world_model", "seal", "validate", "write_canonical",
 ]

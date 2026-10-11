@@ -69,7 +69,12 @@ def test_the_harness_measures_the_production_renderer(tmp_path):
     agent._ensure_session(state_path)
     agent._current_valid_actions = ["ACTION1", "ACTION2"]
     machine = agent._ensure_gate_machine(state_path)
-    assert agent._gate_context_update(state_path) == render_binding_gate_context(machine)
+    card = render_binding_gate_context(machine)
+    context = agent._gate_context_update(state_path)
+    # WO-L2a library view (2026-10-11): the measured card bytes come first and unchanged; the library
+    # digest follows as its own budgeted section, built from the validated live library.
+    assert context.startswith(card)
+    assert context[len(card):].startswith("\nVIRELAI LIBRARY (read-only")
 
 
 def test_every_recorded_transition_is_indexed_once_and_sparse(v2):

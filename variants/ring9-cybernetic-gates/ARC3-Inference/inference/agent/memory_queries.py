@@ -8,6 +8,7 @@ Author: Claude (Alpha build seat), 2026-09-29. R9-R09 (DESIGN_VIRELAI_MEMORY_v2 
 ``tool_agent.py``. ``virelai('orient', notes=[…])`` and ``virelai('annotate', notes=[…])`` write
 Duck's notes to the UNCERTIFIED lane, persisted as ``{stem}_annotations.jsonl``.
 ``virelai('rerun', id=ENTITY, presses=N)`` asks the controller for an extra G4-A run (D3, R9-R10).
+``virelai('library', kind=…)`` pages the validated semantic library (WO-L2a library view, 2026-10-11).
 """
 from __future__ import annotations
 
@@ -49,6 +50,21 @@ def _refused_state(machine: Any) -> dict[str, Any]:
             "card": "virelai('gate')"}
 
 
+def _library_query(machine: Any, parameters: dict[str, Any]) -> dict[str, Any]:
+    """``virelai('library', kind=…, id=…, reason=…, subject=…, level=…, part=…, offset=…, limit=…)``: one
+    bounded page of the validated live library (WO-L2a library view); ``next`` names the call for the rest.
+    A census or lookup failure is the reply's error, never a crash."""
+    from inference.framework.library_view import library_page, live_model
+
+    keys = ("id", "reason", "subject", "level", "part", "offset", "limit")
+    options = {key: parameters[key] for key in keys if key in parameters}
+    try:
+        data = library_page(live_model(machine), str(parameters.get("kind") or "levels"), **options)
+    except Exception as exc:  # noqa: BLE001 - reported to Duck with its type; the gate state is untouched
+        return _reply("library", None, f"{type(exc).__name__}: {exc}")
+    return _reply("library", data, truncated=bool(data.get("truncated")))
+
+
 def gated_memory_query(
     agent: Any, state_path: Path, machine: Any, operation: str, parameters: dict[str, Any]
 ) -> dict[str, Any] | None:
@@ -70,6 +86,8 @@ def gated_memory_query(
         except (ValueError, TypeError, GateContractError) as exc:
             return _reply(operation, None, str(exc))
         return _reply(operation, data, None if data is not None else "Nothing is recorded under that key.")
+    if operation == "library":
+        return _library_query(machine, parameters)
     if operation in {"orient", "annotate"}:
         return _submit(agent, state_path, machine, operation, parameters.get("notes"))
     if operation == "rerun":
