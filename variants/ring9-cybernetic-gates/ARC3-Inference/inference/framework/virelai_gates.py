@@ -6491,6 +6491,7 @@ class CyberneticGateMachine:
         self._build_level(valid_actions, initial_grid, observed_through_step)
         self.lives = LifeRecord()  # lives, levels and the high-water transition (R9-R16)
         self.levels: list[dict[str, Any]] = []  # each finished level's frozen model (R9-R17)
+        self.level_censuses: list[dict[str, Any]] = []  # WO-L2a H1: each ended level's census, check pending
         self._capability_secret = secrets.token_bytes(32)
         self._consumed_capabilities: set[str] = set()
         # The record tier's in-memory index (DESIGN_VIRELAI_MEMORY_v1 §5.1): one sparse, lossless
@@ -6525,6 +6526,10 @@ class CyberneticGateMachine:
 
         Without a lossless after-board the ladder cannot restart, and ``ladder_end`` stops the run as before.
         """
+        from inference.framework.library_census import freeze_census_or_failure
+
+        # WO-L2a H1: census the ended level (its boundary's level_before) before freeze_level; errors are recorded.
+        self.level_censuses.append(freeze_census_or_failure(self, outcome))
         grids = grids_from_probe_outcome(outcome)
         if grids is None:
             return

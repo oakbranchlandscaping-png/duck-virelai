@@ -11,8 +11,8 @@ Both tests drive production code, not the writer directly:
 - A legacy ``controller``/``intent``/``agenda`` query on the runtime after a v2 file exists: today it
   rewrites ``world_model.json`` as v1 (``virelai_runtime.py:1055-1080``).
 
-They are strict xfails until the H2 hook and the legacy-writer separation land (shared files, declared
-first); a strict xfail that starts passing fails the suite, so the marks must be removed with the hooks.
+They were strict xfails until the H2 hook and the legacy-writer separation landed (the WO-L2a hooks slice,
+2026-10-11, under NOTE_SHARED_FILE_WO_L2A_HOOKS); the marks were removed with it.
 """
 from __future__ import annotations
 
@@ -27,11 +27,6 @@ import pytest
 from inference.framework.solver import HarnessSolver, _HarnessGameSession
 from inference.framework.virelai_runtime import VirelaiRuntime
 from test_duck_native_observer import _Game
-
-HOOKS_PENDING = pytest.mark.xfail(
-    strict=True, reason="WO-L2a H2 hook and legacy-writer separation are shared-file edits not yet made",
-)
-
 
 class _CancelledGame(_Game):
     def __init__(self):
@@ -67,7 +62,6 @@ def test_the_cancelled_path_is_the_77_game_shape(tmp_path):
     assert len((folder / "frames.jsonl").read_text().splitlines()) == 1
 
 
-@HOOKS_PENDING
 def test_a_zero_action_cancellation_writes_the_canonical_model(tmp_path):
     folder, _game, _calls = _cancelled_before_first_turn(tmp_path)
     model = json.loads((folder / "world_model.json").read_text())
@@ -77,7 +71,6 @@ def test_a_zero_action_cancellation_writes_the_canonical_model(tmp_path):
     assert {gate["disposition"] for gate in model["levels"][0]["certified"]["gates"]} == {"NOT_STARTED"}
 
 
-@HOOKS_PENDING
 @pytest.mark.parametrize("operation", ["controller", "intent", "agenda"])
 def test_a_legacy_query_never_replaces_the_canonical_model(tmp_path, operation):
     runtime = VirelaiRuntime(game_id="fixture", run_stem="fixture_p0", artifact_root=tmp_path)

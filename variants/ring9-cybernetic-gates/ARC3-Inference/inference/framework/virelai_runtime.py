@@ -519,8 +519,12 @@ class VirelaiRuntime:
         self._experiments_path = self._artifact_dir / "experiments.jsonl" if self._artifact_dir else None
         self._world_model_cache_step = -1
         self._world_model_cache: Any | None = None
+        # WO-L2a: world_model.json belongs to the v2 canonical writer alone. This observer model is an
+        # in-memory query cache; it is persisted only on explicit opt-in, and never at the canonical path.
         self._world_model_path = (
-            self._artifact_dir / "world_model.json" if self._artifact_dir else None
+            self._artifact_dir / "world_model_legacy_v1.json"
+            if self._artifact_dir and os.environ.get("VIRELAI_LEGACY_WORLD_MODEL_FILE", "0").strip() == "1"
+            else None
         )
         self._controller_outcomes: list[dict[str, Any]] = []
         self._controller_revisions: list[dict[str, Any]] = []
@@ -1052,8 +1056,8 @@ class VirelaiRuntime:
             )
         return lesson, self._lesson_enrichments[requested_level]
 
-    def _canonical_world_model(self) -> Any:
-        """Compile once per journal boundary and persist the canonical artifact."""
+    def _observer_world_model(self) -> Any:
+        """The observer's v1 model for queries, compiled once per journal boundary (in memory; WO-L2a)."""
         if self._world_model_cache_step == self.through_step and self._world_model_cache is not None:
             return self._world_model_cache
         from inference.framework.virelai_semantic.compiler import compile_semantic_library
@@ -1223,7 +1227,7 @@ class VirelaiRuntime:
                 from dataclasses import asdict
                 from inference.framework.virelai_agenda import compile_agenda
                 from inference.framework.virelai_experiments import make_intent
-                agenda = compile_agenda(self._canonical_world_model())
+                agenda = compile_agenda(self._observer_world_model())
                 try:
                     intent = make_intent(params, agenda, self._experiment_count + 1)
                 except (ValueError, TypeError) as exc:
@@ -1250,7 +1254,7 @@ class VirelaiRuntime:
                          and self.through_step >= 8
                          and self.through_step - self._world_model_cache_step < 8
                          and not fresh_boundary)
-                agenda = compile_agenda(cached if reuse else self._canonical_world_model())
+                agenda = compile_agenda(cached if reuse else self._observer_world_model())
                 agenda["journal_through_step"] = self.through_step
                 agenda["pending_transitions"] = self.through_step - agenda["observed_through_step"]
                 if op == "question":
@@ -1271,7 +1275,7 @@ class VirelaiRuntime:
             elif op == "controller":
                 from dataclasses import asdict
                 from inference.framework.virelai_controller import build_controller_snapshot
-                model = self._canonical_world_model()
+                model = self._observer_world_model()
                 data = asdict(build_controller_snapshot(model))
             elif op == "controller_outcome":
                 from dataclasses import asdict
@@ -1297,7 +1301,7 @@ class VirelaiRuntime:
                         )
                         transition = self.transitions[-1]
                         comparison = compare_outcome(envelope, transition)
-                        snapshot = build_controller_snapshot(self._canonical_world_model())
+                        snapshot = build_controller_snapshot(self._observer_world_model())
                         claim_id = envelope.prediction.claim_id if envelope.prediction else None
                         parent = next(
                             (rule for rule in snapshot.rule_versions if rule.rule_version_id == claim_id),
@@ -1344,7 +1348,7 @@ class VirelaiRuntime:
                 model = (
                     self._world_model_cache
                     if self._world_model_cache is not None and not force_fresh
-                    else self._canonical_world_model()
+                    else self._observer_world_model()
                 )
                 compiled_step = self._world_model_cache_step
                 canonical_op = "evidence" if op == "model_evidence" else op
@@ -1389,7 +1393,7 @@ class VirelaiRuntime:
                     and pending < 8
                     and not boundary_pending
                 )
-                model = cached if reuse else self._canonical_world_model()
+                model = cached if reuse else self._observer_world_model()
                 if requested_level is None:
                     requested_level = model.current_level
                 compiled_step = self._world_model_cache_step
@@ -1407,7 +1411,7 @@ class VirelaiRuntime:
                 }
                 data["text"] = render_physics_manual(data)
             elif op in {"card", "briefing"}:
-                model = self._canonical_world_model()
+                model = self._observer_world_model()
                 entered_level = int(params.get("level") or model.current_level)
                 completed_level = entered_level - 1 if entered_level > 1 else None
                 lesson, enrichment = self._lesson_bundle(completed_level or -1)

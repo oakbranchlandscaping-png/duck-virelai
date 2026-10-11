@@ -140,8 +140,31 @@ def _validate_level(level: Mapping[str, Any]) -> None:
     _require(accounting.get("status") in {"ACCOUNTED", "NOT_ACCOUNTED"}, "accounting.status is required")
     mismatch = any(gap.get("reason") == "RECORD_MISMATCH" for gap in level.get("gaps") or ())
     _require(not (mismatch and accounting["status"] == "ACCOUNTED"), "a record mismatch is never ACCOUNTED")
+    _validate_journal_check(level, accounting)
     _require(accounting["status"] == "NOT_ACCOUNTED" or not accounting.get("missing"),
              "an ACCOUNTED level lists nothing missing")
+
+
+CHECK_KEYS = ("missing", "extra", "duplicated", "renamed")
+
+
+def _validate_journal_check(level: Mapping[str, Any], accounting: Mapping[str, Any]) -> None:
+    """PENDING until H2 reconciles the level against the execution history; only CHECKED may be ACCOUNTED."""
+    check = (level.get("record") or {}).get("journal_check") or {}
+    status = check.get("status")
+    _require(status in {"PENDING", "CHECKED"}, "journal_check.status is PENDING or CHECKED")
+    if status == "PENDING":
+        _require(accounting["status"] == "NOT_ACCOUNTED" and "JOURNAL_CHECK_PENDING" in (accounting.get("missing") or ()),
+                 "a level whose journal check is pending is NOT_ACCOUNTED, with JOURNAL_CHECK_PENDING missing")
+        return
+    named = {key: sorted(check.get(key) or ()) for key in CHECK_KEYS}
+    _require(check.get("ok") is (not any(named.values())), "journal_check.ok agrees with its ids")
+    if not check["ok"]:
+        _require(accounting["status"] == "NOT_ACCOUNTED", "a checked level with a mismatch is NOT_ACCOUNTED")
+        _require(any(gap.get("reason") == "RECORD_MISMATCH" and gap.get("source") == "record_check"
+                     and {key: sorted(gap.get(key) or ()) for key in CHECK_KEYS} == named
+                     for gap in level.get("gaps") or ()),
+                 "a checked mismatch carries a RECORD_MISMATCH gap naming the same ids")
 
 
 def _validate_track(track: Mapping[str, Any], recorded: set[int]) -> None:

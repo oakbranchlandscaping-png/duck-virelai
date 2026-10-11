@@ -122,6 +122,12 @@ def _engine_action_names(game: taaf.game.Game) -> list[str]:
     return names
 
 
+def _history_action_name(item: Any) -> str:
+    """WO-L2a: an executed action's engine name from a ``game_run.history`` record, or "" when it has none."""
+    action_id = getattr(getattr(item, "action", None), "id", None)
+    return str(getattr(action_id, "name", "") or "")
+
+
 def _model_mouse_action_data(
     action_data: dict[str, Any] | None = None,
 ) -> dict[str, int]:
@@ -204,6 +210,8 @@ class _HarnessGameSession:
     observer_initialized: bool = field(default=False, init=False, repr=False)
     virelai_fault: str = field(default="", init=False, repr=False)
     _viewer_events_flushed: int = field(default=0, init=False, repr=False)
+    _l2a_entry: Any = field(default=None, init=False, repr=False)  # WO-L2a: the observed entry board
+    _l2a_frozen_written: int = field(default=0, init=False, repr=False)  # level censuses already written
 
     def _public_action_names(self) -> list[str]:
         names = _engine_action_names(self.game)
@@ -325,6 +333,73 @@ class _HarnessGameSession:
         except Exception as exc:
             self.virelai_fault = f"{type(exc).__name__}: {exc}"
             self._record_observer_failure(self.virelai_fault)
+            return
+        self._capture_l2a_entry()
+
+    def _l2a_enabled(self) -> bool:
+        return self.solver.virelai_mode == "gated" and self.solver.job_dir is not None
+
+    def _capture_l2a_entry(self) -> None:
+        """WO-L2a: the board, level and actions the census starts from, kept only once actually observed."""
+        if not self._l2a_enabled():
+            return
+        frame = self.current_frame()
+        self._l2a_entry = (frame.grid, int(frame.level), tuple(_engine_action_names(self.game)))
+
+    def _l2a_persist_reason(self, final: bool) -> str:
+        if not final:
+            return "LEVEL_ADVANCE"
+        state = getattr(self.game.game_run, "state", None)
+        if state == "crashed":
+            return "CRASH"
+        if state == "cancelled":
+            return "CANCELLED"
+        cap = self.solver.max_actions_per_game
+        if self.runtime_limit_reached() or (cap is not None and self.action_count >= cap):
+            return "BUDGET_STOP"
+        return "RUN_END"
+
+    def _write_l2a_world_model(self, *, final: bool) -> None:
+        """WO-L2a: compile and write the canonical v2 world model. Never raises; a failure is an event.
+
+        Final (H2): every frozen and open level is reconciled against the whole execution history.
+        Interim (after H1 froze a level): every journal check stays PENDING and nothing is ACCOUNTED.
+        """
+        if not self._l2a_enabled():
+            return
+        if self._l2a_entry is None:
+            if final:
+                self._write_observer_warning("WORLD_MODEL_NOT_OBSERVED", "no initial board was observed; no census")
+            return
+        try:
+            from inference.framework import world_model_v2
+            from inference.framework.library_census import ExecutionRecord, compile_world_model
+
+            run = self.game.game_run
+            game_id = str(run.game_id if run is not None else self.game_index)
+            run_stem = self.solver._run_stem(game_id, self.pass_index)
+            board, level, actions = self._l2a_entry
+            executed = tuple(_history_action_name(item) for item in (run.history if run is not None else ()))
+            machine = getattr(self.analyzer, "_gate_machine", None)
+            payload = compile_world_model(
+                machine, ExecutionRecord(board, level, actions, executed), game_id=game_id, run_stem=run_stem,
+                persist_reason=self._l2a_persist_reason(final),
+                frozen_levels=list(getattr(machine, "level_censuses", ()) or ()), reconcile_journal=final,
+            )
+        except Exception as exc:  # Virelai must never cost Duck the game.
+            self._write_observer_warning("WORLD_MODEL_V2_COMPILE_FAILED", f"{type(exc).__name__}: {exc}")
+            return
+        result = world_model_v2.write_canonical(payload, self.solver.job_dir / "virelai" / run_stem)
+        if not result.ok:
+            self._write_observer_warning("WORLD_MODEL_V2_WRITE_FAILED", str(result.error))
+
+    def _write_l2a_interim_if_advanced(self) -> None:
+        """WO-L2a: after a turn in which H1 froze a level, write the model with its checks still pending."""
+        machine = getattr(self.analyzer, "_gate_machine", None)
+        frozen = len(getattr(machine, "level_censuses", ()) or ())
+        if frozen > self._l2a_frozen_written:
+            self._l2a_frozen_written = frozen
+            self._write_l2a_world_model(final=False)
 
     def _observe_virelai_transition(
         self,
@@ -514,6 +589,7 @@ class _HarnessGameSession:
                             analysis_step, transcript_delta
                         )
                         self.write_viewer_payload()
+                self._write_l2a_interim_if_advanced()
                 if self._rest_after_controlled_stop(result):
                     continue
                 if _turn_ends_game(result, run):
@@ -543,50 +619,55 @@ class _HarnessGameSession:
             total_tokens = _analyzer_reported_tokens(self.analyzer)
             if run.solver_note is None:
                 run.solver_note = f"tokens={total_tokens}"
-            # Close a bounded NAV/CLICK sweep with an explicit G3 product if
-            # the solver stopped before the aggregate inventory was accepted.
-            # The runtime state is still present here; it is removed below.
-            gate_machine = getattr(self.analyzer, "_gate_machine", None)
-            if gate_machine is not None and getattr(gate_machine, "gate_id", None) == "G3-LEVERS":
-                try:
-                    from inference.agent.gate_artifacts import (
-                        load_g3_run_outcome,
-                        record_g3_run_outcome,
-                    )
-
-                    existing_product = load_g3_run_outcome(self.state_path)
-                    # The semantic seam may already have emitted the more precise bounded
-                    # product. Finalization must not replace it with a generic budget stop.
-                    continue_record = not (
-                        isinstance(existing_product, dict)
-                        and existing_product.get("product") in {
-                            "G3_SEMANTIC_RETRY_EXHAUSTED",
-                            "G3_ROUTE_RETRY_EXHAUSTED",
-                        }
-                    )
-
-                    boundary = _is_engine_game_over(self.game) or bool(
-                        getattr(run, "level_completed", False)
-                    )
-                    if boundary:
-                        product = "G3_BOUNDARY_DEFERRED"
-                        detail = "the environment ended or changed level while G3 still had open roster work"
-                    else:
-                        product = "G3_BUDGET_STOPPED"
-                        detail = "the solver action/time boundary stopped G3 before roster completion"
-                    if continue_record:
-                        record_g3_run_outcome(
-                            self.state_path, gate_machine, product, detail=detail,
-                        )
-                except Exception:
-                    # Artifact emission must never turn a completed game into
-                    # a harness crash; the existing run evidence remains valid.
-                    pass
+            self._record_open_g3_outcome(run)
             self._finish_if_needed()
+            self._write_l2a_world_model(final=True)  # WO-L2a H2
             self._close_game_observer()
             self.state_path.unlink(missing_ok=True)
             self._write_analysis_html()
             self.write_viewer_payload()
+
+    def _record_open_g3_outcome(self, run: Any) -> None:
+        """Moved unchanged out of ``play``'s ``finally`` (WO-L2a ratchet compensation)."""
+        # Close a bounded NAV/CLICK sweep with an explicit G3 product if
+        # the solver stopped before the aggregate inventory was accepted.
+        # The runtime state is still present here; it is removed below.
+        gate_machine = getattr(self.analyzer, "_gate_machine", None)
+        if gate_machine is not None and getattr(gate_machine, "gate_id", None) == "G3-LEVERS":
+            try:
+                from inference.agent.gate_artifacts import (
+                    load_g3_run_outcome,
+                    record_g3_run_outcome,
+                )
+
+                existing_product = load_g3_run_outcome(self.state_path)
+                # The semantic seam may already have emitted the more precise bounded
+                # product. Finalization must not replace it with a generic budget stop.
+                continue_record = not (
+                    isinstance(existing_product, dict)
+                    and existing_product.get("product") in {
+                        "G3_SEMANTIC_RETRY_EXHAUSTED",
+                        "G3_ROUTE_RETRY_EXHAUSTED",
+                    }
+                )
+
+                boundary = _is_engine_game_over(self.game) or bool(
+                    getattr(run, "level_completed", False)
+                )
+                if boundary:
+                    product = "G3_BOUNDARY_DEFERRED"
+                    detail = "the environment ended or changed level while G3 still had open roster work"
+                else:
+                    product = "G3_BUDGET_STOPPED"
+                    detail = "the solver action/time boundary stopped G3 before roster completion"
+                if continue_record:
+                    record_g3_run_outcome(
+                        self.state_path, gate_machine, product, detail=detail,
+                    )
+            except Exception:
+                # Artifact emission must never turn a completed game into
+                # a harness crash; the existing run evidence remains valid.
+                pass
 
     def _rest_after_controlled_stop(self, result: Any) -> bool:
         """Director ruling D-3 (2026-10-07): in submission mode a controlled stop rests the level in play.

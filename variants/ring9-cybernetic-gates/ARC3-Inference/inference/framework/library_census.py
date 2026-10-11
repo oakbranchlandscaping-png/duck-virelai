@@ -435,34 +435,41 @@ def record_check(transition_index: Sequence[Mapping[str, Any]], executed: Sequen
             "duplicated": duplicated, "renamed": renamed, "recorded": len(ids), "executed": len(expected)}
 
 
-def _entry(machine: Any | None, execution: ExecutionRecord, level: int) -> dict[str, Any]:
-    if machine is None or level == execution.entry_level:
+def _entry(machine: Any | None, level: int) -> dict[str, Any]:
+    """The entry board's provenance: the first board the machine saw, or the board a level change left."""
+    if machine is None:
         return {"source": "INITIAL_FRAME"}
     previous = [int(row["transition_id"]) for row in machine.transition_index if row.get("level") == level - 1]
     return {"source": "LEVEL_ENTRY", "after_transition": max(previous)} if previous else {"source": "INITIAL_FRAME"}
 
 
-def compile_level(machine: Any | None, execution: ExecutionRecord, *, state: str = "OPEN",
+def compile_level(machine: Any | None, execution: ExecutionRecord | None = None, *, state: str = "OPEN",
                   level: int | None = None) -> dict[str, Any]:
-    """The census of one level (or, with no machine, of the observed entry board).
+    """The census of one level (or, with no machine, of the observed entry board), journal check PENDING.
 
     A FROZEN census is taken at a level boundary, inside ``_advance_level`` before ``freeze_level``. By then
     ``LifeRecord.tag`` has already moved ``machine.lives.level`` to the next level (``life_record.py``), while
     the board, rows and gate products still belong to the level that ended. So a frozen census must be
     given the boundary's ``level_before``; it never reads the level from the machine.
+
+    No census here is checked against the harness's execution history: the gate machine never receives
+    it. ``reconcile`` does that at finalization (Sol, 2026-10-11), and only it can mark a level ACCOUNTED.
     """
     if state == "FROZEN" and level is None:
         raise ValueError("a frozen census needs the boundary's level_before, explicitly")
     if machine is None:
+        if execution is None:
+            raise ValueError("a census without a gate machine needs the observed entry board")
         level, board, rows, life = execution.entry_level, execution.entry_board, [], 1
+        valid_actions = list(execution.valid_actions)
     else:
-        level = int(level if level is not None else (machine.lives.level or execution.entry_level))
+        level = int(level if level is not None else machine.lives.level)
         board = tuple(tuple(row) for row in machine.ego._initial_grid)
         rows = level_rows(machine.transition_index, level)
         life = int(rows[0]["life"]) if rows else int(machine.lives.life)
-    entry = _entry(machine, execution, level)
+        valid_actions = [item.action for item in machine.ego.affordances]
+    entry = _entry(machine, level)
     projection = project_tracks(level, board, entry, rows, entry_life=life)
-    checked = record_check(machine.transition_index if machine is not None else (), execution.executed)
     gaps: list[dict[str, Any]] = [
         {"subject": f"LEVEL-{level}", "archetype_question": question, "reason": reason, "source": source,
          "chapter": chapter}
@@ -492,27 +499,7 @@ def compile_level(machine: Any | None, execution: ExecutionRecord, *, state: str
     for track_id in projection["reset_born"]:
         gaps.append({"subject": track_id, "archetype_question": "Is this the same object as one seen in an earlier life?",
                      "reason": "IDENTITY_UNRESOLVED", "source": "lives are not joined without continuity evidence"})
-    missing: list[str] = []
-    if not checked["ok"]:
-        gaps.append({"subject": f"LEVEL-{level}", "archetype_question": "Does the gate record match what was executed?",
-                     "reason": "RECORD_MISMATCH", "source": "record_check",
-                     "missing": checked["missing"], "extra": checked["extra"], "duplicated": checked["duplicated"],
-                     "renamed": checked["renamed"]})
-        missing.append("RECORD_MISMATCH")
-        unmatched = set(checked["extra"]) | set(checked["renamed"]) | set(checked["duplicated"])
-        kept = []
-        for role in certified["roles"]:
-            cited = {receipts["evidence"][ref]["transition_id"] for ref in role.get("evidence_refs") or ()
-                     if ref in receipts["evidence"]}
-            cited |= {receipts["witnesses"][ref]["transition_id"] for ref in role.get("witness_refs") or ()
-                      if ref in receipts["witnesses"]}
-            if cited & unmatched:
-                gaps.append({"subject": role.get("entity_id") or role["role"],
-                             "archetype_question": f"Is the {role['role']} claim grounded?",
-                             "reason": "RECORD_MISMATCH", "source": "its evidence lies on an unmatched transition"})
-            else:
-                kept.append(role)
-        certified["roles"] = kept
+    missing = ["JOURNAL_CHECK_PENDING"]
     if projection["discontinuities"]:
         missing.append("BOARD_DISCONTINUITY")
         gaps.append({"subject": f"LEVEL-{level}", "archetype_question": "Do the recorded changes rebuild every board?",
@@ -522,21 +509,129 @@ def compile_level(machine: Any | None, execution: ExecutionRecord, *, state: str
         "level": level,
         "state": state,
         "entry": {**entry, "board_sha256": hashlib.sha256(repr([list(r) for r in board]).encode()).hexdigest(),
-                  "valid_actions": list(execution.valid_actions)},
-        "record": {"transition_ids": [int(row["transition_id"]) for row in rows], "journal_check": checked},
+                  "valid_actions": valid_actions},
+        "record": {"transition_ids": [int(row["transition_id"]) for row in rows], "journal_check": {"status": "PENDING"}},
         "observation": {"tracks": projection["tracks"], "terrain": terrain},
         "certified": {"gates": dispositions, **certified},
         "receipts": receipts,
         "gaps": gaps,
-        "accounting": {"status": "NOT_ACCOUNTED" if missing else "ACCOUNTED", "missing": missing},
+        "accounting": {"status": "NOT_ACCOUNTED", "missing": missing},
     }
 
 
+def freeze_level_census(machine: Any, *, level_before: int) -> dict[str, Any]:
+    """H1: the ended level's census from gate state alone, its journal check PENDING (never ACCOUNTED)."""
+    return compile_level(machine, None, state="FROZEN", level=level_before)
+
+
+def freeze_census_or_failure(machine: Any, outcome: Mapping[str, Any]) -> dict[str, Any]:
+    """What H1 appends: the frozen census, or a recorded failure. A census error never stops a level advance.
+
+    ``LifeRecord.tag`` has already moved ``machine.lives.level`` on, so the level is the boundary's
+    ``level_before``, read from the outcome that ended it.
+    """
+    boundary = outcome.get("boundary_event")
+    level_before = boundary.get("level_before") if isinstance(boundary, Mapping) else None
+    try:
+        return freeze_level_census(machine, level_before=int(level_before))
+    except Exception as exc:  # noqa: BLE001 - recorded, never raised into the gate machine
+        return {"level": level_before, "census_failed": f"{type(exc).__name__}: {exc}"}
+
+
+_CHECK_KEYS = ("missing", "extra", "duplicated", "renamed")
+
+
+def assign_mismatches(check: Mapping[str, Any], transition_index: Sequence[Mapping[str, Any]],
+                      levels: Sequence[int]) -> dict[int, dict[str, list[int]]]:
+    """Each mismatched id to the level that owns it (interface v4 §0a step 2).
+
+    A recorded id belongs to its row's level. A missing id (executed, never recorded) belongs to the level
+    whose recorded span contains it, else to the next level's span, else to the last level. A level the
+    census does not hold (a failed H1) gives its ids to the last level.
+    """
+    present = sorted(int(level) for level in levels)
+    row_level = {int(row["transition_id"]): int(row.get("level") or present[-1]) for row in transition_index}
+    spans: dict[int, tuple[int, int]] = {}
+    for tid, level in row_level.items():
+        low, high = spans.get(level, (tid, tid))
+        spans[level] = (min(low, tid), max(high, tid))
+
+    def owner(tid: int, recorded: bool) -> int:
+        if recorded and tid in row_level:
+            level = row_level[tid]
+        else:
+            inside = [level for level, (low, high) in spans.items() if low <= tid <= high]
+            later = sorted(level for level, (low, _high) in spans.items() if low > tid)
+            level = inside[0] if inside else later[0] if later else present[-1]
+        return level if level in present else present[-1]
+
+    result = {level: {key: [] for key in _CHECK_KEYS} for level in present}
+    for key in _CHECK_KEYS:
+        for tid in check.get(key) or ():
+            result[owner(int(tid), key != "missing")][key].append(int(tid))
+    return result
+
+
+def _apply_check(level: Mapping[str, Any], ids: Mapping[str, list[int]], totals: Mapping[str, Any]) -> dict[str, Any]:
+    level = copy.deepcopy(dict(level))
+    if level["record"]["journal_check"].get("status") != "PENDING":
+        raise ValueError(f"level {level['level']} was already reconciled")
+    ok = not any(ids[key] for key in _CHECK_KEYS)
+    level["record"]["journal_check"] = {"status": "CHECKED", "ok": ok, **{k: list(ids[k]) for k in _CHECK_KEYS},
+                                        "recorded": totals["recorded"], "executed": totals["executed"]}
+    missing = [item for item in level["accounting"]["missing"] if item != "JOURNAL_CHECK_PENDING"]
+    if not ok:
+        level["gaps"].append({"subject": f"LEVEL-{level['level']}",
+                              "archetype_question": "Does the gate record match what was executed?",
+                              "reason": "RECORD_MISMATCH", "source": "record_check",
+                              **{k: list(ids[k]) for k in _CHECK_KEYS}})
+        missing.append("RECORD_MISMATCH")
+        unmatched = set(ids["extra"]) | set(ids["renamed"]) | set(ids["duplicated"])
+        receipts, kept = level["receipts"], []
+        for role in level["certified"]["roles"]:
+            cited = {receipts["evidence"][ref]["transition_id"] for ref in role.get("evidence_refs") or ()
+                     if ref in receipts["evidence"]}
+            cited |= {receipts["witnesses"][ref]["transition_id"] for ref in role.get("witness_refs") or ()
+                      if ref in receipts["witnesses"]}
+            if cited & unmatched:
+                level["gaps"].append({"subject": role.get("entity_id") or role["role"],
+                                      "archetype_question": f"Is the {role['role']} claim grounded?",
+                                      "reason": "RECORD_MISMATCH", "source": "its evidence lies on an unmatched transition",
+                                      "transitions": sorted(cited & unmatched)})
+            else:
+                kept.append(role)
+        level["certified"]["roles"] = kept
+    level["accounting"] = {"status": "NOT_ACCOUNTED" if missing else "ACCOUNTED", "missing": missing}
+    return level
+
+
+def reconcile(levels: Sequence[Mapping[str, Any]], machine: Any | None, execution: ExecutionRecord) -> list[dict[str, Any]]:
+    """H2: check the whole gate record against the whole execution history, once, and settle every level."""
+    rows = list(machine.transition_index) if machine is not None else []
+    check = record_check(rows, execution.executed)
+    owned = assign_mismatches(check, rows, [int(level["level"]) for level in levels])
+    totals = {"recorded": check["recorded"], "executed": check["executed"]}
+    return [_apply_check(level, owned[int(level["level"])], totals) for level in levels]
+
+
 def compile_world_model(machine: Any | None, execution: ExecutionRecord, *, game_id: str, run_stem: str,
-                        persist_reason: str, frozen_levels: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The unsealed v2 payload: frozen levels plus the current open level, in one artifact."""
-    current = compile_level(machine, execution)
-    levels = [dict(level) for level in frozen_levels if level.get("level") != current["level"]] + [current]
+                        persist_reason: str, frozen_levels: Sequence[Mapping[str, Any]] = (),
+                        reconcile_journal: bool = True) -> dict[str, Any]:
+    """The unsealed v2 payload: frozen levels plus the current open level, in one artifact.
+
+    With ``reconcile_journal`` (H2, final) every level is checked against ``execution``; without it (the
+    interim write after H1) every level keeps its PENDING check and nothing is ACCOUNTED.
+    """
+    failures = [dict(level) for level in frozen_levels if "census_failed" in level]
+    frozen = [dict(level) for level in frozen_levels if "census_failed" not in level]
+    advance_incomplete = machine is not None and len(getattr(machine, "level_censuses", ())) > len(machine.levels)
+    levels = list(frozen)
+    if not advance_incomplete:  # an advance that froze its census but never rebuilt leaves no open level
+        current = compile_level(machine, execution)
+        levels = [level for level in frozen if level.get("level") != current["level"]] + [current]
+    levels = sorted(levels, key=lambda item: int(item["level"]))
+    if reconcile_journal:
+        levels = reconcile(levels, machine, execution)
     return {
         "game_id": game_id,
         "run_stem": run_stem,
@@ -545,10 +640,13 @@ def compile_world_model(machine: Any | None, execution: ExecutionRecord, *, game
             "persist_reason": persist_reason,
             "actions_executed": len(execution.executed),
             "gate_machine": machine is not None,
+            "journal_check": "RECONCILED" if reconcile_journal else "PENDING",
+            "census_failures": failures,
         },
-        "levels": sorted(levels, key=lambda item: int(item["level"])),
+        "levels": levels,
     }
 
 
-__all__ = ["ExecutionRecord", "board_cut", "compile_level", "compile_world_model", "level_rows",
-           "project_tracks", "record_check"]
+__all__ = ["ExecutionRecord", "assign_mismatches", "board_cut", "compile_level", "compile_world_model",
+           "freeze_census_or_failure", "freeze_level_census", "level_rows", "project_tracks", "reconcile",
+           "record_check"]

@@ -25,7 +25,8 @@ def _model() -> dict:
         "levels": [{
             "level": 1, "state": "OPEN",
             "entry": {"source": "INITIAL_FRAME"},
-            "record": {"transition_ids": [1]},
+            "record": {"transition_ids": [1], "journal_check": {
+                "status": "CHECKED", "ok": True, "missing": [], "extra": [], "duplicated": [], "renamed": []}},
             "observation": {"tracks": [{
                 "track_id": "O-L1-P1-E-x",
                 "segments": [{"first": {"source": "INITIAL_FRAME"}, "last": {"source": "TRANSITION", "transition_id": 1},
@@ -190,3 +191,27 @@ def test_each_write_uses_its_own_temporary_sibling(tmp_path, monkeypatch):
     assert len(set(sources)) == 2 and all(os.path.dirname(src) == str(tmp_path) for src in sources)
     assert stray.read_text() == "someone else's"
     assert sorted(path.name for path in tmp_path.iterdir()) == [".world_model.json.tmp", "world_model.json"]
+
+
+def test_only_a_checked_journal_may_be_accounted():
+    def pending(model):
+        _level(model)["record"]["journal_check"] = {"status": "PENDING"}
+    _refused(pending, "pending is NOT_ACCOUNTED")
+
+    def pending_honest(model):
+        pending(model)
+        _level(model)["accounting"] = {"status": "NOT_ACCOUNTED", "missing": ["JOURNAL_CHECK_PENDING"]}
+    seal(_apply(_model(), pending_honest))
+    _refused(lambda m: _level(m)["record"].pop("journal_check"), "PENDING or CHECKED")
+    _refused(lambda m: _level(m)["record"]["journal_check"].update(missing=[3]), "ok agrees with its ids")
+
+    def mismatch(model, gap_ids):
+        _level(model)["record"]["journal_check"].update(ok=False, renamed=[1])
+        _level(model)["accounting"] = {"status": "NOT_ACCOUNTED", "missing": ["RECORD_MISMATCH"]}
+        _level(model)["gaps"].append({"subject": "LEVEL-1", "archetype_question": "q", "reason": "RECORD_MISMATCH",
+                                      "source": "record_check", "missing": [], "extra": [], "duplicated": [],
+                                      "renamed": gap_ids})
+        return model
+    seal(mismatch(_model(), [1]))
+    with pytest.raises(WorldModelV2Error, match="naming the same ids"):
+        seal(mismatch(_model(), [2]))
