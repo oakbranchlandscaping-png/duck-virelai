@@ -38,13 +38,13 @@ def _same(a: dict, b: dict) -> bool:
 class HybridRun:
     """The production agent on k008 from G3's entry, driven the way ``solver.play`` drives it."""
 
-    def __init__(self, tmp_path: Path, monkeypatch) -> None:
-        result = pickle.loads(_replayed("k008", G3_ENTRY))
+    def __init__(self, tmp_path: Path, monkeypatch, name: str = "k008", cut: int = G3_ENTRY) -> None:
+        result = pickle.loads(_replayed(name, cut))
         self.machine, self.grid = result.machine, [list(row) for row in result.grid]
-        self.recorded = {int(step["transition_id"]): step for step in load_record(RECORDS["k008"])["steps"]
+        self.recorded = {int(step["transition_id"]): step for step in load_record(RECORDS[name])["steps"]
                          if step.get("kind") != "RESET"}
         self.valid = [item.action for item in self.machine.ego.affordances]
-        self.state_path = tmp_path / f"k008_{RUNTIME_STATE_FILENAME}"
+        self.state_path = tmp_path / f"{name}_{RUNTIME_STATE_FILENAME}"
         self.history: list[HistoryEntry] = []
         self.env_calls: list[dict] = []
         self.prompts: list[str] = []
@@ -167,3 +167,57 @@ def test_with_the_handoff_off_the_click_pass_is_the_controllers_from_its_first_s
     assert result is not None and result.step_executed and run.prompts == []
     assert run.rows("_probe_envelopes.jsonl")[-1]["probe_id"] == "G3-LEVERS:CLICK:1"
     assert run.rows("_g3_selection_events.jsonl") == []
+
+
+# ---- Sol's follow-up (2026-10-11): a HYBRID CLICK-phase confirmation executes the gate's bound click -------
+
+K013_CLICK_PASS = 378  # k013: G3's CLICK pass on life 8, with the G3 entity ledger in step with the frame
+
+
+def _respond_on(run: HybridRun, cells, transition: int, action: dict) -> None:
+    """Make the next action a local response on ``cells`` (synthesized; the k013 record shows none here)."""
+    grid = run.grid
+    recorded = dict(run.recorded.get(transition) or {"changed": []})
+    recorded["action"] = dict(action)
+    recorded["changed"] = [item for item in recorded.get("changed") or () if (item[0], item[1]) not in set(cells)] + [
+        [r, c, grid[r][c], (grid[r][c] + 1) % 10] for r, c in cells]
+    run.recorded[transition] = recorded
+
+
+def test_a_hybrid_click_phase_confirmation_executes_the_gates_bound_click(tmp_path):
+    """Fail-first on the HYBRID CLICK repair: ``_nav_step`` sent every ``CONFIRM_LEVER_WITNESS`` to NAV route
+    planning, which has no route for a click ("G1 evidence does not yet support a deterministic route step").
+
+    The gate declares a CLICK-phase confirmation only on a legacy-confirmation machine
+    (``_legacy_confirmation_replay``; live machines leave it false), so this test sets that flag. The witness
+    and the confirmation's response are synthesized local responses on the clicked object."""
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        run = HybridRun(tmp_path, monkeypatch, name="k013", cut=K013_CLICK_PASS)
+        run.agent._controller.g3_choice_handoff = False
+        machine, g3 = run.machine, run.machine._adapters["G3-LEVERS"]
+        machine._legacy_confirmation_replay = True
+        assert g3._world_type == "HYBRID" and g3._phase == "CLICK"
+        head = machine.next_probe_capability()
+        cells, click = [tuple(cell) for cell in head["target"]["cells"]], head["actions"][0]
+        _respond_on(run, cells, run.transition + 1, click)
+        assert run.turn().step_executed  # the coverage click; its local response is the witness
+        assert run.rows("_gate_events.jsonl")[-1]["attribution"]["disposition"] == "LOCAL_LEVER_WITNESS"
+        pending = g3._pending_confirmation
+        assert pending is not None and pending["phase"] == "CLICK"
+        confirm = machine.next_probe_capability()
+        assert confirm["purpose"] == "CONFIRM_LEVER_WITNESS" and confirm["actions"] == [click]
+
+        _respond_on(run, cells, run.transition + 1, click)
+        acted = run.turn()
+        assert acted is not None and acted.step_executed, "the CLICK-phase confirmation went to Duck"
+        assert run.prompts == [] and len(run.env_calls) == 2 and run.env_calls[-1]["actions"] == [click]
+        envelope, receipt, row = run.rows("_probe_envelopes.jsonl")[-1], run.rows("_gate_events.jsonl")[-1], \
+            machine.transition_index[-1]
+        assert envelope["executor"] == "CONTROLLER" and envelope["purpose"] == "CONFIRM_LEVER_WITNESS"
+        assert envelope["probe_id"] == receipt["probe_id"] == row["probe_id"] == pending["probe_id"]
+        assert receipt["evidence_id"] == row["evidence_id"] and row["transition_id"] == K013_CLICK_PASS + 2
+        assert receipt["confirmation"]["status"] == "SUPPORTED" and g3._pending_confirmation is None
+        assert receipt["confirmation"]["witness_evidence_ref"] == pending["witness_evidence_ref"]
+    finally:
+        monkeypatch.undo()

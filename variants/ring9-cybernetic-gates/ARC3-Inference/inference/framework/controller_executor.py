@@ -275,6 +275,8 @@ def _nav_step(
         return _duck(machine, "G3 NAV needs an answer or has no active target")
     if capability.get("purpose") == "RANKED_CLICK_TARGET":  # a HYBRID world's CLICK pass
         return _g3_click_step(machine, capability, g3_choice_handoff)
+    if capability.get("purpose") == "CONFIRM_LEVER_WITNESS" and capability.get("actions"):
+        return _bound_step(machine, capability)  # a CLICK-phase confirmation binds its witnessed click
     if capability.get("purpose") not in {"PILOT_TO_LEVER_CONTACT", "CONFIRM_LEVER_WITNESS"}:
         return _duck(machine, f"G3 NAV cannot compute {capability.get('purpose')}")
     target = capability.get("target") or {}

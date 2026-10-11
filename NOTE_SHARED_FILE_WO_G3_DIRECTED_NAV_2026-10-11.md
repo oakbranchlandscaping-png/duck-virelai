@@ -25,3 +25,15 @@
 ## Amendment 1, 2026-10-11 (filed after the ratchet edit, in the same working session; not before it)
 
 The repair grew `_nav_step` from 111 to 113 NCNB lines. To compensate, a new `_bound_step(machine, capability)` takes the bound-action tail that `_nav_step`'s G1 branch and its G2 non-pilot branch both repeated, **moved unchanged**. `_g3_click_step` calls it too. `_ordinary_step` is left as it was.
+
+## Amendment 2, 2026-10-11, filed before the edit (Sol's follow-up: the HYBRID CLICK-phase confirmation)
+
+| File | Function | Change |
+|---|---|---|
+| `inference/framework/controller_executor.py` | `_nav_step`, G3 branch | A `CONFIRM_LEVER_WITNESS` capability that binds an action (the CLICK-phase confirmation, `virelai_gates.py:3437-3448`) goes to `_bound_step`, which executes the gate's own bound click. A NAV-phase confirmation binds no action, so it stays on `planned_nav_step`, unchanged. |
+
+**Premise found while writing the fail-first test.** The gate declares a CLICK-phase confirmation only when `machine._legacy_confirmation_replay` is true (`virelai_gates.py:4141-4160`; the flag is documented at `:6505-6509`). That flag is false on every live machine; `record_replay` sets it only for historical records that hold legacy G3 dossier answers. A live machine applies the unified G3 law instead: one attributed CLICK activation is the witness, and there is no confirmation. This edit is therefore a parity guard for legacy-flagged machines driven by the controller. It is not a live-play repair. Reported to Sol in the build note.
+
+`virelai_gates.py` and the lifecycle are unchanged. The NAV handoff and NAV selection stay off.
+
+**Sol, 2026-10-11:** keep it as a **replay compatibility guard**, in a separate slice (`BUILD_SLICE_WO_G3_REPLAY_CONFIRM_GUARD_2026-10-11`), committed only after its Mac floor.
