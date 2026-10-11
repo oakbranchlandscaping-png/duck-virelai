@@ -133,7 +133,7 @@ def next_owned_step(
         return _duck(machine, "the orientation turn is due")
     world = control_archetype_prior(machine.ego.affordances)["world_type"]
     if world in {"NAVIGATION", "HYBRID"}:
-        return _nav_step(machine, refused=refused, rerun=rerun)
+        return _nav_step(machine, refused=refused, rerun=rerun, g3_choice_handoff=g3_choice_handoff)
     if world != "CLICK_GOD_MODE":
         return _duck(machine, f"unsupported controller world type {world}")
     if machine.gate_id not in CONTROLLER_GATES:
@@ -184,7 +184,7 @@ def _g3_choice_due(machine: Any) -> bool:
 
 def _nav_step(
     machine: Any, *, refused: frozenset | set = frozenset(),
-    rerun: Mapping[str, Any] | None = None,
+    rerun: Mapping[str, Any] | None = None, g3_choice_handoff: bool = False,
 ) -> OwnedStep:
     """Controller-owned deterministic movement; Duck still owns explanations."""
     if machine.gate_id == "G1-EGO":
@@ -194,13 +194,7 @@ def _nav_step(
         capability = machine.next_probe_capability()
         if capability is None:
             return _duck(machine, "G1 offers no exact probe and no answer")
-        action, reason = _bound_action(capability)
-        if action is None:
-            return _duck(machine, reason)
-        return OwnedStep(
-            CONTROLLER, machine.gate_id, reason, ACTION, action=action,
-            probe_token=str(capability["probe_token"]),
-        )
+        return _bound_step(machine, capability)
     if machine.gate_id == "G2-COUNTER":
         view = machine.gate_view()
         if _answer_due(view):
@@ -209,13 +203,7 @@ def _nav_step(
         if capability is None:
             return _duck(machine, "G2 offers no active target or exact counter probe")
         if capability.get("purpose") != "PILOT_TO_CONTACT":
-            action, reason = _bound_action(capability)
-            if action is None:
-                return _duck(machine, reason)
-            return OwnedStep(
-                CONTROLLER, machine.gate_id, reason, ACTION, action=action,
-                probe_token=str(capability["probe_token"]),
-            )
+            return _bound_step(machine, capability)
         target = capability.get("target") or {}
         planned = machine.counter.planned_nav_step(target)
         if planned is None:
@@ -285,6 +273,8 @@ def _nav_step(
     capability = machine.next_probe_capability()
     if capability is None:
         return _duck(machine, "G3 NAV needs an answer or has no active target")
+    if capability.get("purpose") == "RANKED_CLICK_TARGET":  # a HYBRID world's CLICK pass
+        return _g3_click_step(machine, capability, g3_choice_handoff)
     if capability.get("purpose") not in {"PILOT_TO_LEVER_CONTACT", "CONFIRM_LEVER_WITNESS"}:
         return _duck(machine, f"G3 NAV cannot compute {capability.get('purpose')}")
     target = capability.get("target") or {}
@@ -361,6 +351,27 @@ def _orbit_step(
                 action=dict(lever["click"]), probe_token=str(capability["probe_token"]),
             )
     return _duck(machine, "G4-A has no lever the controller can run")
+
+
+def _g3_click_step(machine: Any, capability: Mapping[str, Any], g3_choice_handoff: bool) -> OwnedStep:
+    """A HYBRID world's G3 CLICK pass, owned as a CLICK world's is (Sol, 2026-10-11): the one bounded CLICK
+    handoff, then the capability's single bound click. The NAV handoff waits for NAV selection and pursuit."""
+    if g3_choice_handoff and _g3_choice_due(machine):
+        return _duck(machine, "G3 choice: several rows are eligible; choose one with "
+                              "virelai('next_probe', question_id=...), or the controller takes the coverage head")
+    return _bound_step(machine, capability)
+
+
+def _bound_step(machine: Any, capability: Mapping[str, Any]) -> OwnedStep:
+    """The controller's step for a capability that binds exactly one action, else Duck's (moved unchanged out
+    of ``_nav_step``'s G1 and G2 branches, the ratchet compensation for the HYBRID CLICK pass)."""
+    action, reason = _bound_action(capability)
+    if action is None:
+        return _duck(machine, reason)
+    return OwnedStep(
+        CONTROLLER, machine.gate_id, reason, ACTION, action=action,
+        probe_token=str(capability["probe_token"]),
+    )
 
 
 def _bound_action(capability: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str]:
