@@ -136,15 +136,23 @@ def test_a_declined_handoff_on_the_hybrid_click_pass_is_followed_by_one_controll
 
 
 def test_the_click_pass_offers_no_second_handoff_and_follows_the_record_into_nav(run):
-    """The rest of the CLICK pass is the controller's; the NAV handoff stays off (Sol: until NAV selection).
+    """The rest of the CLICK pass is the controller's: no second CLICK handoff.
 
-    With Duck declining, the controller's six actions are exactly the live run's transitions 38-43: five
-    coverage clicks, then NAV's first route step."""
+    Revised 2026-10-12 (WO-G3-DIRECTED, NAV slice): Sol's ruling enables the one NAV handoff once NAV selection
+    and pursuit are built, so NAV's first step is that handoff (declined here), then the first route step. With
+    Duck declining both, the controller's six actions are exactly the live run's transitions 38-43: five coverage
+    clicks, then NAV's first route step."""
     g3 = run.machine._adapters["G3-LEVERS"]
-    run.turn()  # the handoff, declined
-    for _ in range(6):
+    fresh_budget = run.agent._yield_seconds
+    run.turn()  # the CLICK handoff, declined
+    for _ in range(5):
         result = run.turn()
-        assert result is not None and result.step_executed and len(run.prompts) == 1  # no second model call
+        assert result is not None and result.step_executed and len(run.prompts) == 1  # no second CLICK handoff
+    run.agent._yield_seconds = fresh_budget  # the stub spends a turn's budget by zeroing it; a new turn has its own
+    nav_handoff = run.turn()  # the one NAV handoff, declined
+    assert nav_handoff is not None and not nav_handoff.step_executed and len(run.prompts) == 2
+    result = run.turn()
+    assert result is not None and result.step_executed and len(run.prompts) == 2
     actions = [call["actions"][0] for call in run.env_calls]
     recorded = [run.recorded[G3_ENTRY + 1 + index]["action"] for index in range(6)]
     assert all(_same(a, b) for a, b in zip(actions, recorded))
@@ -155,9 +163,10 @@ def test_the_click_pass_offers_no_second_handoff_and_follows_the_record_into_nav
     receipts = run.rows("_gate_events.jsonl")
     assert [item["probe_id"] for item in receipts] == [row["probe_id"] for row in run.machine.transition_index[-6:]]
     assert [item["evidence_id"] for item in receipts] == [row["evidence_id"] for row in run.machine.transition_index[-6:]]
-    assert g3._phase == "NAV" and not g3_selection.choice_handoff_due(g3)  # no NAV handoff until NAV selection
-    events = [item["event"] for item in run.rows("_g3_selection_events.jsonl")]
-    assert events == ["HANDOFF", "COVERAGE_RESUMED"]  # one CLICK handoff for the level
+    assert g3._phase == "NAV" and not g3_selection.choice_handoff_due(g3)  # one NAV handoff, already spent
+    events = [(item["event"], item["phase"]) for item in run.rows("_g3_selection_events.jsonl")]
+    assert events == [("HANDOFF", "CLICK"), ("COVERAGE_RESUMED", "CLICK"),
+                      ("HANDOFF", "NAV"), ("COVERAGE_RESUMED", "NAV")]  # one handoff per phase for the level
 
 
 def test_with_the_handoff_off_the_click_pass_is_the_controllers_from_its_first_step(run):

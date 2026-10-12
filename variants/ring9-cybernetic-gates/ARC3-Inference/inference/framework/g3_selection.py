@@ -1,4 +1,4 @@
-"""G3's gate-owned eligibility read and an admitted choice (WO-G3-DIRECTED, CLICK slice).
+"""G3's gate-owned eligibility read and an admitted choice (WO-G3-DIRECTED, CLICK and NAV slices).
 
 Author: Claude (Alpha build seat), 2026-10-11. Design: INTERFACE_WO_G3_DIRECTED_LIBRARY_TARGET v2 §1.2 (Sol's
 decisions D1–D3). Functions over the G3 adapter (``_LeverTarget``), kept beside it the way ``mu_return`` and
@@ -14,7 +14,11 @@ decisions D1–D3). Functions over the G3 adapter (``_LeverTarget``), kept besid
   cursor advance: a finished off-head choice leaves the coverage cursor where it was. ``advance_past_chosen_rows`` keeps the sweep from serving that row again.
 - ``choice_handoff_due`` / ``note_choice_handoff``: at most one bounded Duck handoff per G3 phase per level (D3).
 
-NAV rows are listed for the agenda and served in coverage order; NAV selection is the next slice.
+NAV slice (2026-10-12, Sol's directive): a NAV choice binds a **pursuit** that persists across route steps until
+contact, scoped null, bounded ambiguity, reachability resolution, pilot budget, boundary or staleness ends it.
+A NAV row is selectable only between pursuits (a started pursuit owes its body contact first), and away from the
+head only while it still owes first or body contact (``UNTOUCHED``, ``NO_RESPONSE_YET``). Its staleness reads the
+object's sightings since admission, since the ledger bumps every entity's version on every transition.
 """
 from __future__ import annotations
 
@@ -22,6 +26,8 @@ from typing import Any, Mapping, Sequence
 
 SELECTABLE_STATES = frozenset({"UNTOUCHED", "REOPENED"})
 IN_FLIGHT_STATES = SELECTABLE_STATES | {"ATTEMPTED"}
+NAV_SELECTABLE_STATES = frozenset({"UNTOUCHED", "NO_RESPONSE_YET"})
+NAV_IN_FLIGHT_STATES = NAV_SELECTABLE_STATES | {"ATTEMPTED"}
 
 
 def obligation(g3: Any) -> dict[str, Any] | None:
@@ -61,11 +67,27 @@ def admission_candidates(g3: Any) -> tuple[dict[str, Any], ...]:
         rows.append({
             "entity_id": entity, "member_id": member, "position": position, "phase": g3._phase,
             "coverage_rank": len(rows) + 1, "head": head,
-            "selectable": g3._phase == "CLICK" and (head or (state in SELECTABLE_STATES and member not in inherited)),
+            "selectable": _selectable(g3, head, state, member in inherited),
             "entity_version": None if hypothesis is None else hypothesis.version,
             "obligation": "BODY_CONTACT_OWED" if g3._phase == "NAV" and state == "NO_RESPONSE_YET" else "FIRST_CONTACT",
         })
     return tuple(rows)
+
+
+def _selectable(g3: Any, head: bool, state: str | None, inherited: bool) -> bool:
+    if g3._phase == "CLICK":
+        return head or (state in SELECTABLE_STATES and not inherited)
+    return g3._navigation_steps == 0 and (head or (state in NAV_SELECTABLE_STATES and not inherited))
+
+
+def _refusal(g3: Any, row: Mapping[str, Any] | None) -> str | None:
+    if row is None:
+        return "the question names no row this G3 roster serves now"
+    if row["selectable"]:
+        return None
+    if g3._phase == "NAV" and g3._navigation_steps:
+        return "the NAV pursuit under way owes its body contact first"
+    return f"this {g3._phase} row is not selectable now (settled, ambiguous or an inherited null)"
 
 
 def note(g3: Any, event: str, selection: Mapping[str, Any], reason: str) -> None:
@@ -94,14 +116,17 @@ def select(g3: Any, question_id: str, *, actor: str) -> dict[str, Any]:
     else:
         row = next((item for item in admission_candidates(g3)
                     if lever_question_id(level, item["entity_id"]) == question_id), None)
-        reason = ("the question names no row this G3 roster serves now" if row is None
-                  else None if row["selectable"] else f"a {g3._phase} row is not selectable in this slice")
+        reason = _refusal(g3, row)
     if reason is not None:
         note(g3, "REFUSED", request, reason)
         raise GateContractError(f"G3 choice not admissible: {reason}.")
     selection = {**request, "entity_id": row["entity_id"], "member_id": row["member_id"], "position": row["position"],
                  "entity_version": row["entity_version"], "phase": g3._phase, "level": level,
                  "life": int(g3.machine.lives.life), "is_head": row["head"], "selected_at_revision": g3.revision + 1}
+    if g3._phase == "NAV":  # a new pursuit: its route starts from here
+        selection["selected_at_transition"] = int(g3.machine.observed_through_step)
+        g3._nav_route_evidence.clear()
+        g3._last_nav_plan = None
     g3._selection = selection
     g3.revision += 1
     note(g3, "ADMITTED", selection, "head" if row["head"] else "away from the coverage head")
@@ -116,17 +141,37 @@ def _stale(g3: Any, selection: Mapping[str, Any], candidates: Sequence[Mapping[s
         return "the phase or level changed"
     if int(g3.machine.lives.life) != selection["life"]:
         return "a new life began"
-    if hypothesis is None or hypothesis.version != selection["entity_version"]:
+    if hypothesis is None or _changed(hypothesis, selection):
         return "the chosen object changed"
     if position >= len(candidates) or str(candidates[position]["member_id"]) != selection["member_id"]:
         return "the roster changed"
-    if not selection["is_head"] and getattr(item, "state", None) not in IN_FLIGHT_STATES:
+    if _settled(g3, selection, getattr(item, "state", None)):
         return "the chosen row is already settled"
     return None
 
 
-def selected_click_probe(g3: Any, candidates: Sequence[Mapping[str, Any]]) -> Any | None:
-    """The bound probe of an admitted CLICK choice, head or not, or None (no choice, or a stale one)."""
+def _changed(hypothesis: Any, selection: Mapping[str, Any]) -> bool:
+    """CLICK: not the version the choice named. NAV: absent, or seen other than STILL since admission (the
+    ledger bumps every entity's version on every observed transition, STILL included)."""
+    if selection["phase"] != "NAV":
+        return hypothesis.version != selection["entity_version"]
+    since = int(selection["selected_at_transition"])
+    return hypothesis.status != "PRESENT" or any(
+        sighting.relation != "STILL" for sighting in hypothesis.sightings if sighting.transition_id > since)
+
+
+def _settled(g3: Any, selection: Mapping[str, Any], state: str | None) -> bool:
+    if selection["phase"] != "NAV":
+        return not selection["is_head"] and state not in IN_FLIGHT_STATES
+    entity = selection["entity_id"]
+    if entity in g3._terrain_roles or g3._g3_settled(entity):
+        return True
+    return not selection["is_head"] and state not in NAV_IN_FLIGHT_STATES
+
+
+def selected_probe(g3: Any, candidates: Sequence[Mapping[str, Any]]) -> Any | None:
+    """The bound probe of an admitted choice, head or not, or None (no choice, or a stale one). A NAV probe's id
+    is its admission's identity plus the route step, so the steps of one pursuit share the admission."""
     from inference.framework.virelai_gates import LEVER_GATE_ID
 
     selection = g3._selection
@@ -134,21 +179,22 @@ def selected_click_probe(g3: Any, candidates: Sequence[Mapping[str, Any]]) -> An
         return None
     stale = _stale(g3, selection, candidates)
     if stale is not None:
-        note(g3, "STALE", selection, stale)
-        g3._selection = None
+        yield_choice(g3, stale)
         return None
     position = int(selection["position"])
     target = g3._probe_target(candidates[position], position)
     target["question_id"] = selection["question_id"]
     target["selected_by"] = selection["actor"]
-    probe_id = (f"{LEVER_GATE_ID}:CLICK:SEL:{selection['member_id']}:L{selection['level']}"
+    probe_id = (f"{LEVER_GATE_ID}:{selection['phase']}:SEL:{selection['member_id']}:L{selection['level']}"
                 f"P{selection['life']}:R{selection['selected_at_revision']}")
+    if selection["phase"] == "NAV":
+        return g3._nav_probe(f"{probe_id}:{g3._navigation_steps + 1}", target)
     return g3._click_probe(probe_id, target)
 
 
 def advance_past_chosen_rows(g3: Any, candidates: Sequence[Mapping[str, Any]]) -> None:
     """The coverage sweep does not serve again a row a choice already finished (a no-op with no choice)."""
-    while (g3._phase == "CLICK" and g3._target_index < len(candidates)
+    while (g3._target_index < len(candidates)
            and str(candidates[g3._target_index]["member_id"]) in g3._chosen_members):
         g3._target_index += 1
 
@@ -156,6 +202,7 @@ def advance_past_chosen_rows(g3: Any, candidates: Sequence[Mapping[str, Any]]) -
 def finish_target(g3: Any, member_id: str | None) -> None:
     """A target's G3 work is done. A finished off-head choice leaves the coverage cursor where it was."""
     selection = g3._selection
+    g3._navigation_steps = 0
     if selection is not None and str(member_id or "") == selection["member_id"]:
         g3._selection = None
         note(g3, "FINISHED", selection, "the chosen row's G3 work is done")
@@ -163,6 +210,35 @@ def finish_target(g3: Any, member_id: str | None) -> None:
             g3._chosen_members.add(selection["member_id"])
             return
     g3._target_index += 1
+
+
+def interrupt_pursuit(g3: Any, member_id: str | None) -> None:
+    """A boundary interrupted the pursuit: the row stays where it was, and a choice bound to it ends (STALE). The
+    outcome's route evidence stays on its receipt; ``record_outcome`` clears it once the pursuit has changed."""
+    g3._navigation_steps = 0
+    selection = g3._selection
+    if selection is not None and str(member_id or "") == selection["member_id"]:
+        note(g3, "STALE", selection, "a boundary interrupted the pursuit")
+        g3._selection = None
+
+
+def yield_choice(g3: Any, reason: str) -> None:
+    """End a bound choice that went stale or that mandatory work overtook; coverage owes the row later. An
+    abandoned NAV pursuit takes its route state with it, so coverage resumes at a fresh step (Sol's review)."""
+    selection = g3._selection
+    if selection is None:
+        return
+    note(g3, "STALE", selection, reason)
+    g3._selection = None
+    if selection["phase"] == "NAV":
+        g3._navigation_steps = 0
+        g3._nav_route_evidence.clear()
+        g3._last_nav_plan = None
+
+
+def pursuit(g3: Any) -> tuple[int, int | None]:
+    """The pursuit a route step belongs to: the coverage cursor, and the admission of a bound choice."""
+    return g3._target_index, None if g3._selection is None else int(g3._selection["selected_at_revision"])
 
 
 def choice_handoff_due(g3: Any) -> bool:
@@ -186,4 +262,5 @@ def note_coverage_resumed(g3: Any) -> None:
 
 
 __all__ = ["admission_candidates", "advance_past_chosen_rows", "choice_handoff_due", "finish_target",
-           "note_choice_handoff", "note_coverage_resumed", "obligation", "select", "selected_click_probe"]
+           "interrupt_pursuit", "note_choice_handoff", "note_coverage_resumed", "obligation", "pursuit", "select",
+           "selected_probe", "yield_choice"]

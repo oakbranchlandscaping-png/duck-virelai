@@ -3486,16 +3486,12 @@ class _LeverTarget:
         ):
             return mu_return.revisit_probe(self, ledger, self._mu_revisit[0])
         if self._reopened_reachability_indices:
-            self._target_index = min(self._reopened_reachability_indices)
-            self._reopened_reachability_indices.remove(self._target_index)
-            self._navigation_steps = 0
-            self._nav_route_evidence.clear()
-            self._last_nav_plan = None
+            self._take_reopened_row()
         if self._phase == "NAV":
             terrain_context = self._terrain_context()
             self._classify_terrain_rows(terrain_context)
             self._advance_accounted_terrain_rows(candidates)
-        chosen = g3_selection.selected_click_probe(self, candidates)  # WO-G3-DIRECTED: an admitted choice
+        chosen = g3_selection.selected_probe(self, candidates)  # WO-G3-DIRECTED: an admitted choice
         if chosen is not None:
             return chosen
         g3_selection.advance_past_chosen_rows(self, candidates)
@@ -3504,6 +3500,7 @@ class _LeverTarget:
                 self._phase = "NAV"
                 self._target_index = 0
                 self._navigation_steps = 0
+                self._chosen_members.clear()  # a row chosen in CLICK still owes its NAV body contact
             else:
                 self._close_scoped_null_entities()
                 self._complete_reason = "CLICK_ENUMERATION_COMPLETE"
@@ -3515,8 +3512,22 @@ class _LeverTarget:
         target = self._probe_target(candidates[self._target_index], self._target_index)
         if self._phase == "CLICK":
             return self._click_probe(f"{LEVER_GATE_ID}:CLICK:{self._target_index + 1}", target)
+        return self._nav_probe(f"{LEVER_GATE_ID}:NAV:{self._target_index + 1}:{self._navigation_steps + 1}", target)
+
+    def _take_reopened_row(self) -> None:
+        """A reopened reachability row is due: the cursor goes back to it (moved unchanged out of ``next_probe``),
+        and a bound choice yields to it (WO-G3-DIRECTED, NAV slice)."""
+        self._target_index = min(self._reopened_reachability_indices)
+        self._reopened_reachability_indices.remove(self._target_index)
+        self._navigation_steps = 0
+        self._nav_route_evidence.clear()
+        self._last_nav_plan = None
+        g3_selection.yield_choice(self, "a reopened row owes its body contact first")
+
+    def _nav_probe(self, probe_id: str, target: Mapping[str, Any]) -> ProbeEnvelope:
+        """A NAV pilot probe at the target (moved unchanged out of ``next_probe``; WO-G3-DIRECTED, NAV slice)."""
         return ProbeEnvelope(
-            probe_id=f"{LEVER_GATE_ID}:NAV:{self._target_index + 1}:{self._navigation_steps + 1}",
+            probe_id=probe_id,
             gate_id=LEVER_GATE_ID,
             purpose="PILOT_TO_LEVER_CONTACT",
             question="Pilot the demonstrated ego toward the ranked entity; declare approach or contact attempt.",
@@ -3796,7 +3807,7 @@ class _LeverTarget:
     def record_outcome(
         self, probe: ProbeEnvelope, outcome: Mapping[str, Any]
     ) -> dict[str, Any]:
-        target_index_before = self._target_index
+        pursuit_before = g3_selection.pursuit(self)
         expected = self.next_probe()
         if expected is None or probe.probe_id != expected.probe_id:
             raise GateContractError("Outcome does not belong to the current G3 probe.")
@@ -4287,15 +4298,14 @@ class _LeverTarget:
             self._navigation_steps += 1
             self._nav_route_evidence.append(evidence_id)
             if boundary_interrupted:
-                self._navigation_steps = 0
+                g3_selection.interrupt_pursuit(self, target_member_id)
             elif (
                 discovery_recorded
                 and probe.pilot_intent == "CONTACT_ATTEMPT"
             ):
                 # The positive witness is durable and this roster row is done.
                 # Continue the broad sweep; G4 returns after G3 inventory close.
-                self._target_index += 1
-                self._navigation_steps = 0
+                g3_selection.finish_target(self, target_member_id)
             elif (
                 target_changed
                 and probe.pilot_intent == "CONTACT_ATTEMPT"
@@ -4312,16 +4322,14 @@ class _LeverTarget:
                             "causal ownership; the frozen attempt is recorded rather than repeated."
                         ),
                     )
-                self._target_index += 1
-                self._navigation_steps = 0
+                g3_selection.finish_target(self, target_member_id)
             elif (
                 probe.pilot_intent == "CONTACT_ATTEMPT"
                 and attribution.disposition in {"SCOPED_NULL_RESPONSE", COUNTER_ONLY_DISPOSITION}
                 and self._pending_confirmation is None
             ):
                 # A completed footprint contact with no world residue is the target's scoped null.
-                self._target_index += 1
-                self._navigation_steps = 0
+                g3_selection.finish_target(self, target_member_id)
             elif (
                 terminal or self._navigation_steps >= self._navigation_limit
             ) and self._pending_confirmation is None:
@@ -4334,8 +4342,7 @@ class _LeverTarget:
                         terminal_state="AMBIGUOUS",
                         reason="The embodied contact pursuit was interrupted by a terminal boundary.",
                     )
-                self._target_index += 1
-                self._navigation_steps = 0
+                g3_selection.finish_target(self, target_member_id)
         elif (
             not is_confirmation and self._phase == "CLICK"
             and self._pending_confirmation is None and not boundary_interrupted
@@ -4356,7 +4363,7 @@ class _LeverTarget:
             "target_changed": target_changed,
             "route_evidence_refs": list(self._nav_route_evidence),
         }
-        if self._target_index != target_index_before:
+        if g3_selection.pursuit(self) != pursuit_before:
             self._nav_route_evidence.clear()
             self._last_nav_plan = None
         self.revision += 1
@@ -4545,7 +4552,7 @@ class _LeverTarget:
             })
             self._pending_confirmation = None
         self._pending_reachability = None
-        self._target_index += 1
+        g3_selection.finish_target(self, member_id)
         self._navigation_steps = 0
         self._nav_route_evidence.clear()
         self._last_nav_plan = None

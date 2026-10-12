@@ -148,8 +148,7 @@ def _ordinary_step(
     """Controller ownership shared by CLICK and world-independent exact capabilities."""
     capability = machine.next_probe_capability()  # first: it can advance the gate's own state
     if g3_choice_handoff and capability is not None and _g3_choice_due(machine):
-        return _duck(machine, "G3 choice: several rows are eligible; choose one with "
-                              "virelai('next_probe', question_id=...), or the controller takes the coverage head")
+        return _duck(machine, G3_CHOICE_REASON)
     if machine.gate_id in PREDICTION_GATES:
         return _relations_step(machine, capability, refused)
     view = machine.gate_view()
@@ -166,6 +165,10 @@ def _ordinary_step(
         CONTROLLER, machine.gate_id, reason, ACTION, action=action,
         probe_token=str(capability["probe_token"]),
     )
+
+
+G3_CHOICE_REASON = ("G3 choice: several rows are eligible; choose one with "
+                    "virelai('next_probe', question_id=...), or the controller takes the coverage head")
 
 
 def _g3_choice_due(machine: Any) -> bool:
@@ -279,6 +282,15 @@ def _nav_step(
         return _bound_step(machine, capability)  # a CLICK-phase confirmation binds its witnessed click
     if capability.get("purpose") not in {"PILOT_TO_LEVER_CONTACT", "CONFIRM_LEVER_WITNESS"}:
         return _duck(machine, f"G3 NAV cannot compute {capability.get('purpose')}")
+    return _g3_pilot_step(machine, capability, g3_choice_handoff)
+
+
+def _g3_pilot_step(machine: Any, capability: Mapping[str, Any], g3_choice_handoff: bool) -> OwnedStep:
+    """G3's NAV route step toward the capability's bound target, a selected pursuit's or the coverage head's
+    (moved unchanged out of ``_nav_step``). Before a pursuit starts, the one bounded NAV handoff (Sol, 2026-10-12:
+    at most one NAV choice turn per level, only for a genuine choice and with no obligation pending)."""
+    if g3_choice_handoff and capability.get("purpose") == "PILOT_TO_LEVER_CONTACT" and _g3_choice_due(machine):
+        return _duck(machine, G3_CHOICE_REASON)
     target = capability.get("target") or {}
     adapter = machine._adapters["G3-LEVERS"]
     planned = adapter.planned_nav_step(target)
@@ -357,10 +369,9 @@ def _orbit_step(
 
 def _g3_click_step(machine: Any, capability: Mapping[str, Any], g3_choice_handoff: bool) -> OwnedStep:
     """A HYBRID world's G3 CLICK pass, owned as a CLICK world's is (Sol, 2026-10-11): the one bounded CLICK
-    handoff, then the capability's single bound click. The NAV handoff waits for NAV selection and pursuit."""
+    handoff, then the capability's single bound click. The NAV handoff is ``_g3_pilot_step``'s."""
     if g3_choice_handoff and _g3_choice_due(machine):
-        return _duck(machine, "G3 choice: several rows are eligible; choose one with "
-                              "virelai('next_probe', question_id=...), or the controller takes the coverage head")
+        return _duck(machine, G3_CHOICE_REASON)
     return _bound_step(machine, capability)
 
 
