@@ -2,6 +2,13 @@
 
 ## Current project direction
 
+> **New collaborators start with [`START_HERE.md`](START_HERE.md).** The current accepted local
+> source is `ring9-unified` at `b635fb9`; the current state, plan, execution order, and test record
+> are `STATE_OF_THE_DUCK_BUILD_v5_2026-10-12.md`,
+> `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md`,
+> `EXECUTION_PLAN_SEMANTIC_LIBRARY_v3_2026-10-12.md`, and
+> `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md`.
+
 > **Project directives, 2026-10-04 (Director-ratified): `DIRECTIVE_COMPETITION_ENDGAME_v2_2026-10-04.md`** (supersedes v1 of 2026-10-03).
 > The goal through 8 November is a paper, and the ARC Prize Paper Prize requires a linked, scored
 > Kaggle submission. So: first scored ARC-AGI-3 submission by about 12 October, on Qwen3.6-27B-FP8;
@@ -11,21 +18,23 @@
 > The GPU quota is shared by every seat. Read the directive before planning any run or submission.
 
 > **The single tree, 2026-10-05 onward.** The click line and the NAV line are merged into one Ring 9
-> source. All work commits to `ring9-unified`; `main` only fast-forwards after a Mac test floor
-> passes; Kaggle packages are built from `main`. **New collaborators start with
-> `handoff/FRESH_TASK_BOOTSTRAP_2026-10-07.md`, then `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md`.**
+> source. All work commits to `ring9-unified`; `main` only fast-forwards after an accepted Mac test
+> floor passes. Package manifests name the exact source commit. The fresh-task procedure is
+> `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md`.
 
-The active build is `variants/ring9-cybernetic-gates/` (runtime source: its `ARC3-Inference/`). Its North Star is to make Duck investigate
-an ARC world through gated cybernetic targets: establish its action surface and ego, isolate the
-counter, discover levers and reactions, test environmental forces and scoped inertness, and then
-explore counter-masked novel states. A win is admitted only when the environment presents a
-terminal transition; Duck may then explain that observed win using the physics model it learned.
+The active build is `variants/ring9-cybernetic-gates/` (runtime source: its `ARC3-Inference/`). Its
+North Star is an evidence-backed semantic library for every observed novel world. The library itself
+is the cybernetic target: establish the control locus and counter, discover the lever roster, deepen
+each lever's dossier, then learn forces, driven reactions, scoped negatives, and typed physics laws.
+Duck reads the library and chooses among gate-admitted experiments; deterministic code performs
+routine coverage and certifies results. Push is shelved. If world study reveals a win, the solver
+records it, describes it in the learned grammar, freezes the claim, and tests it on the next level.
 
-The current state of the build (what is built, what is open, the honest ledger and the test floor)
-is `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md`; a later version supersedes it. The read order, the
-branch rule and the path from a change to a Kaggle run are in `handoff/FRESH_TASK_BOOTSTRAP_2026-10-07.md`.
-`DOCUMENTATION_INDEX_2026-09-20.md` maps every document, current and historical.
-`CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-20.md` and `-09-22.md` are historical (they predate the
+The current state of the build is `STATE_OF_THE_DUCK_BUILD_v5_2026-10-12.md`. The read order,
+authority rules, branch discipline, and path from a change to a run are in `START_HERE.md` and
+`handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md`. `DOCUMENTATION_INDEX_2026-09-20.md` maps current and
+historical documents.
+`CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-20.md` and `CURRENT_STATUS_AND_FULL_BUILD_PLAN_2026-09-22.md` are historical (they predate the
 merge, memory, controller-first G4 and submission mode).
 
 The original competition structure below remains useful repository history. Where it conflicts
@@ -60,10 +69,9 @@ No external project path is imported, symlinked, or referenced from inside it.
 
 ## Method laws (abbreviated)
 
-Prefix-incremental library (50 ms typical / 200 ms hard per-turn budget) · one variable per
-A/B · immutable baseline · ≥2 runs per arm, all-25 and ex-ft09 means reported · verdicts typed
-`MATCH / MISMATCH / NOT_MEASURED / NOT_GRADED` · subtraction, never annotation: the library
-shrinks the model's per-turn reading, it never adds a dossier.
+One canonical library writer · gate-owned admission and certification · receipts for every action ·
+bounded live view and retrieval · one shared-file editor · fail-first slices · T0/T1/T2 test gates ·
+verdicts typed `MATCH / MISMATCH / NOT_MEASURED / NOT_GRADED` · artifacts inspected before scores.
 
 ## Licensing and attribution
 

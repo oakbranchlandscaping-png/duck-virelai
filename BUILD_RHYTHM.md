@@ -1,5 +1,19 @@
 # Duck–Virelai build rhythm
 
+## Current Ring 9 amendment — 2026-10-12
+
+The active development loop is **interface → fail first → narrow build → T0 → T1 → review → T2 once → explicit-path commit → live evidence when required**.
+
+Test tiers protect both speed and coverage:
+
+- **T0, change-focused:** the smallest meaningful contract and regression set; expected under 90 seconds.
+- **T1, slice floor:** all tests for the changed subsystem and its shared boundaries; expected under 5 minutes, target near 3.
+- **T2, full acceptance:** the full accepted suite, run once after Sol accepts the source and before packaging, release, or a shared runtime merge; goal under 15 minutes.
+
+The current pre-optimization T2 reference is 792 passed, 1 skipped in 1535.82 seconds at `b635fb9`. The tiering slice must prove unchanged test collection and may not delete, weaken, skip, xfail, or alter a golden. Until it lands, follow the focused command in the active work order and preserve the latest full-floor command for final acceptance.
+
+The present product loop is library-centered: a gate exposes an actionable question, Duck chooses where needed, the controller acts, receipts capture the result, deterministic code certifies it, and the library revision becomes the next target. See `START_HERE.md` and build plan v3.
+
 ## Standing rule
 
 Do not spend a full 25-game Kaggle run to debug a narrow mechanism.

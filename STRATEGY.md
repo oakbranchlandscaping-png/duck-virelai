@@ -1,4 +1,13 @@
 # THE WIN-DISCOVERY STRATEGY — the Virelai method, stated once
+
+## Current strategy amendment — 2026-10-12
+
+The semantic library is now the cybernetic target. The earliest actionable library gap selects the gate; the gate owns admissible experiments and certification; the controller performs routine coverage and navigation; Duck chooses among bounded admitted experiments when judgment helps. The result is written to one evidence-backed `world_model.json`, and Duck reads a bounded projection before its next choice.
+
+G1 establishes the control locus, G2 the counter, G3 the lever roster, G4 each lever's mechanics, and G5/G6 the remaining force, reaction, negative, and grammar chapters. One attributed activation admits a lever; later gates deepen the dossier. Duck's assertions never certify a fact.
+
+Push and frontier-driven win seeking are shelved. World study may reveal a win; the solver then describes the observed transition in its learned language, freezes that claim, and tests it on the next level. Earlier sections describing exhaustive novelty as the active win policy are historical strategy. The current governing documents are `START_HERE.md` and `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md`.
+
 **Type:** `STRATEGY` · **v1.2** · **2026-08-26** · **Author:** the Director; recorded by the
 Cowork chamber · **Status:** GOVERNING for this repo — every ring implements a piece of
 this document; every prompt layer teaches it to the model.
@@ -6,7 +15,7 @@ this document; every prompt layer teaches it to the model.
 PROBE_STRATEGY_v2 + rider · SPEC_SOLVER_LOOPS_v2 · G9/G10/G11.
 **Amendments:** v1.1 — §5 induction/deduction rhythm (Director, 2026-08-26). v1.2 — §6
 the field card reading surface + refreshed live status (2026-08-26). Header carries the
-version; the superseded text stays legible below.
+version; the superseded text stays legible below. The 2026-10-12 amendment above governs where the older text conflicts.
 
 ---
 

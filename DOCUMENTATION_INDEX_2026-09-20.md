@@ -1,27 +1,40 @@
 # Duck-Virelai documentation authority map
 
-**Updated:** 2026-10-07
+**Updated:** 2026-10-12
 **Active source:** `variants/ring9-cybernetic-gates/ARC3-Inference/` on branch `ring9-unified` (one tree since 2026-10-05)
 **Purpose:** Distinguish the present North Star and build state from historical plans, frozen
 packages, execution evidence, and prior-art trees.
 
-## START HERE (2026-10-07)
+## START HERE (2026-10-12)
 
 **The build is one tree.** The click line (`r9-r20-level-entry`) and the NAV line (the old `main`) were merged into
-`ring9-unified` on 2026-10-05. All work commits there; `main` fast-forwards only after a Mac floor passes; Kaggle
-packages are built from `main`. Current floor: **619 passed, 1 skipped** at `c5e8ff6`; `main` = `ring9-unified` =
-`f333919`.
+`ring9-unified` on 2026-10-05. All work commits there; `main` fast-forwards only after an accepted Mac floor;
+package manifests name their exact source commit. Current accepted local head: `b635fb9`. Current floor:
+**792 passed, 1 skipped** in 1535.82 seconds. After this documentation consolidation, local `ring9-unified` is
+eight commits ahead of local and remote `main`, which remain at `472aa32`; accepted runtime is `b635fb9`.
 
 | Read | For |
 |---|---|
-| `handoff/FRESH_TASK_BOOTSTRAP_2026-10-07.md` | Seats, the branch rule, the read order, the path from a change to a Kaggle run, the rules never bent |
-| `STATE_OF_THE_DUCK_BUILD_v2_2026-10-07.md` | The cursor, open questions, horizon, honest ledger, build-status table and floor |
+| `START_HERE.md` | The project in one page, authority order, current handoff, roles, and fixed terms |
+| `STATE_OF_THE_DUCK_BUILD_v5_2026-10-12.md` | Accepted source, built capabilities, live evidence, remaining gaps, and directed order |
+| `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md` | The product, control loop, gate contract, stages, and acceptance criteria |
+| `EXECUTION_PLAN_SEMANTIC_LIBRARY_v3_2026-10-12.md` | Work orders, owners, dependencies, test gates, and public-25 contract |
+| `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md` | Cold-start branch, review, testing, commit, and handoff procedure |
+| `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md` | Accepted floors through `b635fb9` and the test-runtime requirement |
+| `RULINGS_CONSOLIDATION_v4_2026-10-10.md` | Ratified rulings 15–24 |
 | `RECORD_RING9_SINGLE_TREE_AGREEMENT_v1_2026-10-05.md`, `UNIFICATION_RING9_SINGLE_TREE_v1_2026-10-05.md` | The merge and the shared first-witness law (G3 discovers, G4 types) |
-| `REPORT_SOL_SINGLE_TREE_NAV_AND_NEXT_WORK_v1_2026-10-06.md`, `REVIEW_SOL_SINGLE_TREE_REPORT_v1_2026-10-06.md` | The whole tree read at source, and where the two Alpha seats agree and differ |
-| `RECORD_RING9_TEST_FLOOR_v1_2026-10-07.md` | Every floor since the merge, reconciled |
+
+**Authority:** latest Director ruling → ratified rulings → current build plan → current execution plan → current
+status → accepted slice records → history. Code and test evidence determine what is implemented.
 
 Sections 2, 5 and 10 below are kept as they stood on their dates; where they disagree with the documents above,
 the documents above govern. The dated callouts that follow are the running log, newest first.
+
+> **2026-10-12 LIBRARY-DIRECTED G3 AND CURRENT HANDOFF (Sol, builder supervisor) — signed.** The local
+> accepted source is `b635fb9`: canonical v2 world models, bounded live view and retrieval, directed G3 CLICK,
+> reset-continuous evidence, fail-closed record handling, and directed G3 NAV pursuit. Mac floor: 792 passed,
+> 1 skipped. Next: test-runtime infrastructure, G4 per-lever dossiers, remaining NAV G1 and answer-loop friction,
+> then a current-source public-25 run. Push stays shelved. Start with `START_HERE.md` and status v5.
 
 > **2026-10-08 · Claude Alpha (click) · `eac248f`, `5d0120d` — signed.** Touched: `UPLOAD_STATUS_RING9_SUBMISSION_v1_2026-10-08.md` (kernel push logged; gate amended under rulings 8 and 10), the ratification documents committed (`RULINGS_CONSOLIDATION_v1`, Directive v3, chamber briefs, `THESIS_v1`, `BUILD_PLAN_PAPER_EVIDENCE_v1`). No runtime files.
 

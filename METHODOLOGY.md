@@ -4,6 +4,12 @@ actually executed (Director's order: "you have developed a good rhythm and we ne
 codified"). **For:** any future build chamber, cold. Read STRATEGY.md for WHAT the
 solver does; this is HOW a ring gets built, proven, shipped, run, and read.
 
+## Current Ring 9 addendum — 2026-10-12
+
+The current single-tree workflow replaces ring-copy mechanics for active Ring 9 work. Start with `START_HERE.md` and `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md`. Work on `ring9-unified`; file a shared-file note before an edit; demonstrate the failure on accepted source; build one narrow slice; run T0 and T1; have Sol review source, replay semantics, and artifacts; then run T2 once and commit explicit paths. The Director controls pushes, `main` fast-forwards, Kaggle run spend, and submissions.
+
+The active evidence rhythm is **question → admitted experiment → receipt → deterministic certification → library revision → next question**. A live run proves the feature executed and its artifacts are coherent before score is interpreted. Historical ring procedures below remain useful provenance where they do not conflict with this addendum.
+
 ---
 
 ## The cycle, in one line
