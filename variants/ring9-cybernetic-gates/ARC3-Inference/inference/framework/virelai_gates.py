@@ -3139,15 +3139,35 @@ class _LeverTarget:
         ego_cells, _ego_binding_source = self.machine.ego.embodied_ego_binding()
         if ego_cells:
             ledger.bind_role_cells("EGO", ego_cells)
-        for outcome in self.machine.counter._lossless_outcomes:
-            transition_id = int(outcome.get("transition_id") or 0)
-            if transition_id in self._observed_transition_ids:
-                continue
-            ledger.observe(outcome)
-            self._observed_transition_ids.add(transition_id)
+        self._observe_seed_stream(ledger)
         self.entity_ledger = ledger
         self.lifecycle_journal = LifecycleJournal(ledger.entities)
         return ledger
+
+    def _observe_seed_stream(self, ledger: EntityLedger) -> None:
+        """G2's outcomes and, in transition order with them, every reset since G2's seed, each as a full board
+        rebuilt and verified from the level-entry record (G3 reset continuity; DIAGNOSTIC_G3_LEDGER_FRAME_SYNC_v1
+        option A). A broken record is reported on the ledger and no reset is threaded: never a silent resync."""
+        from inference.framework.level_board import BrokenBoardRecord, reset_frames
+
+        counter, machine = self.machine.counter, self.machine
+        ledger.limitations.extend(f"G2 seed: {item['detail']}" for item in getattr(counter, "seed_limitations", ()))
+        stream = [(int(outcome.get("transition_id") or 0), False, outcome) for outcome in counter._lossless_outcomes]
+        self._board_record_breaks = []  # read by the library census, which fails G3's claims closed on a break
+        try:
+            resets = reset_frames(machine.ego._initial_grid, machine.transition_index, entry=machine.carry.entry,
+                                  since=getattr(counter, "seed_transition", machine.carry.entry))
+        except BrokenBoardRecord as exc:
+            ledger.limitations.append(f"reset continuity unavailable: {exc}; no reset was threaded")
+            self._board_record_breaks.append(
+                {"stage": "G3_RESET_CONTINUITY", "transition_id": exc.transition_id, "detail": str(exc)})
+            resets = []
+        stream += [(int(outcome["transition_id"]), True, outcome) for outcome in resets]
+        for transition_id, is_reset, outcome in sorted(stream, key=lambda item: (item[0], not item[1])):
+            if transition_id in self._observed_transition_ids:
+                continue
+            (ledger.observe_reset if is_reset else ledger.observe)(outcome)
+            self._observed_transition_ids.add(transition_id)
 
     def observe_transition(self, outcome: Mapping[str, Any]) -> EntityTransition:
         ledger = self._ensure_entity_ledger()
@@ -6568,15 +6588,41 @@ class CyberneticGateMachine:
 
         ego_cells, binding_source = self.ego.embodied_ego_binding()
         nav_control = compile_nav_control_map(self.ego)
+        seed, seed_transition, broken = self._latest_observed_board()
         self.counter = CounterGateMachine(
             affordances=self.ego.affordances,
-            initial_grid=self.ego.current_grid(),
+            initial_grid=seed,
             observed_through_step=self.ego.observed_through_step,
             excluded_ego_cells=ego_cells,
             ego_binding_source=binding_source,
             nav_bearings=nav_control.bearing_map(),
         )
+        # G3 reset continuity: the transition initial_grid is the board after, and any broken record found while
+        # seeding (reported on G3's ledger, never repaired). A counter built at level entry has neither: its seed is
+        # the level-entry board.
+        self.counter.seed_transition = seed_transition
+        self.counter.seed_limitations = [broken] if broken else []
         self._counter_prepared_from_ego = True
+
+    def _latest_observed_board(self) -> tuple[Any, int, dict[str, Any] | None]:
+        """The board after the level's latest recorded transition, resets included, rebuilt and verified from the
+        level-entry record (G3 reset continuity). A broken record falls back to G1's own outcomes and says so."""
+        from inference.framework.level_board import BrokenBoardRecord, board_through, latest_transition
+
+        entry = self.carry.entry
+        indexed = latest_transition(self.transition_index, entry=entry)
+        in_flight = [  # G1's outcome being recorded now is retained by G1 before its transition-index row is written
+            {"transition_id": int(item.get("transition_id") or 0), "kind": "PROBE",
+             "changed": [[cell["row"], cell["col"], cell.get("before"), cell.get("after")]
+                         for cell in item.get("changed_cells") or () if isinstance(cell, Mapping)]}
+            for item in self.ego._lossless_outcomes if int(item.get("transition_id") or 0) > indexed]
+        rows = [*self.transition_index, *in_flight]
+        try:
+            return board_through(self.ego._initial_grid, rows, entry=entry), latest_transition(rows, entry=entry), None
+        except BrokenBoardRecord as exc:
+            return (self.ego.current_grid(), self.ego.observed_through_step,
+                    {"stage": "G2_SEED", "transition_id": exc.transition_id,
+                     "detail": f"{exc}; seeded from G1's own outcomes instead"})
 
     @property
     def g0_answer(self) -> ActionMetadataAnswer | None:

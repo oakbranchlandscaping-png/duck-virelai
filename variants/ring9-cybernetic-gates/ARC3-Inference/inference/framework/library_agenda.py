@@ -114,19 +114,24 @@ def _gate_questions(machine: Any, level: int) -> list[dict[str, Any]]:
     return questions
 
 
-def _g3_questions(machine: Any, level: int) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[dict[str, Any]]]:
+def _g3_questions(machine: Any, level: int
+                  ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[dict[str, Any]], int]:
     adapter = (getattr(machine, "_adapters", None) or {}).get(G3)
     ledger = getattr(adapter, "entity_ledger", None)
     lifecycle = getattr(adapter, "lifecycle_journal", None)
     if adapter is None or ledger is None or lifecycle is None:
-        return [], None, []
+        return [], None, [], 0
     from inference.framework import g3_selection
 
     candidates = list(g3_selection.admission_candidates(adapter)) if machine.gate_id == G3 else []
     selectable = {row["entity_id"]: row for row in candidates if row.get("selectable")}
     terrain = getattr(adapter, "_terrain_roles", None) or {}
-    questions = []
+    questions, departed = [], 0
     for entity_id, item in sorted(lifecycle.entities.items()):
+        hypothesis = ledger.entities.get(entity_id)
+        if _departed_untouched(hypothesis, item):  # kept in the evidence history, not an actionable question
+            departed += 1
+            continue
         if item.witness_refs:  # a witness admits a lever whatever else was observed of it
             disposition = "ANSWERED_LEVER"
         elif entity_id in terrain:
@@ -137,14 +142,20 @@ def _g3_questions(machine: Any, level: int) -> tuple[list[dict[str, Any]], dict[
             disposition = LIFECYCLE_DISPOSITION.get(item.state, "OPEN")
         if entity_id in selectable and disposition in {"OPEN", "OPEN_IN_PROGRESS"}:
             disposition = "OPEN_ACTIONABLE"
-        hypothesis = ledger.entities.get(entity_id)
         questions.append(_question(
             level, G3, entity_id, "IS_LEVER", "Is this object a lever: does it respond when the ego acts on it?",
             disposition, lifecycle_state=item.state, evidence_refs=list(item.witness_refs)[-3:],
             binding={"entity_version": None if hypothesis is None else hypothesis.version,
                      "member_id": (selectable.get(entity_id) or {}).get("member_id")},
         ))
-    return questions, g3_selection.obligation(adapter), candidates
+    return questions, g3_selection.obligation(adapter), candidates, departed
+
+
+def _departed_untouched(hypothesis: Any, item: Any) -> bool:
+    """Sol, 2026-10-11 (G3 reset continuity, ruling 3): an object that has left the board and that G3 never
+    touched is not actionable. One with a witness or any G3 lifecycle event stays on the agenda."""
+    return (hypothesis is not None and hypothesis.status == "ABSENT" and item.state == "UNTOUCHED"
+            and not item.witness_refs and not item.events)
 
 
 def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str, Any]]:
@@ -210,7 +221,7 @@ def gate_agenda(machine: Any) -> dict[str, Any]:
     """The open questions of the current level, their dispositions and the one selected question."""
     level = int(machine.lives.level)
     gates = _gate_questions(machine, level)
-    g3, obligation, candidates = _g3_questions(machine, level)
+    g3, obligation, candidates, departed = _g3_questions(machine, level)
     levers = [q["subject"] for q in g3 if q["disposition"] == "ANSWERED_LEVER"]
     g4 = _g4_questions(machine, level, levers)
     library = [_question(level, None, f"LEVEL-{level}", chapter, text, "NOT_BUILT") for chapter, text in NOT_BUILT]
@@ -226,7 +237,7 @@ def gate_agenda(machine: Any) -> dict[str, Any]:
     agenda = {
         "schema": SCHEMA, "level": level, "life": int(machine.lives.life), "gate": machine.gate_id,
         "questions": questions, "selected": selected, "eligible": eligible,
-        "obligation": obligation,
+        "obligation": obligation, "departed_untouched": departed,
         "counts": {"questions": len(questions),
                    "unresolved": sum(1 for q in questions if not q["disposition"].startswith("ANSWERED")),
                    "not_built": len(library)},

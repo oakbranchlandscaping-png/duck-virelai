@@ -65,6 +65,8 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_pending_reachability": TRANSIENT,
         # WO-G3-DIRECTED (2026-10-11): a choice is in flight until its row finishes; what was chosen stays.
         "_selection": TRANSIENT, "_chosen_members": LEVEL, "_selection_events": LEVEL, "_choice_handoffs": LEVEL,
+        # G3 reset continuity (2026-10-11): a broken level record found while building the ledger.
+        "_board_record_breaks": LEVEL,
     },
     "_ReactionTarget": {
         "machine": GAME, "revision": LEVEL, "_anatomies": LEVEL, "_answers": LEVEL, "_ordered_entities": LEVEL,

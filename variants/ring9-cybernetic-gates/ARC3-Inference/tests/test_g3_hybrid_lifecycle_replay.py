@@ -47,17 +47,26 @@ def _cut(record, transition_id):
     return next(i for i, step in enumerate(record["steps"]) if step["transition_id"] == transition_id)
 
 
-def _drive(path, first_nav):
-    """Replay up to the first G3 NAV step, then plan and act as the controller does."""
+def _drive(path, first_nav, plans_through=None):
+    """Replay up to the first G3 NAV step, then plan and act as the controller does.
+
+    The controller's planned action must equal the recorded one through ``plans_through`` (every step when it is
+    None). After it the recorded actions play back as history: the planner is still asked, its plans are kept,
+    but it is not held to the live run's choices (Sol, 2026-10-11, G3 reset continuity revision 2).
+    """
     record = load_record(path)
     cut = _cut(record, first_nav)
     result = replay(record, max_steps=cut, measure=False)
     machine = result.machine
     g3 = machine._adapters["G3-LEVERS"]
+    result.plans = {}
     for step in record["steps"][cut:]:
         capability = machine.next_probe_capability()
         planned = g3.planned_nav_step(capability["target"])
-        assert planned is not None and planned.action == step["action"]["action"], step["transition_id"]
+        result.plans[int(step["transition_id"])] = planned
+        assert planned is not None, step["transition_id"]
+        if plans_through is None or int(step["transition_id"]) <= plans_through:
+            assert planned.action == step["action"]["action"], step["transition_id"]
         probe = machine.validate_probe(
             {"probe_token": capability["probe_token"], **dict(step.get("decision") or {})}, [step["action"]]
         )
@@ -72,7 +81,9 @@ def _drive(path, first_nav):
 
 @pytest.fixture(scope="module")
 def k008():
-    return _drive(K008, K008_FIRST_NAV)
+    # The live k008 pursuit was planned from a stale ego (its ledger missed RESET 31): plans are held to the
+    # live run only at T43; T44 onward is historical playback through the T61 boundary.
+    return _drive(K008, K008_FIRST_NAV, plans_through=K008_FIRST_NAV)
 
 
 @pytest.fixture(scope="module")
@@ -161,6 +172,26 @@ def test_k008_boundary_during_the_nav_pursuit_completes_without_a_crash(k008):
     assert g3._deferred_observations[-1]["observation"] == "LEVER_TARGET_ATTEMPT_INTERRUPTED_BY_BOUNDARY"
     assert g3._deferred_observations[-1]["entity_id"] == "E0001"
     _assert_no_lever_without_witness(g3, ())
+
+
+def test_k008_t44_plan_starts_from_the_egos_true_post_reset_footprint(k008):
+    """G3 reset continuity: at T44 the repaired planner stands where the ego really is after RESET 31, not
+    where the stale ledger left it before the death (the live run's stand)."""
+    from test_g3_ledger_frame_sync import _record_board
+
+    _record, result, _machine, g3 = k008
+    plan = result.plans[44]
+    ledger = g3.entity_ledger
+    ego = ledger.entities[ledger.role_entities("EGO")[0]].sightings[0]
+    top, left = min(r for r, _ in ego.cells), min(c for _, c in ego.cells)
+    shape = {(r - top, c - left) for r, c in ego.cells}
+
+    def ego_at(stand, board):  # the ego's footprint, anchored at ``stand``, on a board rebuilt from the record
+        return {board[stand[0] + r][stand[1] + c] for r, c in shape} == {ego.integer}
+
+    after_t43, before_death = _record_board("k008", 43), _record_board("k008", 30)
+    assert tuple(plan.stand) == (12, 16) and ego_at(plan.stand, after_t43)
+    assert ego_at((12, 12), before_death) and not ego_at((12, 12), after_t43)  # the live run's stale stand
 
 
 def test_k013_reachability_release_completes_without_a_crash(k013):

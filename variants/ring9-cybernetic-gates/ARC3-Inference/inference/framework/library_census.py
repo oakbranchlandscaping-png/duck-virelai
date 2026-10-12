@@ -411,6 +411,56 @@ def _certified(machine: Any, steps: Mapping[str, tuple[ComponentObservation, ...
     return {"roles": roles, "scoped_nulls": nulls}, terrain, gaps
 
 
+# G3 reset continuity (Sol, 2026-10-11): which gates' claims rest on a board the level record could not rebuild.
+BOARD_BREAK_GATES = {"G2_SEED": ("G2-COUNTER", "G3-LEVERS"), "G3_RESET_CONTINUITY": ("G3-LEVERS",)}
+
+
+def _board_record_breaks(machine: Any | None) -> list[dict[str, Any]]:
+    """The breaks the gates reported: G2's seed fell back to G1's own board, or G3's ledger could not thread a
+    reset. Each is ``{stage, transition_id, detail}``."""
+    if machine is None:
+        return []
+    adapter = (getattr(machine, "_adapters", None) or {}).get("G3-LEVERS")
+    return ([dict(item) for item in getattr(getattr(machine, "counter", None), "seed_limitations", ()) or ()]
+            + [dict(item) for item in getattr(adapter, "_board_record_breaks", ()) or ()])
+
+
+def _fail_closed(breaks: Sequence[Mapping[str, Any]], level: int, certified: dict[str, Any],
+                 dispositions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A broken board record fails the library closed: a typed RECORD_MISMATCH gap names the break, and every
+    role or scoped null resting on the unverifiable board leaves ``certified`` for a RECORD_MISMATCH gap. Those
+    gates read RECORD_MISMATCH, not CERTIFIED. The gate machine's own products are not touched."""
+    gates: set[str] = set()
+    gaps: list[dict[str, Any]] = []
+    for item in breaks:
+        gates.update(BOARD_BREAK_GATES.get(str(item.get("stage")), ()))
+        gaps.append({"subject": f"LEVEL-{level}", "reason": "RECORD_MISMATCH", "source": "board_record_break",
+                     "archetype_question": "Does the level record rebuild the board these gates rest on?",
+                     "stage": item.get("stage"), "transitions": [int(item.get("transition_id") or 0)],
+                     "detail": str(item.get("detail") or "")})
+    if not gates:
+        return gaps
+    transitions = sorted({int(item.get("transition_id") or 0) for item in breaks})
+    kept = []
+    for role in certified["roles"]:
+        if role.get("gate_id") not in gates:
+            kept.append(role)
+            continue
+        gaps.append({"subject": role.get("entity_id") or role["role"], "reason": "RECORD_MISMATCH",
+                     "archetype_question": f"Is the {role['role']} claim grounded?", "source": "board_record_break",
+                     "transitions": transitions})
+    certified["roles"] = kept
+    if "G3-LEVERS" in gates:
+        gaps.extend({"subject": item["entity_id"], "reason": "RECORD_MISMATCH", "source": "board_record_break",
+                     "archetype_question": "Is the scoped null claim grounded?", "transitions": transitions}
+                    for item in certified["scoped_nulls"])
+        certified["scoped_nulls"] = []
+    for row in dispositions:
+        if row["gate_id"] in gates and row["disposition"] == "CERTIFIED":
+            row["disposition"] = "RECORD_MISMATCH"
+    return gaps
+
+
 def _action_gaps(machine: Any) -> list[dict[str, Any]]:
     product = machine.target_journal.active_product("G1-EGO")
     gaps = []
@@ -488,6 +538,8 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
         gaps.extend(identity_gaps)
         gaps.extend(_action_gaps(machine))
     dispositions = _gate_dispositions(machine)
+    breaks = _board_record_breaks(machine)
+    gaps.extend(_fail_closed(breaks, level, certified, dispositions))
     certified_ids = {d["gate_id"] for d in dispositions if d["disposition"] == "CERTIFIED"}
     foundation_open = not {"G1-EGO", "G2-COUNTER"} <= certified_ids
     role_tracks = {role["identity"]["track_id"] for role in certified["roles"] if role["identity"].get("track_id")}
@@ -499,12 +551,7 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
     for track_id in projection["reset_born"]:
         gaps.append({"subject": track_id, "archetype_question": "Is this the same object as one seen in an earlier life?",
                      "reason": "IDENTITY_UNRESOLVED", "source": "lives are not joined without continuity evidence"})
-    missing = ["JOURNAL_CHECK_PENDING"]
-    if projection["discontinuities"]:
-        missing.append("BOARD_DISCONTINUITY")
-        gaps.append({"subject": f"LEVEL-{level}", "archetype_question": "Do the recorded changes rebuild every board?",
-                     "reason": "RECORD_MISMATCH", "source": "a recorded before-value disagrees with the replayed board",
-                     "transitions": sorted({d["transition_id"] for d in projection["discontinuities"]})})
+    missing = _board_accounting(projection["discontinuities"], breaks, level, gaps)
     return {
         "level": level,
         "state": state,
@@ -517,6 +564,20 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
         "gaps": gaps,
         "accounting": {"status": "NOT_ACCOUNTED", "missing": missing},
     }
+
+
+def _board_accounting(discontinuities: Sequence[Mapping[str, Any]], breaks: Sequence[Mapping[str, Any]], level: int,
+                      gaps: list[dict[str, Any]]) -> list[str]:
+    """What the level's accounting still misses (moved out of ``compile_level``, the ratchet): the pending journal
+    check, and a board discontinuity, whether the census found it or a gate reported a board-record break."""
+    missing = ["JOURNAL_CHECK_PENDING"]
+    if discontinuities or breaks:
+        missing.append("BOARD_DISCONTINUITY")
+    if discontinuities:
+        gaps.append({"subject": f"LEVEL-{level}", "archetype_question": "Do the recorded changes rebuild every board?",
+                     "reason": "RECORD_MISMATCH", "source": "a recorded before-value disagrees with the replayed board",
+                     "transitions": sorted({d["transition_id"] for d in discontinuities})})
+    return missing
 
 
 def freeze_level_census(machine: Any, *, level_before: int) -> dict[str, Any]:
