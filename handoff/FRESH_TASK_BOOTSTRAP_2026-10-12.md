@@ -10,9 +10,9 @@
 Read, in order:
 
 1. `START_HERE.md`
-2. `STATE_OF_THE_DUCK_BUILD_v5_2026-10-12.md`
-3. `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md`
-4. `EXECUTION_PLAN_SEMANTIC_LIBRARY_v3_2026-10-12.md`
+2. `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md`
+3. `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md`
+4. `EXECUTION_PLAN_SEMANTIC_LIBRARY_v4_2026-10-12.md`
 5. `RULINGS_CONSOLIDATION_v4_2026-10-10.md`
 6. `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md`
 
@@ -54,10 +54,11 @@ Push is shelved. A clear is evidence to describe and test across levels, not the
 ## 5. Next assignment sequence
 
 1. Test-runtime infrastructure and tiered floors.
-2. G4 schema-v3 dossiers and projection.
-3. G4 selected-question integration.
-4. NAV G1 and no-repair-loop closure.
-5. Current-source public-25 diagnostic.
+2. Schema-v3 descriptive event ledger and exact scene state.
+3. Bounded scene, transformation, dossier, law, and residual views.
+4. G4 schema-v3 dossiers and selected-question integration.
+5. NAV G1 and no-repair-loop closure.
+6. Current-source public-25 description diagnostic.
 
 Do not start G5/G6, observed-win transfer, Push, or SUB-4 inside these slices.
 

@@ -6,7 +6,7 @@ The semantic library is now the cybernetic target. The earliest actionable libra
 
 G1 establishes the control locus, G2 the counter, G3 the lever roster, G4 each lever's mechanics, and G5/G6 the remaining force, reaction, negative, and grammar chapters. One attributed activation admits a lever; later gates deepen the dossier. Duck's assertions never certify a fact.
 
-Push and frontier-driven win seeking are shelved. World study may reveal a win; the solver then describes the observed transition in its learned language, freezes that claim, and tests it on the next level. Earlier sections describing exhaustive novelty as the active win policy are historical strategy. The current governing documents are `START_HERE.md` and `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md`.
+Push and frontier-driven win seeking are shelved. The solver first describes ordinary scenes and transformations with certified archetype nouns and exact observation verbs. World study may then reveal a win; the solver describes that observed transition in the same learned language, freezes the claim, and tests it on the next level. Earlier sections describing exhaustive novelty as the active win policy are historical strategy. The current governing documents are `START_HERE.md` and `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md`.
 
 **Type:** `STRATEGY` · **v1.2** · **2026-08-26** · **Author:** the Director; recorded by the
 Cowork chamber · **Status:** GOVERNING for this repo — every ring implements a piece of

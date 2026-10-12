@@ -16,12 +16,13 @@ newer documentation commits. Local and remote `main` remain at `472aa32`; inspec
 | Read | For |
 |---|---|
 | `START_HERE.md` | The project in one page, authority order, current handoff, roles, and fixed terms |
-| `STATE_OF_THE_DUCK_BUILD_v5_2026-10-12.md` | Accepted source, built capabilities, live evidence, remaining gaps, and directed order |
-| `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md` | The product, control loop, gate contract, stages, and acceptance criteria |
-| `EXECUTION_PLAN_SEMANTIC_LIBRARY_v3_2026-10-12.md` | Work orders, owners, dependencies, test gates, and public-25 contract |
+| `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md` | Accepted source, built capabilities, live evidence, remaining gaps, and directed order |
+| `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md` | The product, descriptive language, control loop, stages, and acceptance criteria |
+| `EXECUTION_PLAN_SEMANTIC_LIBRARY_v4_2026-10-12.md` | Work orders from test rhythm through description, mechanics, grammar, transfer, and release |
 | `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md` | Cold-start branch, review, testing, commit, and handoff procedure |
 | `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md` | Accepted floors through `b635fb9` and the test-runtime requirement |
 | `PRIOR_ART_WORLD_DESCRIPTION_GRAMMAR_v1_2026-10-12.md` | Exact files and reuse boundaries for nouns, grid transformations, causal sentences, rendering, and win description |
+| `PRIOR_ART_REMAINING_LIBRARY_BUILD_FUNCTIONS_v1_2026-10-12.md` | Prior art and reuse boundaries for test speed, G4, reliability, G5/G6, reports, recovery, transfer, packaging, and release |
 | `RULINGS_CONSOLIDATION_v4_2026-10-10.md` | Ratified rulings 15–24 |
 | `RECORD_RING9_SINGLE_TREE_AGREEMENT_v1_2026-10-05.md`, `UNIFICATION_RING9_SINGLE_TREE_v1_2026-10-05.md` | The merge and the shared first-witness law (G3 discovers, G4 types) |
 
@@ -34,7 +35,7 @@ the documents above govern. The dated callouts that follow are the running log, 
 > **2026-10-12 LIBRARY-DIRECTED G3 AND CURRENT HANDOFF (Sol, builder supervisor) — signed.** The local
 > accepted source is `b635fb9`: canonical v2 world models, bounded live view and retrieval, directed G3 CLICK,
 > reset-continuous evidence, fail-closed record handling, and directed G3 NAV pursuit. Mac floor: 792 passed,
-> 1 skipped. Next: test-runtime infrastructure, G4 per-lever dossiers, remaining NAV G1 and answer-loop friction,
+> 1 skipped. Next: test-runtime infrastructure, schema-v3 scene and transformation description, G4 per-lever dossiers, remaining NAV G1 and answer-loop friction,
 > then a current-source public-25 run. Push stays shelved. Start with `START_HERE.md` and status v5.
 
 > **2026-10-08 · Claude Alpha (click) · `eac248f`, `5d0120d` — signed.** Touched: `UPLOAD_STATUS_RING9_SUBMISSION_v1_2026-10-08.md` (kernel push logged; gate amended under rulings 8 and 10), the ratification documents committed (`RULINGS_CONSOLIDATION_v1`, Directive v3, chamber briefs, `THESIS_v1`, `BUILD_PLAN_PAPER_EVIDENCE_v1`). No runtime files.

@@ -12,7 +12,7 @@ Test tiers protect both speed and coverage:
 
 The current pre-optimization T2 reference is 792 passed, 1 skipped in 1535.82 seconds at `b635fb9`. The tiering slice must prove unchanged test collection and may not delete, weaken, skip, xfail, or alter a golden. Until it lands, follow the focused command in the active work order and preserve the latest full-floor command for final acceptance.
 
-The present product loop is library-centered: a gate exposes an actionable question, Duck chooses where needed, the controller acts, receipts capture the result, deterministic code certifies it, and the library revision becomes the next target. See `START_HERE.md` and build plan v3.
+The present product loop is library-centered: a gate exposes an actionable question, Duck chooses where needed, the controller acts, receipts capture the result, deterministic code certifies it, and the library revision becomes the next target. The ordinary world description must exist before a win can be explained in that language. See `START_HERE.md` and build plan v4.
 
 ## Standing rule
 

@@ -13,9 +13,9 @@ Ring 9 is building an evidence-backed semantic library for each novel ARC world.
 ## Read these in order
 
 1. `START_HERE.md` — this orientation and the authority order.
-2. `STATE_OF_THE_DUCK_BUILD_v5_2026-10-12.md` — what exists at `b635fb9`, what remains, and the current test evidence.
-3. `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v3_2026-10-12.md` — the destination and staged path.
-4. `EXECUTION_PLAN_SEMANTIC_LIBRARY_v3_2026-10-12.md` — the next slices, dependencies, owners, and acceptance gates.
+2. `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md` — what exists at `b635fb9`, what remains, and the current test evidence.
+3. `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md` — the destination and staged path: describe the world before explaining a win.
+4. `EXECUTION_PLAN_SEMANTIC_LIBRARY_v4_2026-10-12.md` — the next slices, dependencies, owners, and acceptance gates.
 5. `RULINGS_CONSOLIDATION_v4_2026-10-10.md` — ratified rulings 15–24, especially the model role, lifecycle repair, and bounded free-play restart.
 6. `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md` — branch, review, testing, packaging, and handoff procedure.
 7. `DOCUMENTATION_INDEX_2026-09-20.md` — the full map, including historical records.
@@ -28,9 +28,9 @@ When documents disagree, use this order:
 
 1. the Director's latest explicit ruling;
 2. ratified ruling records;
-3. the current build plan v3;
-4. the current execution plan v3;
-5. the current build status v5;
+3. the current build plan v4;
+4. the current execution plan v4;
+5. the current build status v6;
 6. accepted slice interfaces and build reports;
 7. historical plans, reviews, and run reports.
 
@@ -42,7 +42,7 @@ Code and test results establish what is implemented. A plan does not make a capa
 - **Accepted floor:** 792 passed, 1 skipped in 25:35 on macOS at `b635fb9`. The focused G3 NAV set is 89 passed in 4:43.
 - **Branch state:** `ring9-unified` contains accepted runtime `b635fb9` plus newer documentation commits. `origin/ring9-unified`, `origin/main`, and local `main` remain at `472aa32`; inspect Git for the current ahead count.
 - **Run evidence:** the earlier `db8a657` public-25 diagnostic produced canonical libraries for 25/25 worlds and 28/28 observed levels. It predates the reset and NAV-selection repairs, so it is pipeline evidence rather than current-source acceptance.
-- **Immediate work:** introduce tiered tests and timing reports; build the v3 per-lever G4 dossier projection; close the remaining NAV G1 and answer-loop friction; then run the current source across the public 25.
+- **Immediate work:** introduce tiered tests and timing reports; add schema-v3 scene and transformation descriptions; build the per-lever G4 dossiers and selected study; close NAV G1 and answer-loop friction; then run the current source across the public 25.
 - **Still open:** G5/G6, the full physics grammar, observed-win transfer, bounded free-play recovery, the accepted world manifest and human report, a scored submission, and the final package.
 
 ## Roles
