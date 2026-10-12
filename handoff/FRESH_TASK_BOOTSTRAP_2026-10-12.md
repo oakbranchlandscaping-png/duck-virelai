@@ -23,7 +23,7 @@ Then read the interface and build report for the slice you are assigned. Do not 
 - Work in `duck-virelai-r9r20` on `ring9-unified`.
 - Active runtime is `variants/ring9-cybernetic-gates/ARC3-Inference/`.
 - `b635fb9` is the accepted local head.
-- `main` and the remotes are still at `472aa32`; after this documentation consolidation the branch is eight commits ahead, with accepted runtime at `b635fb9`.
+- `main` and the remotes are still at `472aa32`; `ring9-unified` contains accepted runtime `b635fb9` plus later documentation commits. Inspect Git for the live ahead count.
 - `main` fast-forwards only after the accepted floor and Director direction.
 - Kaggle packages are built from the commit named in their manifest. Do not assume remote `main` contains the current solver.
 

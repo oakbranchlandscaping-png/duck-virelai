@@ -40,7 +40,7 @@ Code and test results establish what is implemented. A plan does not make a capa
 
 - **Landed locally:** canonical v2 `world_model.json`, census and H1/H2 hooks; bounded library digest and retrieval; G3 directed CLICK choice; reset-safe G3 evidence; G3 directed NAV selection and pursuit.
 - **Accepted floor:** 792 passed, 1 skipped in 25:35 on macOS at `b635fb9`. The focused G3 NAV set is 89 passed in 4:43.
-- **Branch state:** after this documentation consolidation, `ring9-unified` is eight local commits ahead of `origin/ring9-unified`, `origin/main`, and local `main`, which remain at `472aa32`. The accepted runtime source is still `b635fb9`.
+- **Branch state:** `ring9-unified` contains accepted runtime `b635fb9` plus newer documentation commits. `origin/ring9-unified`, `origin/main`, and local `main` remain at `472aa32`; inspect Git for the current ahead count.
 - **Run evidence:** the earlier `db8a657` public-25 diagnostic produced canonical libraries for 25/25 worlds and 28/28 observed levels. It predates the reset and NAV-selection repairs, so it is pipeline evidence rather than current-source acceptance.
 - **Immediate work:** introduce tiered tests and timing reports; build the v3 per-lever G4 dossier projection; close the remaining NAV G1 and answer-loop friction; then run the current source across the public 25.
 - **Still open:** G5/G6, the full physics grammar, observed-win transfer, bounded free-play recovery, the accepted world manifest and human report, a scored submission, and the final package.

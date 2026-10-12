@@ -19,7 +19,7 @@ The ideal solver is not complete. G4 does not yet expose a durable per-lever dos
 | Working branch | `ring9-unified` |
 | Accepted local head | `b635fb9` |
 | Remote and local `main` | `472aa32` |
-| Local commits not pushed after this document set is committed | 8: seven accepted runtime/plan commits plus this documentation consolidation |
+| Local commits not pushed | accepted runtime/plan commits and later documentation commits; inspect Git for the live count |
 | Accepted full Mac floor | 792 passed, 1 skipped; 1535.82 s |
 | Focused G3 NAV floor | 89 passed; 283 s |
 | Scored competition submission | none recorded |

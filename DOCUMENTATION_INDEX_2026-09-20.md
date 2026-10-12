@@ -10,8 +10,8 @@ packages, execution evidence, and prior-art trees.
 **The build is one tree.** The click line (`r9-r20-level-entry`) and the NAV line (the old `main`) were merged into
 `ring9-unified` on 2026-10-05. All work commits there; `main` fast-forwards only after an accepted Mac floor;
 package manifests name their exact source commit. Current accepted local head: `b635fb9`. Current floor:
-**792 passed, 1 skipped** in 1535.82 seconds. After this documentation consolidation, local `ring9-unified` is
-eight commits ahead of local and remote `main`, which remain at `472aa32`; accepted runtime is `b635fb9`.
+**792 passed, 1 skipped** in 1535.82 seconds. Local `ring9-unified` contains accepted runtime `b635fb9` plus
+newer documentation commits. Local and remote `main` remain at `472aa32`; inspect Git for the live ahead count.
 
 | Read | For |
 |---|---|
@@ -21,6 +21,7 @@ eight commits ahead of local and remote `main`, which remain at `472aa32`; accep
 | `EXECUTION_PLAN_SEMANTIC_LIBRARY_v3_2026-10-12.md` | Work orders, owners, dependencies, test gates, and public-25 contract |
 | `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md` | Cold-start branch, review, testing, commit, and handoff procedure |
 | `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md` | Accepted floors through `b635fb9` and the test-runtime requirement |
+| `PRIOR_ART_WORLD_DESCRIPTION_GRAMMAR_v1_2026-10-12.md` | Exact files and reuse boundaries for nouns, grid transformations, causal sentences, rendering, and win description |
 | `RULINGS_CONSOLIDATION_v4_2026-10-10.md` | Ratified rulings 15–24 |
 | `RECORD_RING9_SINGLE_TREE_AGREEMENT_v1_2026-10-05.md`, `UNIFICATION_RING9_SINGLE_TREE_v1_2026-10-05.md` | The merge and the shared first-witness law (G3 discovers, G4 types) |
 
