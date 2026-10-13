@@ -10,11 +10,55 @@ from dataclasses import asdict
 
 import pytest
 
+from inference.framework.descriptive_events import event_id, witness_sha256
 from inference.framework.virelai_world_model import canonical_bytes as v1_bytes
 from inference.framework.virelai_world_model import empty_world_model
 from inference.framework.world_model_v2 import (
     SCHEMA, WorldModelV2Error, canonical_bytes, read_world_model, seal, validate, write_canonical,
 )
+
+
+TRACK = "O-L1-P1-E-x"
+
+
+def _witness() -> dict:
+    receipt = {"entity_id": "E0001", "member_id": "M0001", "evidence_ref": "E-1", "transition_id": 1, "channel": "CLICK",
+               "residue": {"local_runs": [[0, 0, 0]], "remote_runs": [], "cell_count": 1}}
+    return {**receipt, "witness_sha256": witness_sha256("W-1", receipt)}  # schema v3 receipts carry residue and hash
+
+
+def _description(lever: bool = True) -> dict:
+    """Schema v3 (WO-DESC-A): this level's description. The one track is still at transition 1; a track bound to a
+    certified role has its STILL emitted, any other is only counted."""
+    roles = [{"role": "LEVER", "gate_id": "G3-LEVERS", "role_ref": "E0001"}] if lever else []
+    shape = {"class": 3, "anchor": [0, 0], "bbox": [0, 0, 0, 0], "cell_count": 1, "shape_hash": "h"}
+    still = {"event_id": event_id(1, 1, TRACK, "STILL"), "transition_id": 1, "level": 1, "life": 1,
+             "subject": {"track_id": TRACK, "roles": roles}, "verb": "STILL", "before": shape, "after": shape,
+             "delta": {"footprint": {"membership_groups": {"retained_rewritten": [], "prior_footprint_only": [],
+                                                           "later_footprint_only": []}, "retained_same_value_cells": 1}},
+             "correspondence": {"source": "SITE", "witness": "golden_cascade", "ambiguity": None},
+             "flags": {"recolor": False, "returns_to_prior_state": False, "reopens_role_typing": False,
+                       "role_binding_ends": False},
+             "status": "OBSERVED", "explanation": {"status": "UNEXPLAINED", "refs": [], "basis": "NO_CHANGE"}}
+    return {
+        "schema": "virelai-description-v1",
+        "basis": {"continuity": "virelai-golden-weave-v1:weave_window+re_join", "entry_node": 0,
+                  "windows": [{"life": 1, "from_node": 0, "to_node": 1}]},
+        "integrity": "VERIFIED", "first_mismatch": None,
+        "transitions": [{"transition_id": 1, "level": 1, "life": 1, "kind": "PROBE", "action": {"action": "ACTION6"},
+                         "actor": "G3-LEVERS", "evidence_ref": "E-1",
+                         "pixel_rewrite": {"coverage_status": "TOTAL", "changed": [], "held_cells": 1,
+                                           "signed_class_delta": []},
+                         "still_total": 1, "still_emitted": int(lever), "still_omitted": int(not lever),
+                         "events": [still] if lever else [], "boundary": None, "record_status": "VERIFIED"}],
+        "presence": {TRACK: [[0, 1]]},
+        "role_bindings": [{**role, "track_id": TRACK, "ends_at_transition": None} for role in roles],
+        "scene": {"as_of_transition": 1, "as_of_node": 1, "life": 1, "record_mismatch": None,
+                  "present": [{"track_id": TRACK, "class": 3, "anchor": [0, 0], "bbox": [0, 0, 0, 0], "cell_count": 1,
+                               "roles": roles or "UNRESOLVED_OBJECT"}],
+                  "departed": [], "unverified_tracks": [], "verb_counts": {"STILL": 1} if lever else {},
+                  "unexplained": [], "open_identity": []},
+    }
 
 
 def _model() -> dict:
@@ -44,12 +88,12 @@ def _model() -> dict:
             "receipts": {
                 "evidence": {"E-1": {"transition_id": 1, "gate_id": "G3-LEVERS", "probe_id": "G3-LEVERS:CLICK:1"}},
                 "products": {"L-1": {"gate_id": "G1-EGO", "product_type": "EgoLaw", "revision": 1, "payload_sha256": "0" * 64}},
-                "witnesses": {"W-1": {"entity_id": "E0001", "member_id": "M0001", "evidence_ref": "E-1",
-                                      "transition_id": 1, "channel": "CLICK"}},
+                "witnesses": {"W-1": _witness()},
             },
             "gaps": [{"subject": "LEVEL-1", "archetype_question": "Is anything INERT?", "reason": "NOT_BUILT"},
                      {"subject": "E0003", "archetype_question": "Is this object a lever?", "reason": "INCONCLUSIVE"}],
             "accounting": {"status": "ACCOUNTED", "missing": []},
+            "description": _description(),
         }],
     }
 
@@ -111,6 +155,7 @@ def test_a_role_reference_must_resolve_to_a_receipt():
             _level(model)["certified"]["roles"][0].update(
                 role="EGO", gate_id="G1-EGO", product_id=product_id, binding_source="POINTER_EGO_HAS_NO_GRID_FOOTPRINT",
                 identity={"status": "NOT_APPLICABLE", "track_id": None, "basis": None})
+            _level(model)["description"] = _description(lever=False)  # a pointer ego binds no track
         return edit
     seal(_apply(_model(), ego("L-1")))  # a resolvable product passes
     _refused(ego("L-FABRICATED"), "resolves to no product receipt")

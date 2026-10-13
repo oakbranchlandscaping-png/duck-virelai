@@ -1,7 +1,9 @@
-"""The canonical world model, schema v2: one validated, canonically hashed file per observed game.
+"""The canonical world model, schema v3: one validated, canonically hashed file per observed game.
 
 Author: Claude (Alpha build seat), 2026-10-10. WO-L2a (INTERFACE_WO_L2A_WORLD_MODEL_V2 v2; Sol's reviews
-REVIEW_WO_L2_00_CENSUS_ARCHITECTURE and REVIEW_WO_L2A_INTERFACE, 2026-10-10).
+REVIEW_WO_L2_00_CENSUS_ARCHITECTURE and REVIEW_WO_L2A_INTERFACE, 2026-10-10). Schema v3, 2026-10-13: WO-DESC-A
+(INTERFACE_WO_DESC_A_v2) adds each level's descriptive event ledger and scene (``descriptive_events``) and
+enriches the receipts it is checked against. A v2 artifact is still read, by the v2 rules (``validate_v2``).
 
 Two tiers, kept apart by the validator:
 
@@ -32,7 +34,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-world-model-v2"
+SCHEMA = "virelai-world-model-v3"
+V2_SCHEMA = "virelai-world-model-v2"
 V1_SCHEMA = "virelai-world-model-v1"
 CANONICAL_NAME = "world_model.json"
 
@@ -96,7 +99,17 @@ def canonical_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def validate(payload: Mapping[str, Any]) -> None:
-    _require(payload.get("schema") == SCHEMA, f"schema must be {SCHEMA}")
+    """The v3 contract: the v2 rules, plus every level's description and the receipts it is checked against."""
+    _validate_payload(payload, SCHEMA)
+
+
+def validate_v2(payload: Mapping[str, Any]) -> None:
+    """The accepted v2 contract, unchanged: how a v2 artifact written before schema v3 is still read."""
+    _validate_payload(payload, V2_SCHEMA)
+
+
+def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
+    _require(payload.get("schema") == schema, f"schema must be {schema}")
     manifest = payload.get("manifest") or {}
     _require(manifest.get("status") in MANIFEST_STATUSES, "manifest.status is not a known status")
     _require(manifest.get("persist_reason") in PERSIST_REASONS, "manifest.persist_reason is not a known reason")
@@ -108,6 +121,8 @@ def validate(payload: Mapping[str, Any]) -> None:
     _require(len(open_levels) <= 1, "at most one level is open")
     for level in levels:
         _validate_level(level)
+        if schema == SCHEMA:
+            _validate_v3_level(level)
     if "content_sha256" in payload:
         _require(payload["content_sha256"] == content_sha256(payload), "content_sha256 does not match the content")
 
@@ -148,6 +163,38 @@ def _validate_level(level: Mapping[str, Any]) -> None:
 
 
 CHECK_KEYS = ("missing", "extra", "duplicated", "renamed")
+
+
+def _validate_v3_level(level: Mapping[str, Any]) -> None:
+    """The v3 additions: enriched receipts, binding ends, and the description, checked against all of them."""
+    from inference.framework import descriptive_events
+
+    receipts = level["receipts"]
+    for ref, product in receipts["products"].items():
+        mask = product.get("mask")
+        if mask is not None:
+            _require(product["gate_id"] == "G2-COUNTER", f"product receipt {ref}: only a G2 mask law carries a mask")
+            cells = descriptive_events.run_cells(mask.get("cell_runs") or ())
+            rewrite = mask.get("rewrite") or {}
+            _require(len(cells) == mask.get("cell_count") and isinstance(rewrite.get("from"), int)
+                     and isinstance(rewrite.get("to"), int), f"product receipt {ref} carries a malformed mask")
+    for ref, witness in receipts["witnesses"].items():
+        _require(isinstance(witness.get("residue"), Mapping) and bool(witness.get("witness_sha256")),
+                 f"witness receipt {ref} carries its residue and hash")
+    roles = (level.get("certified") or {}).get("roles") or []
+    recorded = set((level.get("record") or {}).get("transition_ids") or ())
+    for role in roles:
+        ends = role.get("binding_ends_at")
+        _require(ends is None or ends in recorded, f"a {role.get('role')} binding ends at a recorded transition")
+    entry = level.get("entry") or {}
+    _require(((level.get("description") or {}).get("basis") or {}).get("entry_node")
+             == (entry.get("after_transition") if entry.get("source") == "LEVEL_ENTRY" else 0),
+             "the description starts at the level's entry board")
+    descriptive_events.validate_description(
+        level.get("description"), recorded=recorded, receipts=receipts, roles=roles, gaps=level.get("gaps") or [],
+        tracks=[track["track_id"] for track in (level.get("observation") or {}).get("tracks") or ()])
+    if (level.get("description") or {}).get("first_mismatch"):
+        _require(level["accounting"]["status"] == "NOT_ACCOUNTED", "a description cut short is never ACCOUNTED")
 
 
 def _validate_journal_check(level: Mapping[str, Any], accounting: Mapping[str, Any]) -> None:
@@ -237,7 +284,8 @@ def _validate_role(role: Mapping[str, Any], known_tracks: set[str], receipts: Ma
 
 
 def read_world_model(payload: Mapping[str, Any]) -> Any:
-    """Version-aware reader: v1 through its own validator, v2 through this one; anything else is refused."""
+    """Version-aware reader: v1 through its own validator, v2 by the v2 rules, v3 by this module's; anything
+    else is refused."""
     schema = payload.get("schema")
     if schema == V1_SCHEMA:
         from inference.framework.virelai_world_model import validate_world_model, world_model_from_dict
@@ -245,6 +293,9 @@ def read_world_model(payload: Mapping[str, Any]) -> Any:
         model = world_model_from_dict(dict(payload))
         validate_world_model(model)
         return model
+    if schema == V2_SCHEMA:
+        validate_v2(payload)
+        return dict(payload)
     if schema == SCHEMA:
         validate(payload)
         return dict(payload)
@@ -283,6 +334,6 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
 
 
 __all__ = [
-    "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "WorldModelV2Error", "WriteResult", "canonical_bytes",
-    "content_sha256", "read_world_model", "seal", "validate", "write_canonical",
+    "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "V2_SCHEMA", "WorldModelV2Error", "WriteResult",
+    "canonical_bytes", "content_sha256", "read_world_model", "seal", "validate", "validate_v2", "write_canonical",
 ]

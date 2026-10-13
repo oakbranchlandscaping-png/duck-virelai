@@ -17,6 +17,7 @@ import pickle
 import pytest
 
 from inference.framework import library_view
+from inference.framework.descriptive_events import scene_at
 from inference.framework.library_view import (
     DIGEST_BUDGET, GOAL_QUESTIONS, HANDLES, HEADER, PAGE_BUDGET, library_digest, library_page, live_model,
     render_library_digest,
@@ -151,6 +152,17 @@ def test_duck_reads_the_digest_after_the_card_and_pages_the_library(tmp_path):
 LONG = "w" * 400
 
 
+def _light(level: dict) -> dict:
+    """Schema v3 describes every recorded transition, so a light level records none: no transition, no evidence
+    on one, and a description of its entry board alone (it has no objects)."""
+    level["record"]["transition_ids"] = []
+    level["receipts"].update(evidence={}, witnesses={})
+    description = level["description"]
+    description.update(transitions=[], presence={}, role_bindings=[], first_mismatch=None, integrity="VERIFIED")
+    description["scene"] = scene_at(description, [], [])
+    return level
+
+
 def _large(model) -> dict:
     """k013's validated level, inflated: 40 levels, 300 more gap kinds (one with a 600-id list), 120 terrain
     labels, and one object with 500 class events and 300 possible correspondences. Re-sealed, so still valid."""
@@ -172,7 +184,7 @@ def _large(model) -> dict:
         copy.update(level=number, state="FROZEN", observation={"tracks": [], "terrain": []},
                     gaps=copy["gaps"][:3])
         copy["certified"]["roles"] = []
-        frozen.append(copy)
+        frozen.append(_light(copy))
     level["level"] = 41
     base["levels"] = frozen + [level]
     return seal(base)

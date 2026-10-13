@@ -1,0 +1,193 @@
+# k008 at transition 45 — description excerpt (schema virelai-world-model-v3, virelai-description-v1)
+integrity VERIFIED; first_mismatch None; windows [{'life': 1, 'from_node': 0, 'to_node': 30}, {'life': 2, 'from_node': 31, 'to_node': 44}]
+certified roles: EGO G1-EGO identity=UNRESOLVED; COUNTER G2-COUNTER identity=UNRESOLVED
+
+## t1  PROBE ACTION1 by G1-EGO  life 1  evidence E-fb83768790fd1e4e
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P1-E-38a900612642 [-] class 9 @(16, 12) n=80 -> class 9 @(12, 12) n=80 Δ[-4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   SHRINK    O-L1-P1-E-8457c97c3c09 [-] class 14 @(0, 0) n=64 -> class 14 @(0, 0) n=62  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-fb83768790fd1e4e']
+   DEFORM    O-L1-P1-E-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   BIRTH     O-L1-P1-T1-f5ee56666088 [-] - -> class 0 @(0, 62) n=2  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-fb83768790fd1e4e']
+## t2  PROBE ACTION1 by G1-EGO  life 1  evidence E-317611cef80f7f5b
+   pixels: 14->0 x2; held 4094
+   still: total 7 = emitted 0 + omitted 7
+   SHRINK    O-L1-P1-E-8457c97c3c09 [-] class 14 @(0, 0) n=62 -> class 14 @(0, 0) n=60  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-317611cef80f7f5b']
+   GROW      O-L1-P1-T1-f5ee56666088 [-] class 0 @(0, 62) n=2 -> class 0 @(0, 60) n=4  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-317611cef80f7f5b']
+## t3  PROBE ACTION2 by G1-EGO  life 1  evidence E-d62f587f09bf6873
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P1-E-38a900612642 [-] class 9 @(12, 12) n=80 -> class 9 @(16, 12) n=80 Δ[4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   SHRINK    O-L1-P1-E-8457c97c3c09 [-] class 14 @(0, 0) n=60 -> class 14 @(0, 0) n=58  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-d62f587f09bf6873']
+   DEFORM    O-L1-P1-E-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   GROW      O-L1-P1-T1-f5ee56666088 [-] class 0 @(0, 60) n=4 -> class 0 @(0, 58) n=6  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-d62f587f09bf6873']
+## t13  PROBE ACTION1 by G1-EGO  life 1  evidence E-ffefff713bc297c2
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P1-E-38a900612642 [-] class 9 @(16, 12) n=80 -> class 9 @(12, 12) n=80 Δ[-4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   SHRINK    O-L1-P1-E-8457c97c3c09 [-] class 14 @(0, 0) n=38 -> class 14 @(0, 0) n=36  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-ffefff713bc297c2']
+   DEFORM    O-L1-P1-E-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   GROW      O-L1-P1-T1-f5ee56666088 [-] class 0 @(0, 38) n=26 -> class 0 @(0, 36) n=28  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-ffefff713bc297c2']
+## t14  PROBE ACTION2 by G1-EGO  life 1  evidence E-d98374c36ccdef67
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P1-E-38a900612642 [-] class 9 @(12, 12) n=80 -> class 9 @(16, 12) n=80 Δ[4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   SHRINK    O-L1-P1-E-8457c97c3c09 [-] class 14 @(0, 0) n=36 -> class 14 @(0, 0) n=34  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-d98374c36ccdef67']
+   DEFORM    O-L1-P1-E-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   GROW      O-L1-P1-T1-f5ee56666088 [-] class 0 @(0, 36) n=28 -> class 0 @(0, 34) n=30  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-d98374c36ccdef67']
+## t30  PROBE ACTION1 by G1-EGO  life 1  evidence E-17c3472cbac8067b
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P1-E-38a900612642 [-] class 9 @(16, 12) n=80 -> class 9 @(12, 12) n=80 Δ[-4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   DEATH     O-L1-P1-E-8457c97c3c09 [-] class 14 @(0, 0) n=2 -> -  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-17c3472cbac8067b']
+   DEFORM    O-L1-P1-E-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   GROW      O-L1-P1-T1-f5ee56666088 [-] class 0 @(0, 2) n=62 -> class 0 @(0, 0) n=64  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-17c3472cbac8067b']
+## t31  RESET RESET by G1-EGO  life 2  evidence None
+   pixels: 0->14 x64, 9->12 x80, 12->9 x80; held 3872
+   still: total 0 = emitted 0 + omitted 0
+   boundary: {'kind': 'RESET', 'life_before': 1, 'life_after': 2, 'tracks_ended': 8, 'tracks_started': 8, 'possible_correspondences': 8}
+## t32  PROBE ACTION1 by G1-EGO  life 2  evidence E-9d9a0521fa33b570
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P2-R31-38a900612642 [-] class 9 @(16, 12) n=80 -> class 9 @(12, 12) n=80 Δ[-4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   SHRINK    O-L1-P2-R31-8457c97c3c09 [-] class 14 @(0, 0) n=64 -> class 14 @(0, 0) n=62  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-9d9a0521fa33b570']
+   DEFORM    O-L1-P2-R31-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   BIRTH     O-L1-P2-T32-f5ee56666088 [-] - -> class 0 @(0, 62) n=2  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-9d9a0521fa33b570']
+## t33  PROBE ACTION1 by G2-COUNTER  life 2  evidence E-bc080565851d2dd1
+   pixels: 14->0 x2; held 4094
+   still: total 7 = emitted 0 + omitted 7
+   SHRINK    O-L1-P2-R31-8457c97c3c09 [-] class 14 @(0, 0) n=62 -> class 14 @(0, 0) n=60  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-bc080565851d2dd1']
+   GROW      O-L1-P2-T32-f5ee56666088 [-] class 0 @(0, 62) n=2 -> class 0 @(0, 60) n=4  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-bc080565851d2dd1']
+## t44  PROBE ACTION2 by G3-LEVERS  life 2  evidence E-c5381039849ffc63
+   pixels: 9->12 x80, 12->9 x80, 14->0 x2; held 3934
+   still: total 5 = emitted 0 + omitted 5
+   MOVE      O-L1-P2-R31-38a900612642 [-] class 9 @(12, 16) n=80 -> class 9 @(16, 16) n=80 Δ[4, 0] | OBSERVED · UNEXPLAINED NOT_COVERED []
+   SHRINK    O-L1-P2-R31-8457c97c3c09 [-] class 14 @(0, 0) n=38 -> class 14 @(0, 0) n=36  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-c5381039849ffc63']
+   DEFORM    O-L1-P2-R31-cc4a625bee87 [-] class 12 @(1, 0) n=3508 -> class 12 @(1, 0) n=3508  | OBSERVED · UNEXPLAINED NOT_COVERED [] witness=dominant_mutual_overlap
+   GROW      O-L1-P2-T32-f5ee56666088 [-] class 0 @(0, 38) n=26 -> class 0 @(0, 36) n=28  | OBSERVED · EXPLAINED G2_MASK_LAW ['COUNTER-ff49a4722c5ef0d3', 'E-c5381039849ffc63']
+
+## scene as of t44 (life 2), record_mismatch None
+   present 9, departed 9, unverified 0
+   present O-L1-P2-R31-38a900612642 class 9 @(16, 16) n=80 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-5dcee6516728 class 6 @(4, 36) n=16 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-714d09de6819 class 11 @(52, 16) n=80 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-8457c97c3c09 class 14 @(0, 0) n=36 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-ac73d3fad86b class 4 @(1, 36) n=12 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-cc4a625bee87 class 12 @(1, 0) n=3508 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-d8f928cb6509 class 11 @(52, 40) n=80 roles=UNRESOLVED_OBJECT
+   present O-L1-P2-R31-dd97e41663d0 class 1 @(60, 0) n=256 roles=UNRESOLVED_OBJECT
+   verb_counts {'BIRTH': 2, 'DEATH': 1, 'DEFORM': 20, 'GROW': 41, 'MOVE': 20, 'SHRINK': 42, 'STILL': 12}
+   unexplained 40 events; open_identity [{'role': 'COUNTER', 'gate_id': 'G2-COUNTER', 'subject': 'COUNTER'}, {'role': 'EGO', 'gate_id': 'G1-EGO', 'subject': 'EGO'}]
+
+## one event, raw
+{
+ "event_id": "EV-e591044b226ed722",
+ "transition_id": 1,
+ "level": 1,
+ "life": 1,
+ "subject": {
+  "track_id": "O-L1-P1-E-8457c97c3c09",
+  "roles": []
+ },
+ "verb": "SHRINK",
+ "before": {
+  "class": 14,
+  "anchor": [
+   0,
+   0
+  ],
+  "bbox": [
+   0,
+   0,
+   0,
+   63
+  ],
+  "cell_count": 64,
+  "shape_hash": "d00c1a7cff8d5b63"
+ },
+ "after": {
+  "class": 14,
+  "anchor": [
+   0,
+   0
+  ],
+  "bbox": [
+   0,
+   0,
+   0,
+   61
+  ],
+  "cell_count": 62,
+  "shape_hash": "fabdfddc322d0520"
+ },
+ "delta": {
+  "footprint": {
+   "membership_groups": {
+    "retained_rewritten": [],
+    "prior_footprint_only": [
+     {
+      "before_class": 14,
+      "after_class": 0,
+      "outcome": "CHANGED",
+      "cell_count": 2,
+      "cell_runs": [
+       [
+        0,
+        62,
+        63
+       ]
+      ]
+     }
+    ],
+    "later_footprint_only": []
+   },
+   "retained_same_value_cells": 62
+  },
+  "count": -2,
+  "departed_sites": {
+   "count": 2
+  }
+ },
+ "correspondence": {
+  "source": "CLASS",
+  "witness": "golden_cascade",
+  "ambiguity": null
+ },
+ "flags": {
+  "recolor": false,
+  "returns_to_prior_state": false,
+  "reopens_role_typing": false,
+  "role_binding_ends": false
+ },
+ "status": "OBSERVED",
+ "explanation": {
+  "status": "EXPLAINED",
+  "refs": [
+   "COUNTER-ff49a4722c5ef0d3",
+   "E-fb83768790fd1e4e"
+  ],
+  "basis": "G2_MASK_LAW"
+ }
+}
+## the COUNTER product receipt (v3 enrichment)
+{
+ "gate_id": "G2-COUNTER",
+ "product_type": "CounterGateProduct",
+ "revision": 8,
+ "payload_sha256": "0c3dad0bac04505e8fcc821393e62e21b16debe83bfcd793c38c069574f67032",
+ "mask": {
+  "cell_runs": [
+   [
+    0,
+    0,
+    63
+   ]
+  ],
+  "cell_count": 64,
+  "rewrite": {
+   "from": 14,
+   "to": 0
+  },
+  "law_version_id": "MASK-V1-72bfa978605d4f0e"
+ }
+}

@@ -53,6 +53,13 @@ tests = [
     "tests/test_g3_directed_click.py::test_0_no_choice_replays_keep_every_envelope_evidence_id_and_product[carry_v7]",
 ]
 
+[T0.desc-a]
+tests = [
+    "tests/test_descriptive_events.py",          # WO-DESC-A: the ledger, explanations, the verified prefix, schema v3
+    "tests/test_world_model_v2.py",              # the model contract the description is validated within
+    "tests/test_wo_l2a_census_paths.py::test_a_zero_action_cancellation_writes_the_canonical_model",  # v3 on disk
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
@@ -71,4 +78,16 @@ tests = [
     "tests/test_memory_m2.py::test_with_the_live_g3_choice_handoff_the_first_model_call_is_that_one_choice",
     # the golden is compared on its own full traced replay, never a cached checkpoint
     "tests/test_replay_checkpoints.py::test_8_the_no_choice_golden_compares_its_own_full_traced_replay",
+]
+
+[T1.description]
+tests = [
+    "tests/test_descriptive_events.py",          # WO-DESC-A: the descriptive ledger and scene
+    "tests/test_world_model_v2.py",              # the v3 contract and the v2 reader
+    "tests/test_library_census.py",              # the census the description is compiled in
+    "tests/test_library_view.py",                # the live library that seals every Duck turn
+    "tests/test_wo_l2a_census_paths.py",         # every path that writes the canonical model
+    "tests/test_wo_l2a_close.py",                # the run-end write
+    "tests/test_wo_l2a_hooks.py",                # H1 and H2, the frozen level and the journal check
+    "tests/test_g3_ledger_frame_sync.py",        # reset continuity and board-record breaks
 ]

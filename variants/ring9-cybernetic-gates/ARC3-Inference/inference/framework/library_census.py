@@ -26,6 +26,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
+from inference.framework.descriptive_events import cell_runs, describe_level, restrict_description, role_ref, witness_sha256
 from inference.framework.virelai_continuity import (
     ComponentObservation,
     NodeCut,
@@ -111,11 +112,19 @@ def level_rows(transition_index: Sequence[Mapping[str, Any]], level: int) -> lis
                   key=lambda row: int(row["transition_id"]))
 
 
+def entry_board_node(entry: Mapping[str, Any]) -> int:
+    """The level-entry board's node: 0 for the initial frame, or the transition that ended the previous level.
+    The level's first transition must be the next one, so a missing first record is detectable."""
+    return int(entry["after_transition"]) if entry.get("source") == "LEVEL_ENTRY" else 0
+
+
 def _windows(level: int, entry_board: Grid, entry: Mapping[str, Any], rows: Sequence[Mapping[str, Any]],
              entry_life: int) -> tuple[list[_Window], list[list[int]], list[dict[str, Any]]]:
-    """Replay the level's rows from its entry board, one weave window per life."""
+    """Replay the level's rows from its entry board, one weave window per life. A row numbered at or before the
+    entry board cannot follow it: its changes are replayed, but it gets no cut, so it never overwrites the entry
+    sighting (WO-DESC-A revision 2; the description marks it ``BEFORE_ENTRY``)."""
     board = _grid(entry_board)
-    entry_node = (int(rows[0]["transition_id"]) - 1) if rows else 0
+    entry_node = entry_board_node(entry)  # from the entry itself, never from the first recorded row
     windows = [_Window(entry_life)]
     windows[0].cuts.append(board_cut(board, node=entry_node, level=level))
     windows[0].sources[entry_node] = dict(entry)
@@ -126,6 +135,8 @@ def _windows(level: int, entry_board: Grid, entry: Mapping[str, Any], rows: Sequ
             if before is not None and board[r][c] != before:
                 discontinuities.append({"transition_id": transition_id, "cell": [r, c]})
             board[r][c] = int(after)
+        if transition_id <= entry_node:
+            continue
         if row.get("kind") == "RESET":
             windows.append(_Window(int(row.get("life") or windows[-1].life + 1)))
         windows[-1].cuts.append(board_cut(board, node=transition_id, level=level))
@@ -150,6 +161,17 @@ def _segments(steps: Sequence[ComponentObservation], sources: Mapping[int, Mappi
     return segments
 
 
+def _track_id(level: int, life: int, position: int, born_at_start: bool, first: ComponentObservation) -> str:
+    """A track's id: level, life, where it began (entry, reset, or a transition) and its first footprint."""
+    token = ("E" if position == 0 else f"R{first.node_index}") if born_at_start else f"T{first.node_index}"
+    return f"O-L{level}-P{life}-{token}-" + hashlib.sha256(repr((first.class_id, first.cells)).encode()).hexdigest()[:12]
+
+
+def _class_events(edges: Sequence[Any]) -> list[dict[str, Any]]:
+    return [{"transition_id": edge.now.node_index, "verb": edge.verb, "witness": edge.witness}
+            for edge in edges if edge.verb in CLASS_VERBS and edge.now is not None]
+
+
 def project_tracks(level: int, entry_board: Grid, entry: Mapping[str, Any],
                    rows: Sequence[Mapping[str, Any]], *, entry_life: int = 1) -> dict[str, Any]:
     """Observation tracks for one level: present and departed, scoped to level and life."""
@@ -158,16 +180,16 @@ def project_tracks(level: int, entry_board: Grid, entry: Mapping[str, Any],
     tracks: list[dict[str, Any]] = []
     steps_by_track: dict[str, tuple[ComponentObservation, ...]] = {}
     first_cuts: list[dict[tuple[int, tuple[Cell, ...]], str]] = []
+    woven: list[dict[str, Any]] = []
     for position, window in enumerate(windows):
         lines = re_join(weave_window(window.cuts), window.cuts)
+        woven.append({"life": window.life, "cuts": window.cuts, "lines": []})
         window_end = window.cuts[-1].node_index
         spawn: dict[tuple[int, tuple[Cell, ...]], str] = {}
         for line in sorted(lines, key=lambda item: (item.steps[0].node_index, item.steps[0].anchor, item.local_id)):
             first = line.steps[0]
             born_at_start = first.node_index == window.cuts[0].node_index
-            token = ("E" if position == 0 else f"R{first.node_index}") if born_at_start else f"T{first.node_index}"
-            track_id = (f"O-L{level}-P{window.life}-{token}-"
-                        + hashlib.sha256(repr((first.class_id, first.cells)).encode()).hexdigest()[:12])
+            track_id = _track_id(level, window.life, position, born_at_start, first)
             last = line.steps[-1]
             track = {
                 "track_id": track_id,
@@ -178,11 +200,7 @@ def project_tracks(level: int, entry_board: Grid, entry: Mapping[str, Any],
                     "last_seen": dict(window.sources[last.node_index]),
                     "reason": "LIFE_ENDED" if last.node_index == window_end else "DEPARTED",
                 },
-                "class_events": [
-                    {"transition_id": edge.now.node_index, "verb": edge.verb, "witness": edge.witness}
-                    for edge in line.edges
-                    if edge.verb in CLASS_VERBS and edge.now is not None
-                ],
+                "class_events": _class_events(line.edges),
                 "band1": {"status": "UNSETTLED", "reason": "NOT_BUILT"},
                 "g3_join": {"status": "NOT_APPLICABLE", "entity_id": None, "basis": None},
             }
@@ -195,6 +213,7 @@ def project_tracks(level: int, entry_board: Grid, entry: Mapping[str, Any],
                     )
             tracks.append(track)
             steps_by_track[track_id] = line.steps
+            woven[-1]["lines"].append((track_id, line))
         first_cuts.append(spawn)
     return {
         "tracks": tracks,
@@ -202,6 +221,7 @@ def project_tracks(level: int, entry_board: Grid, entry: Mapping[str, Any],
         "final_board": final_board,
         "discontinuities": discontinuities,
         "reset_born": [t["track_id"] for t in tracks if "possible_correspondence" in t],
+        "windows": woven,  # each life's cuts and woven lines, read by the description (WO-DESC-A)
     }
 
 
@@ -227,18 +247,39 @@ def _receipts(machine: Any, rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         if product is not None:
             products[product.product_id] = {"gate_id": contract.target_id, "product_type": product.product_type,
                                             "revision": product.revision, "payload_sha256": _payload_sha256(product.payload)}
+            mask = _mask_receipt(product.payload) if contract.target_id == "G2-COUNTER" else None
+            if mask is not None:
+                products[product.product_id]["mask"] = mask
     adapter = (getattr(machine, "_adapters", None) or {}).get("G3-LEVERS")
     ledger = getattr(adapter, "entity_ledger", None)
     witnesses = {}
     accumulator = getattr(adapter, "evidence", None)
     for member_id, rows_ in sorted((getattr(accumulator, "_witnesses", None) or {}).items()):
         for witness in rows_:
-            witnesses[witness.witness_id] = {
+            receipt = {
                 "entity_id": None if ledger is None else ledger.member_to_entity.get(member_id),
                 "member_id": member_id, "evidence_ref": witness.evidence_ref,
                 "transition_id": int(witness.transition_id), "channel": witness.channel,
+                "residue": _residue(witness.local_residue_cells, witness.remote_residue_cells),
             }
+            witnesses[witness.witness_id] = {**receipt, "witness_sha256": witness_sha256(witness.witness_id, receipt)}
     return {"evidence": evidence, "products": products, "witnesses": witnesses}
+
+
+def _mask_receipt(payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The G2 mask law as a receipt can check it: the mask's cells and its one source -> replacement rewrite."""
+    law = (payload or {}).get("mask_law") or {}
+    source, _arrow, target = str(law.get("rewrite") or "").partition("->")
+    cells = {(int(r), int(c)) for r, c in law.get("cells") or ()}
+    if not cells or not source.strip().lstrip("-").isdigit() or not target.strip().lstrip("-").isdigit():
+        return None
+    return {"cell_runs": cell_runs(cells), "cell_count": len(cells), "rewrite": {"from": int(source), "to": int(target)},
+            "law_version_id": law.get("law_version_id")}
+
+
+def _residue(local: Iterable[Cell], remote: Iterable[Cell]) -> dict[str, Any]:
+    local, remote = {(int(r), int(c)) for r, c in local}, {(int(r), int(c)) for r, c in remote}
+    return {"local_runs": cell_runs(local), "remote_runs": cell_runs(remote), "cell_count": len(local | remote)}
 
 
 def _resolvable(refs: Iterable[Any], receipts: Mapping[str, Any]) -> tuple[list[str], list[str]]:
@@ -540,18 +581,9 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
     dispositions = _gate_dispositions(machine)
     breaks = _board_record_breaks(machine)
     gaps.extend(_fail_closed(breaks, level, certified, dispositions))
-    certified_ids = {d["gate_id"] for d in dispositions if d["disposition"] == "CERTIFIED"}
-    foundation_open = not {"G1-EGO", "G2-COUNTER"} <= certified_ids
-    role_tracks = {role["identity"]["track_id"] for role in certified["roles"] if role["identity"].get("track_id")}
-    for track in projection["tracks"]:
-        if track["track_id"] not in role_tracks:
-            gaps.append({"subject": track["track_id"], "archetype_question": "Which roles does this object hold?",
-                         "reason": "FOUNDATION_UNRESOLVED" if foundation_open else "NOT_REACHED",
-                         "source": "no certified role names this track"})
-    for track_id in projection["reset_born"]:
-        gaps.append({"subject": track_id, "archetype_question": "Is this the same object as one seen in an earlier life?",
-                     "reason": "IDENTITY_UNRESOLVED", "source": "lives are not joined without continuity evidence"})
-    missing = _board_accounting(projection["discontinuities"], breaks, level, gaps)
+    gaps.extend(_track_gaps(projection, certified, dispositions))
+    description = _describe(level, board, entry, rows, life, projection, certified, receipts, gaps)
+    missing = _board_accounting(projection["discontinuities"], breaks, level, gaps, description)
     return {
         "level": level,
         "state": state,
@@ -563,13 +595,52 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
         "receipts": receipts,
         "gaps": gaps,
         "accounting": {"status": "NOT_ACCOUNTED", "missing": missing},
+        "description": description,
     }
 
 
+def _track_gaps(projection: Mapping[str, Any], certified: Mapping[str, Any],
+                dispositions: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Each track no certified role names, and each reset-born track (moved out of ``compile_level``, the ratchet)."""
+    certified_ids = {d["gate_id"] for d in dispositions if d["disposition"] == "CERTIFIED"}
+    foundation_open = not {"G1-EGO", "G2-COUNTER"} <= certified_ids
+    role_tracks = {role["identity"]["track_id"] for role in certified["roles"] if role["identity"].get("track_id")}
+    gaps = [{"subject": track["track_id"], "archetype_question": "Which roles does this object hold?",
+             "reason": "FOUNDATION_UNRESOLVED" if foundation_open else "NOT_REACHED",
+             "source": "no certified role names this track"}
+            for track in projection["tracks"] if track["track_id"] not in role_tracks]
+    gaps.extend({"subject": track_id, "archetype_question": "Is this the same object as one seen in an earlier life?",
+                 "reason": "IDENTITY_UNRESOLVED", "source": "lives are not joined without continuity evidence"}
+                for track_id in projection["reset_born"])
+    return gaps
+
+
+def _describe(level: int, board: Grid, entry: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], life: int,
+              projection: Mapping[str, Any], certified: dict[str, Any], receipts: Mapping[str, Any],
+              gaps: list[dict[str, Any]]) -> dict[str, Any]:
+    """The level's description (WO-DESC-A). A class change on a certified track ends that role's binding: the
+    role stays certified as history, records ``binding_ends_at``, and gains a CLASS_CHANGED gap (the gate retypes)."""
+    description = describe_level(level, board, entry, rows, entry_life=life, certified=certified, receipts=receipts,
+                                 projection=projection)
+    for binding in description["role_bindings"]:
+        ends = binding["ends_at_transition"]
+        if ends is None:
+            continue
+        role = next(r for r in certified["roles"] if r["role"] == binding["role"] and role_ref(r) == binding["role_ref"]
+                    and r["identity"].get("track_id") == binding["track_id"])
+        role["binding_ends_at"] = ends
+        gaps.append({"subject": role.get("entity_id") or role["role"], "reason": "CLASS_CHANGED",
+                     "archetype_question": f"Does this object still hold the {role['role']} role after its class changed?",
+                     "source": "description: the certified track changed class; the gate owns retyping",
+                     "track_id": binding["track_id"], "transitions": [ends]})
+    return description
+
+
 def _board_accounting(discontinuities: Sequence[Mapping[str, Any]], breaks: Sequence[Mapping[str, Any]], level: int,
-                      gaps: list[dict[str, Any]]) -> list[str]:
+                      gaps: list[dict[str, Any]], description: Mapping[str, Any]) -> list[str]:
     """What the level's accounting still misses (moved out of ``compile_level``, the ratchet): the pending journal
-    check, and a board discontinuity, whether the census found it or a gate reported a board-record break."""
+    check, and a board discontinuity, whether the census found it or a gate reported a board-record break; and a
+    duplicated or missing record that ended the description's verified prefix."""
     missing = ["JOURNAL_CHECK_PENDING"]
     if discontinuities or breaks:
         missing.append("BOARD_DISCONTINUITY")
@@ -577,6 +648,12 @@ def _board_accounting(discontinuities: Sequence[Mapping[str, Any]], breaks: Sequ
         gaps.append({"subject": f"LEVEL-{level}", "archetype_question": "Do the recorded changes rebuild every board?",
                      "reason": "RECORD_MISMATCH", "source": "a recorded before-value disagrees with the replayed board",
                      "transitions": sorted({d["transition_id"] for d in discontinuities})})
+    mismatch = description["first_mismatch"]
+    if mismatch and mismatch["reason"] in {"DUPLICATE_TRANSITION", "MISSING_TRANSITION", "BEFORE_ENTRY"}:
+        missing.append("RECORD_MISMATCH")
+        gaps.append({"subject": f"LEVEL-{level}", "archetype_question": "Is every recorded transition present exactly once?",
+                     "reason": "RECORD_MISMATCH", "source": "description_prefix", "detail": mismatch["reason"],
+                     "transitions": [mismatch["transition_id"]]})
     return missing
 
 
@@ -646,7 +723,8 @@ def _apply_check(level: Mapping[str, Any], ids: Mapping[str, list[int]], totals:
                               "archetype_question": "Does the gate record match what was executed?",
                               "reason": "RECORD_MISMATCH", "source": "record_check",
                               **{k: list(ids[k]) for k in _CHECK_KEYS}})
-        missing.append("RECORD_MISMATCH")
+        if "RECORD_MISMATCH" not in missing:
+            missing.append("RECORD_MISMATCH")
         unmatched = set(ids["extra"]) | set(ids["renamed"]) | set(ids["duplicated"])
         receipts, kept = level["receipts"], []
         for role in level["certified"]["roles"]:
@@ -662,8 +740,23 @@ def _apply_check(level: Mapping[str, Any], ids: Mapping[str, list[int]], totals:
             else:
                 kept.append(role)
         level["certified"]["roles"] = kept
+        level["description"] = _restrict_description(level, ids)
     level["accounting"] = {"status": "NOT_ACCOUNTED" if missing else "ACCOUNTED", "missing": missing}
     return level
+
+
+def _restrict_description(level: dict[str, Any], ids: Mapping[str, list[int]]) -> dict[str, Any]:
+    """H2 settles the description too: it ends at the level's earliest mismatched id, binding ends after that id
+    are not recorded, and roles H2 withdrew are withdrawn from every event (WO-DESC-A)."""
+    cut = min(t for key in _CHECK_KEYS for t in ids[key])
+    for role in level["certified"]["roles"]:
+        ended = role.get("binding_ends_at")
+        if ended is not None and ended >= cut:
+            del role["binding_ends_at"]
+            level["gaps"] = [gap for gap in level["gaps"] if not (gap["reason"] == "CLASS_CHANGED" and gap.get(
+                "track_id") == role["identity"]["track_id"] and ended in (gap.get("transitions") or ()))]
+    return restrict_description(level["description"], level["observation"]["tracks"], level["certified"]["roles"],
+                                level["receipts"], truncate_at=cut)
 
 
 def reconcile(levels: Sequence[Mapping[str, Any]], machine: Any | None, execution: ExecutionRecord) -> list[dict[str, Any]]:
@@ -708,6 +801,6 @@ def compile_world_model(machine: Any | None, execution: ExecutionRecord, *, game
     }
 
 
-__all__ = ["ExecutionRecord", "assign_mismatches", "board_cut", "compile_level", "compile_world_model",
+__all__ = ["ExecutionRecord", "assign_mismatches", "board_cut", "compile_level", "compile_world_model", "entry_board_node",
            "freeze_census_or_failure", "freeze_level_census", "level_rows", "project_tracks", "reconcile",
            "record_check"]
