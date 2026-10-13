@@ -22,7 +22,6 @@ k013 (HYBRID, nine witnessed levers, inventory pending), replayed through the pr
 from __future__ import annotations
 
 import copy
-import functools
 import hashlib
 import json
 import pickle
@@ -38,8 +37,9 @@ from inference.framework.library_agenda import (
 )
 from inference.framework.library_census import ExecutionRecord, compile_world_model
 from inference.framework.play_gate import rest_in_play
-from inference.framework.record_replay import load_record, lossless_outcome, record_like_live, replay
+from inference.framework.record_replay import lossless_outcome, record_like_live
 from inference.framework.virelai_gates import CyberneticGateMachine, GateContractError
+from replay_checkpoints import checkpoint_bytes
 from test_l1a_pointer_g1_contract import GRID
 
 
@@ -47,9 +47,10 @@ def _digest(machine) -> str:
     return hashlib.sha256(pickle.dumps(machine)).hexdigest()
 
 
-@functools.lru_cache(maxsize=None)
 def _replayed(name: str, cut: int) -> bytes:
-    return pickle.dumps(replay(load_record(RECORDS[name]), max_steps=cut, measure=False))
+    """The pickled replay of ``name`` to ``cut``, from the shared checkpoint layer (WO-1): keyed by the record's
+    content and options, built once per process; every consumer unpickles its own copy."""
+    return checkpoint_bytes(RECORDS[name], max_steps=cut, measure=False)
 
 
 def _at(name: str, cut: int):

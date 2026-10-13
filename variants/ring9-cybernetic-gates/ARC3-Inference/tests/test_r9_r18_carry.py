@@ -15,6 +15,7 @@ from inference.framework.card_builder import world_model_digest
 from inference.framework.controller_executor import next_owned_step
 from inference.framework.memory_store import MemoryStore
 from inference.framework.record_replay import load_record, lossless_outcome, replay, record_like_live
+from replay_checkpoints import checkpoint
 from test_r9_r15_replay_fidelity import FT09_EXIT, VC33_EXIT
 
 SQUARE = [9, [1, 1], [1]]
@@ -22,7 +23,7 @@ RESPONSIVE = {(16, 0): (50, 30), (24, 0): (54, 30)}  # stand-in level 2: two squ
 
 
 def _vc33():
-    result = replay(load_record(VC33_EXIT))
+    result = checkpoint(VC33_EXIT, measure=True)  # the shared checkpoint layer: a fresh copy
     return result.machine, result.grid
 
 
@@ -97,6 +98,6 @@ def test_a_click_before_the_mask_or_on_a_terminal_transition_grades_nothing():
 
 
 def test_the_first_level_carries_nothing():
-    machine = replay(load_record(FT09_EXIT)).machine
+    machine = checkpoint(FT09_EXIT, measure=True).machine
     assert machine.carry.candidates == [] and machine.carry.line() is None
     assert not any(line.startswith("[carry]") for line in world_model_digest(machine))

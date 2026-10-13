@@ -25,6 +25,7 @@ from inference.framework.card_builder import (
     worst_case_request_chars,
 )
 from inference.framework.record_replay import load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.virelai_gates import GateContractError
 
 V2_RECORD = Path(__file__).parent / "fixtures" / "ft09_kaggle_v2_record.json.gz"
@@ -41,12 +42,12 @@ def ladders():
 
 @pytest.fixture(scope="module")
 def v2():
-    return replay(load_record(V2_RECORD), measure=False)
+    return checkpoint(V2_RECORD, measure=False)  # the shared checkpoint layer: a fresh copy
 
 
 @pytest.fixture(scope="module")
 def v2_in_g2():
-    return replay(load_record(V2_RECORD), max_steps=56, measure=False)
+    return checkpoint(V2_RECORD, max_steps=56, measure=False)
 
 
 def test_a_duck_that_reads_only_the_card_completes_the_ladder(ladders):

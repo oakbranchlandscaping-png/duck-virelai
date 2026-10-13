@@ -27,10 +27,9 @@ from pathlib import Path
 import pytest
 
 from inference.framework.controller_executor import ANSWER, CONTROLLER, DUCK, next_owned_step
-from inference.framework.record_replay import (
-    load_record, lossless_outcome, merge_recorded_answer, record_like_live, replay,
-)
+from inference.framework.record_replay import load_record, lossless_outcome, merge_recorded_answer, record_like_live
 from inference.framework.virelai_gates import GateContractError
+from replay_checkpoints import checkpoint
 
 FIXTURES = Path(__file__).parent / "fixtures"
 K008 = FIXTURES / "ring9_v2_k008_g3_lifecycle_record.json.gz"
@@ -56,7 +55,7 @@ def _drive(path, first_nav, plans_through=None):
     """
     record = load_record(path)
     cut = _cut(record, first_nav)
-    result = replay(record, max_steps=cut, measure=False)
+    result = checkpoint(path, max_steps=cut, measure=False)  # the shared checkpoint layer: a fresh copy
     machine = result.machine
     g3 = machine._adapters["G3-LEVERS"]
     result.plans = {}
@@ -153,7 +152,7 @@ def _assert_lever_sets(levers, expected_levers):
 
 def test_k008_pointer_nulls_stay_open_for_the_nav_pass():
     record = load_record(K008)
-    result = replay(record, max_steps=_cut(record, K008_FIRST_NAV), measure=False)
+    result = checkpoint(K008, max_steps=_cut(record, K008_FIRST_NAV), measure=False)
     g3 = result.machine._adapters["G3-LEVERS"]
     for entity_id in K008_POINTER_NULLS:
         lifecycle = g3.lifecycle_journal.entities[entity_id]

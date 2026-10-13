@@ -25,6 +25,7 @@ from pathlib import Path
 
 from inference.framework.controller_executor import next_owned_step, wake_reason
 from inference.framework.record_replay import load_record, lossless_outcome, record_like_live, replay
+from replay_checkpoints import checkpoint
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 VC33_CARRY_V4 = FIXTURES / "vc33_kaggle_carry_v4_record.json.gz"
@@ -34,7 +35,7 @@ VC33_CARRY_V2 = FIXTURES / "vc33_kaggle_carry_v2_record.json.gz"
 def _drive_level_two():
     """Replay level 1, then level 2 as live: the controller's answers, the recorded actions."""
     record = load_record(VC33_CARRY_V4)
-    result = replay(record, max_steps=26, measure=False)
+    result = checkpoint(VC33_CARRY_V4, max_steps=26, measure=False)  # the shared checkpoint layer
     machine, grid = result.machine, result.grid
     for step in record["steps"][26:]:
         owned = next_owned_step(machine)
@@ -66,9 +67,9 @@ def test_an_inventory_no_answer_can_satisfy_is_not_a_legal_move(monkeypatch):
 
 def test_a_level_change_that_restarts_the_ladder_does_not_wake_duck():
     """D6: the controller owns level entry; deaths and the run's end still wake Duck."""
-    level_two = replay(load_record(VC33_CARRY_V2), measure=False).machine
+    level_two = checkpoint(VC33_CARRY_V2, measure=False).machine
     assert level_two.gate_id == "G0-ACTION-METADATA" and level_two.lives.level == 2
     assert wake_reason(level_two, {}, {"level_completed": True}) is None
     assert wake_reason(level_two, {}, {"game_over": True}) == "boundary event: game_over"
-    level_one = replay(load_record(VC33_CARRY_V2), max_steps=25, measure=False).machine
+    level_one = checkpoint(VC33_CARRY_V2, max_steps=25, measure=False).machine
     assert wake_reason(level_one, {}, {"level_completed": True}) == "boundary event: level_completed"

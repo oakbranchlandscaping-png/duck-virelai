@@ -21,6 +21,7 @@ from inference.framework.library_census import (
     ExecutionRecord, board_cut, compile_level, compile_world_model, record_check,
 )
 from inference.framework.record_replay import decode_grid, load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.virelai_gates import CyberneticGateMachine, EgoGateMachine
 from inference.framework.world_model_v2 import WorldModelV2Error, seal
 from test_g3_hybrid_lifecycle_replay import K008, K013, K013_LIVE_LEVERS
@@ -34,7 +35,7 @@ def _digest(machine) -> str:
 def _cut(path, transition_id):
     record = load_record(path)
     cut = next(i for i, step in enumerate(record["steps"]) if step["transition_id"] == transition_id)
-    machine = replay(record, max_steps=cut, measure=False).machine
+    machine = checkpoint(path, max_steps=cut, measure=False).machine  # the shared checkpoint layer: a fresh copy
     execution = ExecutionRecord(
         entry_board=tuple(tuple(row) for row in decode_grid(record["initial_grid"])), entry_level=1,
         valid_actions=tuple(record["valid_actions"]),

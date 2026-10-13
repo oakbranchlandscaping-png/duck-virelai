@@ -12,6 +12,7 @@ from inference.framework.card_builder import world_budgets
 from inference.framework.life_record import PERSISTENCE, undeclared
 from inference.framework.memory_store import MemoryStore
 from inference.framework.record_replay import click_world_machine, decode_grid, load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.recall import recall_slot
 from test_g4b_relations import _predict, _take, start_g4b
 from test_g4c_law import _described, _law
@@ -39,7 +40,7 @@ def test_d2_a_reset_before_g2_is_recorded_once_and_opens_the_next_life():
 
 
 def test_d1_ft09_records_the_death_and_life_two_and_recall_says_which_life():
-    machine = replay(load_record(FT09_EXIT)).machine
+    machine = checkpoint(FT09_EXIT, measure=True).machine
     rows = machine.transition_index
     reset = next(row for row in rows if row["kind"] == "RESET")
     assert reset["transition_id"] == 89 and reset["life"] == 2
@@ -57,7 +58,7 @@ def test_d1_ft09_records_the_death_and_life_two_and_recall_says_which_life():
 
 
 def test_d1_vc33_records_its_level_change():
-    machine = replay(load_record(VC33_EXIT)).machine
+    machine = checkpoint(VC33_EXIT, measure=True).machine
     (life,) = machine.lives.summary()
     assert life["level"] == 1 and life["level_changes"] == [26] and life["ended_by"] is None
     assert machine.transition_index[-1]["level"] == 1 and machine.lives.level == 2
@@ -99,7 +100,7 @@ def test_d3_a_law_test_cut_off_by_a_death_neither_certifies_nor_reopens():
 
 
 def test_d4_every_gate_machine_field_has_a_declared_persistence_tier():
-    machine = replay(load_record(FT09_EXIT)).machine
+    machine = checkpoint(FT09_EXIT, measure=True).machine
     assert undeclared(machine) == []
     for adapter in machine._adapters.values():
         assert undeclared(adapter) == [], type(adapter).__name__

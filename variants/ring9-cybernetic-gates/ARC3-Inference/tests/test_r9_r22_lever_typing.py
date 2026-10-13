@@ -19,6 +19,7 @@ from inference.framework.controller_executor import next_owned_step, wake_reason
 from inference.framework.g4_guided import LeverRun
 from inference.framework.lever_repeat import certified
 from inference.framework.record_replay import load_record, lossless_outcome, record_like_live, replay
+from replay_checkpoints import checkpoint
 
 from tests.test_r9_r21_g3_contradicted import FIXTURES, VC33_CARRY_V4
 
@@ -41,7 +42,7 @@ def _controller_answers(machine) -> None:
 def _drive_level_two():
     """Replay level 1, then level 2 as live: the controller's answers, the recorded actions."""
     record = load_record(VC33_CARRY_V4)
-    result = replay(record, max_steps=26, measure=False)
+    result = checkpoint(VC33_CARRY_V4, max_steps=26, measure=False)  # the shared checkpoint layer
     machine, grid = result.machine, result.grid
     for step in record["steps"][26:]:
         _controller_answers(machine)
@@ -136,7 +137,7 @@ def test_a_state_that_offers_no_move_is_illegal_whatever_it_is_called(monkeypatc
 def test_every_recorded_run_ends_in_a_legal_state():
     """D11: the general rule calls no recorded run's resting state a deadlock it was not."""
     for path in sorted(FIXTURES.glob("*_record.json.gz")):
-        machine = replay(load_record(path), measure=False).machine
+        machine = checkpoint(path, measure=False).machine
         status = machine.legal_move_status()
         assert status["legal"] is True, (path.name, status)
 

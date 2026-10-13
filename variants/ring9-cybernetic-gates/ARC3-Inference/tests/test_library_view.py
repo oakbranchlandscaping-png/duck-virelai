@@ -23,6 +23,7 @@ from inference.framework.library_view import (
 )
 from inference.framework.world_model_v2 import seal
 from inference.framework.record_replay import load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.world_model_v2 import WorldModelV2Error, read_world_model, write_canonical
 from test_g3_hybrid_lifecycle_replay import K013
 from test_gated_python_bridge import _agent, _capability
@@ -35,7 +36,7 @@ def _digest_of(machine) -> str:
 
 @pytest.fixture(scope="module")
 def k013():
-    machine = replay(load_record(K013), max_steps=400, measure=False).machine
+    machine = checkpoint(K013, max_steps=400, measure=False).machine  # the shared checkpoint layer: a fresh copy
     before = _digest_of(machine)
     model = live_model(machine)
     assert _digest_of(machine) == before  # the live view leaves the gate machine byte-identical
@@ -44,7 +45,7 @@ def k013():
 
 @pytest.fixture(scope="module")
 def carry():
-    machine = replay(load_record(CARRY), measure=False).machine
+    machine = checkpoint(CARRY, measure=False).machine
     return machine, live_model(machine)
 
 

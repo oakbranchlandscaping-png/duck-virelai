@@ -197,9 +197,9 @@ def test_the_one_pull_interface_refuses_an_unknown_kind():
 
 def test_recall_keys_a_pending_dossier_and_never_calls_a_witnessed_lever_null():
     """The live v2 record's last state: a lever witnessed and confirmed, its dossier due."""
-    from inference.framework.record_replay import load_record, replay
+    from replay_checkpoints import checkpoint
 
-    machine = replay(load_record(V2_RECORD), measure=False).machine
+    machine = checkpoint(V2_RECORD, measure=False).machine  # the shared checkpoint layer: a fresh copy
     recall = build_card(machine).payload["recall"]
     assert recall["key"] == {"gate": "G3-LEVERS", "entity": "E0060", "site": [52, 36]}
     kinds = [next(iter(fact)) for fact in recall["facts"]]

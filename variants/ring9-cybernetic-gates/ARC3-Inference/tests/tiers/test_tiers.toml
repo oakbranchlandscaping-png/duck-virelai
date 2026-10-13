@@ -1,0 +1,74 @@
+# The test tiers (WO-1, test-runtime infrastructure; Claude, Alpha build seat, 2026-10-13).
+# Run with tools/test_tiers.py. Every entry is checked by collection before a tier runs: a named test or file that
+# no longer collects fails the run, and so does any node id in the T2 snapshot.
+#
+# Who runs what:
+#   T0  Claude, after every edit of a slice and before parking it; Sol, to check a review correction.
+#   T1  Claude, before parking every revision; Sol, while reviewing; the Director, on the copied files.
+#   T2  The Director: once after Sol accepts a slice and before its commit, at packaging and release
+#       checkpoints, and whenever shared infrastructure (test support, the replay path, conftest) changes.
+#
+# T0 sets are a slice's fail-first tests and nearest contract guards (target: under 90 s).
+# T1 sets are a whole subsystem with its neighbouring interfaces, saved-record guards and goldens (target: under
+# five minutes). T2 is the complete suite, less the separately held physics-grammar contract (as before WO-1).
+
+schema = "virelai-test-tiers-v1"
+version = 1
+weights = "tests/tiers/file_weights.json"  # measured seconds per file: shard balance only, never selection
+
+[T2]
+paths = ["tests"]
+exclude = ["tests/test_physics_grammar_contract.py"]
+snapshot = "tests/tiers/T2_collected.txt"  # every node id here must still collect
+
+# ---- T0 ----------------------------------------------------------------------------------------------------
+
+[T0.test-tiers]
+tests = [
+    "tests/test_replay_checkpoints.py",
+    "tests/test_test_tiers.py",
+]
+
+[T0.g3-directed]
+tests = [
+    # NAV selection and pursuit: admission, binding, staleness, the fresh resume, obligations, the handoff
+    "tests/test_g3_directed_nav.py::test_k008_nav_entry_offers_a_genuine_choice_the_gate_admits",
+    "tests/test_g3_directed_nav.py::test_an_off_head_nav_choice_binds_a_selected_pursuit_on_the_true_post_reset_board",
+    "tests/test_g3_directed_nav.py::test_an_explicit_head_choice_is_bound_and_an_implicit_head_step_stays_on_the_coverage_path",
+    "tests/test_g3_directed_nav.py::test_a_started_coverage_pursuit_owes_its_body_contact_before_any_choice",
+    "tests/test_g3_directed_nav.py::test_a_reachability_obligation_comes_before_any_choice",
+    "tests/test_g3_directed_nav.py::test_a_new_life_makes_the_choice_stale_and_coverage_resumes",
+    "tests/test_g3_directed_nav.py::test_a_change_to_the_chosen_object_makes_the_choice_stale",
+    "tests/test_g3_directed_nav.py::test_after_the_chosen_object_changes_the_resumed_coverage_step_starts_fresh",
+    "tests/test_g3_directed_nav.py::test_after_a_new_life_the_resumed_coverage_step_starts_fresh",
+    "tests/test_g3_directed_nav.py::test_with_the_handoff_off_the_nav_pass_is_the_controllers_from_its_first_step",
+    # CLICK selection: choice, refusal, staleness, the explicit head, the handoff
+    "tests/test_g3_directed_click.py::test_2a_duck_chooses_a_row_away_from_the_head_and_the_outcome_is_attributed_to_it",
+    "tests/test_g3_directed_click.py::test_2b_the_handoff_happens_once_per_phase_then_the_controller_serves_the_head",
+    "tests/test_g3_directed_click.py::test_2c_a_stale_choice_is_refused_and_the_head_resumes",
+    "tests/test_g3_directed_click.py::test_2c_an_inadmissible_choice_is_refused_once_with_its_reason",
+    "tests/test_g3_directed_click.py::test_2c_no_choice_is_admitted_while_the_gate_owes_an_obligation",
+    "tests/test_g3_directed_click.py::test_8_an_explicit_head_choice_is_bound_receipted_and_attributed_then_coverage_resumes",
+    # the nearest guard of the no-choice path: the CLICK world's golden (k008 and k013 are T1)
+    "tests/test_g3_directed_click.py::test_0_no_choice_replays_keep_every_envelope_evidence_id_and_product[carry_v7]",
+]
+
+# ---- T1 ----------------------------------------------------------------------------------------------------
+
+[T1.g3-directed]
+tests = [
+    "tests/test_g3_directed_click.py",           # directed CLICK, the agenda, the card, and the no-choice golden
+    "tests/test_g3_directed_nav.py",             # directed NAV
+    "tests/test_g3_hybrid_click_pass.py",        # HYBRID CLICK
+    "tests/test_g3_ledger_frame_sync.py",        # reset continuity
+    "tests/test_g3_hybrid_lifecycle_replay.py",  # lifecycle replay on the saved records
+    "tests/test_g3_scheduler.py",                # the G3 scheduler the choice binds into
+    "tests/test_g3_checkpoint.py",               # the G3 certificate
+    "tests/test_library_census.py",              # the census the agenda reports through
+    "tests/test_library_view.py",                # the live library and digest Duck reads
+    # selection persistence and event logging
+    "tests/test_r9_r16_life_record.py::test_d4_every_gate_machine_field_has_a_declared_persistence_tier",
+    "tests/test_memory_m2.py::test_with_the_live_g3_choice_handoff_the_first_model_call_is_that_one_choice",
+    # the golden is compared on its own full traced replay, never a cached checkpoint
+    "tests/test_replay_checkpoints.py::test_8_the_no_choice_golden_compares_its_own_full_traced_replay",
+]

@@ -13,13 +13,14 @@ from inference.framework.controller_executor import ladder_end, next_owned_step
 from inference.framework.life_record import undeclared
 from inference.framework.memory_store import MemoryStore
 from inference.framework.record_replay import lossless_outcome, load_record, replay, record_like_live
+from replay_checkpoints import checkpoint
 from test_r9_r15_replay_fidelity import FT09_EXIT, VC33_EXIT
 
 WIN = {"action": "ACTION6", "row": 32, "col": 60}
 
 
 def _vc33():
-    result = replay(load_record(VC33_EXIT))
+    result = checkpoint(VC33_EXIT, measure=True)  # the shared checkpoint layer: a fresh copy
     return result.machine, result.grid
 
 
@@ -91,6 +92,6 @@ def test_memory_shows_the_frozen_level_and_keeps_level_one_out_of_level_two_reca
 
 
 def test_a_game_with_no_level_change_freezes_nothing():
-    machine = replay(load_record(FT09_EXIT)).machine
+    machine = checkpoint(FT09_EXIT, measure=True).machine
     assert machine.levels == [] and machine.lives.level == 1
     assert ladder_end(machine) is None and machine.gate_id == "PLAY-NORMAL"  # R9-R24 D22: normal play, not a stop

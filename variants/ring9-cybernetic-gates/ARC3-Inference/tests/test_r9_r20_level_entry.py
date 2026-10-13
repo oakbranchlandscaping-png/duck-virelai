@@ -19,6 +19,7 @@ from pathlib import Path
 from inference.framework import record_replay
 from inference.framework.controller_executor import next_owned_step
 from inference.framework.record_replay import load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.virelai_gates import EgoGateMachine
 
 VC33_CARRY_V2 = Path(__file__).resolve().parent / "fixtures" / "vc33_kaggle_carry_v2_record.json.gz"
@@ -26,7 +27,7 @@ BOARD = [[0] * 8 for _ in range(8)]
 
 
 def _level_two():
-    result = replay(load_record(VC33_CARRY_V2))
+    result = checkpoint(VC33_CARRY_V2, measure=True)  # the shared checkpoint layer: a fresh copy
     assert result.machine.lives.level == 2 and result.machine.gate_id == "G0-ACTION-METADATA"
     return result.machine
 

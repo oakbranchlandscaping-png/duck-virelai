@@ -14,6 +14,7 @@ from ft09_world import V1_RECORD
 from inference.agent.memory_queries import gated_memory_query
 from inference.framework.annotation_lane import orientation_due
 from inference.framework.record_replay import load_record, replay
+from replay_checkpoints import checkpoint
 from test_g4b_relations import _predict, start_g4b
 from test_memory_m2 import Run
 
@@ -47,7 +48,7 @@ def test_f1_the_current_gate_is_a_note_subject(tmp_path, monkeypatch):
 
 def test_f2_the_observed_step_follows_every_transition():
     record = load_record(V1_RECORD)
-    machine = replay(record, measure=False).machine
+    machine = checkpoint(V1_RECORD, measure=False).machine
     assert machine.observed_through_step == max(step["transition_id"] for step in record["steps"])  # 109
     machine, world = start_g4b()
     prediction = _predict(machine, "E0053")

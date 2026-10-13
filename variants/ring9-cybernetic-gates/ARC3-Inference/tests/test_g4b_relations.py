@@ -22,6 +22,7 @@ from inference.framework.card_builder import CARD_BUDGET, build_card, world_mode
 from inference.framework.controller_executor import ladder_end, next_owned_step
 from inference.framework.g4_orbits import G4OrbitError, validate_orbit_answer
 from inference.framework.record_replay import load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.virelai_gates import GateContractError
 
 RELATIONS = "G4-B-LEVER-RELATIONS"
@@ -45,7 +46,7 @@ def g4b():
 def start_g4b():
     """The live v1 record replayed to G4-A's close, oriented, on the offline world it defines."""
     record = load_record(V1_RECORD)
-    result = replay(record, measure=False)
+    result = checkpoint(V1_RECORD, measure=False)  # the shared checkpoint layer: a fresh copy
     world = Ft09World(record)
     world.grid = [row[:] for row in result.grid]
     world.transition_id = max(step["transition_id"] for step in record["steps"])
@@ -197,7 +198,7 @@ def test_the_description_needs_every_lever_pressed_and_rests_only_on_supported_p
 
 def test_f2_an_orbit_answer_refuses_a_bare_string_where_a_list_belongs():
     """Live E0056: limitations given as one string were stored as 250 single characters."""
-    result = replay(load_record(V1_RECORD), max_steps=79, measure=False)
+    result = checkpoint(V1_RECORD, max_steps=79, measure=False)
     lever = result.machine._adapters[ORBITS]
     template = result.machine.gate_view()["answer_template"]
     raw = {**template, "mechanism_explanation": "Each press flips the tile between its two colours and back again.",

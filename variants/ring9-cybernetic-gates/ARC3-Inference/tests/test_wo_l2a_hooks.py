@@ -23,6 +23,7 @@ import pytest
 from inference.framework import library_census, world_model_v2
 from inference.framework.library_census import ExecutionRecord, assign_mismatches, compile_world_model
 from inference.framework.record_replay import decode_grid, load_record, replay
+from replay_checkpoints import checkpoint
 from inference.framework.solver import HarnessSolver, _HarnessGameSession
 from inference.framework.world_model_v2 import seal, validate
 from test_duck_native_observer import _Game
@@ -33,7 +34,7 @@ BOUNDARY = 26  # the transition that completed level 1
 
 def _carry():
     record = load_record(CARRY)
-    machine = replay(record, measure=False).machine
+    machine = checkpoint(CARRY, measure=False).machine  # the shared checkpoint layer: a fresh copy
     names = tuple(step["action"]["action"] for step in record["steps"] if step["transition_id"] <= BOUNDARY)
     board = tuple(tuple(row) for row in decode_grid(record["initial_grid"]))
     return machine, board, tuple(record["valid_actions"]), names
