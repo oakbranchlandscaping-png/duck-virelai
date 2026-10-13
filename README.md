@@ -3,11 +3,11 @@
 ## Current project direction
 
 > **New collaborators start with [`START_HERE.md`](START_HERE.md).** The current accepted local
-> source is `ring9-unified` at `b635fb9`; the current state, plan, execution order, and test record
-> are `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md`,
+> source is `ring9-unified` at `5fdac9a`; the current state, plan, execution order, and test record
+> are `STATE_OF_THE_DUCK_BUILD_v7_2026-10-13.md`,
 > `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md`,
 > `EXECUTION_PLAN_SEMANTIC_LIBRARY_v4_2026-10-12.md`, and
-> `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md`.
+> `RECORD_RING9_TEST_FLOOR_v3_2026-10-13.md`.
 
 > **Project directives, 2026-10-04 (Director-ratified): `DIRECTIVE_COMPETITION_ENDGAME_v2_2026-10-04.md`** (supersedes v1 of 2026-10-03).
 > The goal through 8 November is a paper, and the ARC Prize Paper Prize requires a linked, scored
@@ -30,7 +30,7 @@ Duck reads the library and chooses among gate-admitted experiments; deterministi
 routine coverage and certifies results. Push is shelved. If world study reveals a win, the solver
 records it, describes it in the learned grammar, freezes the claim, and tests it on the next level.
 
-The current state of the build is `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md`. The read order,
+The current state of the build is `STATE_OF_THE_DUCK_BUILD_v7_2026-10-13.md`. The read order,
 authority rules, branch discipline, and path from a change to a run are in `START_HERE.md` and
 `handoff/FRESH_TASK_BOOTSTRAP_2026-10-12.md`. `DOCUMENTATION_INDEX_2026-09-20.md` maps current and
 historical documents.

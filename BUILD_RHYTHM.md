@@ -10,7 +10,7 @@ Test tiers protect both speed and coverage:
 - **T1, slice floor:** all tests for the changed subsystem and its shared boundaries; expected under 5 minutes, target near 3.
 - **T2, full acceptance:** the full accepted suite, run once after Sol accepts the source and before packaging, release, or a shared runtime merge; goal under 15 minutes.
 
-The current pre-optimization T2 reference is 792 passed, 1 skipped in 1535.82 seconds at `b635fb9`. The tiering slice must prove unchanged test collection and may not delete, weaken, skip, xfail, or alter a golden. Until it lands, follow the focused command in the active work order and preserve the latest full-floor command for final acceptance.
+WO-TEST-RHYTHM is accepted at `5fdac9a`. On the four-core Mac, directed-G3 T0 is 19 passed in 56.8 seconds, directed-G3 T1 is 143 passed in 272.1 seconds with four workers, and the exact 817-test T2 is 816 passed, 1 skipped in 534.4 seconds with four workers. The golden is unchanged. See `RECORD_RING9_TEST_FLOOR_v3_2026-10-13.md`.
 
 The present product loop is library-centered: a gate exposes an actionable question, Duck chooses where needed, the controller acts, receipts capture the result, deterministic code certifies it, and the library revision becomes the next target. The ordinary world description must exist before a win can be explained in that language. See `START_HERE.md` and build plan v4.
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-12
 **Use:** cold start for a new team member
-**Accepted local source:** `ring9-unified` at `b635fb9`
+**Accepted local source:** `ring9-unified` at `5fdac9a`
 **Supersedes:** `FRESH_TASK_BOOTSTRAP_2026-10-07.md`
 
 ## 1. First orientation
@@ -10,11 +10,11 @@
 Read, in order:
 
 1. `START_HERE.md`
-2. `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md`
+2. `STATE_OF_THE_DUCK_BUILD_v7_2026-10-13.md`
 3. `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md`
 4. `EXECUTION_PLAN_SEMANTIC_LIBRARY_v4_2026-10-12.md`
 5. `RULINGS_CONSOLIDATION_v4_2026-10-10.md`
-6. `RECORD_RING9_TEST_FLOOR_v2_2026-10-12.md`
+6. `RECORD_RING9_TEST_FLOOR_v3_2026-10-13.md`
 
 Then read the interface and build report for the slice you are assigned. Do not begin with an older strategy narrative or a transfer-folder summary.
 
@@ -22,7 +22,7 @@ Then read the interface and build report for the slice you are assigned. Do not 
 
 - Work in `duck-virelai-r9r20` on `ring9-unified`.
 - Active runtime is `variants/ring9-cybernetic-gates/ARC3-Inference/`.
-- `b635fb9` is the accepted local head.
+- `5fdac9a` is the accepted local head; production runtime behavior remains `b635fb9`.
 - `main` and the remotes are still at `472aa32`; `ring9-unified` contains accepted runtime `b635fb9` plus later documentation commits. Inspect Git for the live ahead count.
 - `main` fast-forwards only after the accepted floor and Director direction.
 - Kaggle packages are built from the commit named in their manifest. Do not assume remote `main` contains the current solver.
@@ -53,12 +53,11 @@ Push is shelved. A clear is evidence to describe and test across levels, not the
 
 ## 5. Next assignment sequence
 
-1. Test-runtime infrastructure and tiered floors.
-2. Schema-v3 descriptive event ledger and exact scene state.
-3. Bounded scene, transformation, dossier, law, and residual views.
-4. G4 schema-v3 dossiers and selected-question integration.
-5. NAV G1 and no-repair-loop closure.
-6. Current-source public-25 description diagnostic.
+1. Schema-v3 descriptive event ledger and exact scene state.
+2. Bounded scene, transformation, dossier, law, and residual views.
+3. G4 schema-v3 dossiers and selected-question integration.
+4. NAV G1 and no-repair-loop closure.
+5. Current-source public-25 description diagnostic.
 
 Do not start G5/G6, observed-win transfer, Push, or SUB-4 inside these slices.
 
@@ -83,7 +82,7 @@ Use the tiers defined by the accepted WO-TEST-RHYTHM output:
 - T1 at slice handoff;
 - T2 once after Sol accepts the slice and before packaging or release.
 
-Until that slice lands, use the focused tests named by the current work order and preserve the full command from the latest build report. The current full reference is 792 passed, 1 skipped at `b635fb9`; it takes about 26 minutes. The uncommitted physics grammar contract is excluded from that accepted floor.
+The accepted four-core commands are serial T0, `--jobs 4` for T1, and `--jobs 4` for T2. Current references are 56.8 seconds for directed-G3 T0, 272.1 seconds for directed-G3 T1, and 534.4 seconds for the complete T2. The uncommitted physics grammar contract is excluded from that accepted floor.
 
 Never improve time by weakening coverage. State exactly which tier ran and its elapsed time.
 

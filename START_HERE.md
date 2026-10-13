@@ -4,7 +4,7 @@
 **Audience:** a new builder, reviewer, or Director joining the current work
 **Active source:** `variants/ring9-cybernetic-gates/ARC3-Inference/`
 **Working branch:** `ring9-unified`
-**Current accepted commit:** `b635fb9`
+**Current accepted commit:** `5fdac9a` (runtime behavior remains `b635fb9`)
 
 ## The project in one paragraph
 
@@ -13,7 +13,7 @@ Ring 9 is building an evidence-backed semantic library for each novel ARC world.
 ## Read these in order
 
 1. `START_HERE.md` — this orientation and the authority order.
-2. `STATE_OF_THE_DUCK_BUILD_v6_2026-10-12.md` — what exists at `b635fb9`, what remains, and the current test evidence.
+2. `STATE_OF_THE_DUCK_BUILD_v7_2026-10-13.md` — what exists at `5fdac9a`, what remains, and the current test evidence.
 3. `BUILD_PLAN_SEMANTIC_LIBRARY_DIRECTED_EXPLORATION_v4_2026-10-12.md` — the destination and staged path: describe the world before explaining a win.
 4. `EXECUTION_PLAN_SEMANTIC_LIBRARY_v4_2026-10-12.md` — the next slices, dependencies, owners, and acceptance gates.
 5. `RULINGS_CONSOLIDATION_v4_2026-10-10.md` — ratified rulings 15–24, especially the model role, lifecycle repair, and bounded free-play restart.
@@ -39,10 +39,10 @@ Code and test results establish what is implemented. A plan does not make a capa
 ## Current handoff in one screen
 
 - **Landed locally:** canonical v2 `world_model.json`, census and H1/H2 hooks; bounded library digest and retrieval; G3 directed CLICK choice; reset-safe G3 evidence; G3 directed NAV selection and pursuit.
-- **Accepted floor:** 792 passed, 1 skipped in 25:35 on macOS at `b635fb9`. The focused G3 NAV set is 89 passed in 4:43.
-- **Branch state:** `ring9-unified` contains accepted runtime `b635fb9` plus newer documentation commits. `origin/ring9-unified`, `origin/main`, and local `main` remain at `472aa32`; inspect Git for the current ahead count.
+- **Accepted floor:** T2 passed 816 tests with 1 skipped in 8:54 using four workers at `5fdac9a`; T1 directed G3 passed 143 tests in 4:32.
+- **Branch state:** `ring9-unified` contains accepted production behavior through `b635fb9`, documentation through plan v4, and accepted test infrastructure at `5fdac9a`. `origin/ring9-unified`, `origin/main`, and local `main` remain at `472aa32`; inspect Git for the current ahead count.
 - **Run evidence:** the earlier `db8a657` public-25 diagnostic produced canonical libraries for 25/25 worlds and 28/28 observed levels. It predates the reset and NAV-selection repairs, so it is pipeline evidence rather than current-source acceptance.
-- **Immediate work:** introduce tiered tests and timing reports; add schema-v3 scene and transformation descriptions; build the per-lever G4 dossiers and selected study; close NAV G1 and answer-loop friction; then run the current source across the public 25.
+- **Immediate work:** add schema-v3 scene and transformation descriptions; build the per-lever G4 dossiers and selected study; close NAV G1 and answer-loop friction; then run the current source across the public 25.
 - **Still open:** G5/G6, the full physics grammar, observed-win transfer, bounded free-play recovery, the accepted world manifest and human report, a scored submission, and the final package.
 
 ## Roles
