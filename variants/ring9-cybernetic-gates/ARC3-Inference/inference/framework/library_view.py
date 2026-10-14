@@ -1,4 +1,4 @@
-"""What Duck reads of the semantic library: a compact digest and paged retrieval, from a validated v2 model.
+"""What Duck reads of the semantic library: a compact digest and paged retrieval, from a validated v3 model.
 
 Author: Claude (Alpha build seat), 2026-10-11. Sol's directive after the WO-L2a hooks: "build the card
 digest and retrieval from the validated library ... with a clear current goal, compact certified findings,
@@ -12,6 +12,11 @@ typed open gaps, and retrieval handles" (plan stage C; BUILD_PLAN_SEMANTIC_LIBRA
   Both are bounded however large the library grows (Sol's review, 2026-10-11): the whole rendered digest
   section, header included, fits ``DIGEST_BUDGET``; every page fits ``PAGE_BUDGET`` (below the tool's
   output limit), clips long lists to a count, and names the exact call that continues it.
+
+WO-DESC-B (INTERFACE_WO_DESC_B_v3, 2026-10-13) adds the world description (``world_description``): a ``world``
+block inside the same one 2,500-character section (at most 1,500 of it; the selected question stays first), and
+six pages (``scene``, ``events``, ``transformations``, ``dossiers``, ``laws``, ``residuals``) whose continuations
+keep every filter. The view is a pure projection of the sealed model, cached by content hash.
 
 The census is never compiled on the controller path or inside ``build_card`` (replay measurement): only
 the Duck-facing prompt section and the ``virelai('library', ...)`` query call ``live_model``, and a cache
@@ -48,7 +53,13 @@ GAP_ORDER = ("RECORD_MISMATCH", "IDENTITY_UNRESOLVED", "INCONCLUSIVE", "BUDGET",
 # The open questions that belong to the active gate's goal, by the census's own wording (never a world's).
 GOAL_GAP_TERMS = {"G1-EGO": "ego", "G2-COUNTER": "counter", "G3-LEVERS": "lever", "G4-REACTIONS": "lever",
                   "G4.2-LEVER-ORBITS": "lever", "G4-B-LEVER-RELATIONS": "lever", "G4-C-LEVER-LAW": "lever"}
-PAGE_KINDS = ("levels", "objects", "object", "gaps", "role", "evidence")
+PAGE_KINDS = ("levels", "objects", "object", "gaps", "role", "evidence",
+              "scene", "events", "transformations", "dossiers", "laws", "residuals")
+WORLD_KINDS = PAGE_KINDS[6:]
+WORLD_BUDGET = 1_500  # characters of the world block, inside the one DIGEST_BUDGET section
+# (patterns shown, questions shown, characters per line); the last keeps the scene, the census and the handle
+WORLD_TIERS = ((5, 3, 120), (4, 2, 110), (3, 2, 100), (2, 1, 90), (1, 1, 80), (0, 0, 0))
+WORLD_HANDLE = "virelai('library', kind='transformations')"
 HANDLES = (
     "virelai('library', kind='levels')",
     "virelai('library', kind='objects', offset=0, limit=10)",
@@ -56,6 +67,7 @@ HANDLES = (
     "virelai('library', kind='gaps', reason=REASON, subject=SUBJECT, offset=0, limit=10)",
     "virelai('library', kind='role', id=ENTITY_ID_OR_ROLE)",
     "virelai('library', kind='evidence', id=REF)",
+    WORLD_HANDLE,  # WO-DESC-B revision 2: appended; the six accepted handles keep their text and order
 )
 PAGE_LIMIT = 25
 # The python tool's output limit is LOCAL_ANALYZER_TOOL_OUTPUT_TOKENS x 4 = 4,096 characters by default; the
@@ -226,7 +238,9 @@ def _objects(level: Mapping[str, Any]) -> dict[str, int]:
 
 
 # (gap kinds shown, subjects per kind, ids per findings line, earlier levels shown, handles shown)
-DIGEST_TIERS = ((8, 3, 6, 6, 6), (6, 2, 4, 4, 6), (5, 1, 3, 3, 3), (4, 0, 2, 2, 3), (3, 0, 0, 1, 1), (2, 0, 0, 0, 1))
+DIGEST_TIERS = ((8, 3, 6, 6, 7), (6, 2, 4, 4, 7), (5, 1, 3, 3, 3), (4, 0, 2, 2, 3), (3, 0, 0, 1, 1), (2, 0, 0, 0, 1))
+# WO-DESC-B revision 2 (Sol): the world block keeps two patterns and one question; the gap inventory shrinks first
+WORLD_FLOOR = (2, 1)
 
 
 def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int],
@@ -262,6 +276,86 @@ def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int],
     }
 
 
+_VIEWS: dict[tuple[Any, int], dict[str, Any]] = {}
+
+
+def _world_view(model: Mapping[str, Any], level: Mapping[str, Any]) -> dict[str, Any]:
+    """The level's semantic view (``world_description``), cached by the sealed model's content hash."""
+    from inference.framework.world_description import describe_level_view
+
+    key = (model.get("content_sha256"), int(level["level"]))
+    view = _VIEWS.get(key)
+    if view is None:
+        if len(_VIEWS) >= 16:
+            _VIEWS.clear()
+        view = _VIEWS[key] = describe_level_view(level)
+    return view
+
+
+def _pattern_line(pattern: Mapping[str, Any], keep: int) -> str:
+    """The pattern id leads, so clipping never removes it."""
+    top = max(pattern["explanations"].items(), key=lambda kv: (kv[1], kv[0]))
+    line = (f"{pattern['pattern_id']} "
+            f"{pattern['object']['name'] if pattern['object']['role'] else pattern['object']['handle']} "
+            f"{pattern['verb']} x{pattern['count']} sites {','.join(f'{a}>{b}' for a, b in pattern['sites'])}; "
+            f"{top[0]} x{top[1]}")
+    return _clip_text(line, keep)
+
+
+def _question_line(question: Mapping[str, Any], pattern: Mapping[str, Any] | None, keep: int) -> str:
+    """The question id and the id of the pattern it asks about lead, so clipping never removes them. The object is
+    named by its handle (the full name is one page away), so the counts survive the line limit."""
+    if pattern is None:
+        return _clip_text(f"{question['question_id']} ({question['pattern_id']}) {question['text']}", keep)
+    return _clip_text(f"{question['question_id']} ({question['pattern_id']}) What changes {pattern['object']['handle']}? "
+                      f"{pattern['verb']} x{question['unexplained']} unexplained of {pattern['count']}", keep)
+
+
+def _shown_patterns(view: Mapping[str, Any], shown: int, asked: int) -> list[Mapping[str, Any]]:
+    """The leading patterns by rank, always including the pattern of each displayed question."""
+    by_id = {pattern["pattern_id"]: pattern for pattern in view["patterns"]}
+    chosen = [by_id[q["pattern_id"]] for q in view["questions"][:asked] if q["pattern_id"] in by_id]
+    for pattern in view["patterns"]:
+        if pattern not in chosen:
+            chosen.append(pattern)
+    return sorted(chosen[:shown], key=lambda pattern: pattern["rank"])
+
+
+def _scene_line(scene: Mapping[str, Any]) -> str:
+    mismatch = scene["record_mismatch"]
+    record = (f"record {scene['integrity']}" if not mismatch
+              else f"record {scene['integrity']} at t{mismatch['transition_id']} ({mismatch['reason']})")
+    # revision 3 (Sol): with no verified action the scene is the level's entry board, never "tNone"
+    as_of = "as of level entry" if scene["as_of_transition"] is None else f"as of t{scene['as_of_transition']}"
+    return (f"{as_of}, life {scene['life']}: {scene['objects_present']} objects present, "
+            f"{scene['objects_departed']} departed; {record}")
+
+
+def _world_block(model: Mapping[str, Any], level: Mapping[str, Any], tier: tuple[int, int, int]) -> dict[str, Any]:
+    """Scene, the most frequent transformations, the leading open questions and unresolved roles, in brief."""
+    shown, asked, keep = tier
+    view = _world_view(model, level)
+    scene = view["scene"]
+    census = view["census"]
+    patterns = view["patterns"]
+    block: dict[str, Any] = {
+        "scene": _scene_line(scene),
+        "census": (f"primary events {census['primary']}, folded mirrors {census['folded']}; "
+                   f"patterns {len(patterns)}, open questions {len(view['questions'])}"),
+    }
+    if shown:
+        block["patterns"] = [_pattern_line(pattern, keep) for pattern in _shown_patterns(view, shown, asked)]
+    if asked:
+        by_id = {pattern["pattern_id"]: pattern for pattern in patterns}
+        block["questions"] = [_question_line(q, by_id.get(q["pattern_id"]), keep) for q in view["questions"][:asked]]
+    if view["open_identity"]:
+        block["open_identity"] = (f"{len(view['open_identity'])} unresolved: "
+                                  + ", ".join(f"{item['role']} identity" for item in view["open_identity"]))
+    more = len(patterns) - min(shown, len(patterns))
+    block["retrieve"] = f"+{more} more of {len(patterns)} patterns: {WORLD_HANDLE}" if more else WORLD_HANDLE
+    return block
+
+
 def _minimal_digest(model: Mapping[str, Any], target: Mapping[str, Any] | None = None) -> dict[str, Any]:
     level = _current(model)
     goal = _goal(level, target)
@@ -285,14 +379,39 @@ def library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET, *,
     goal is the gate in progress, as for a saved record read with no live machine.
     """
     validate(model)
-    for tier in DIGEST_TIERS:
-        digest = _digest_at(model, tier, target)
-        if len(_render(digest)) <= budget:
-            return digest
+    level = _current(model)
+    view = _world_view(model, level)
+    floor = (min(WORLD_FLOOR[0], len(view["patterns"])), min(WORLD_FLOOR[1], len(view["questions"])))
+    # First the floor: the gap inventory shrinks, then the other library detail, before the world goes below two
+    # patterns and one question. Only a library too large for the floor at every tier falls back to the old order.
+    for tiers, need in ((_gap_first_tiers(), floor), (DIGEST_TIERS, (0, 0))):
+        fitted = _fit(model, level, tiers, need, budget, target)
+        if fitted is not None:
+            return fitted
     digest = _minimal_digest(model, target)
     if len(_render(digest)) > budget:
         raise ValueError(f"a digest budget of {budget} characters cannot hold the goal and the counts")
     return digest
+
+
+def _gap_first_tiers() -> tuple[tuple[int, int, int, int, int], ...]:
+    """The general gap inventory shrinks first (kinds and subjects), at the full tier's other limits."""
+    head = DIGEST_TIERS[0]
+    return tuple((groups, subjects, *head[2:]) for groups, subjects, *_ in DIGEST_TIERS) + DIGEST_TIERS[1:]
+
+
+def _fit(model: Mapping[str, Any], level: Mapping[str, Any], tiers: Sequence[tuple[int, int, int, int, int]],
+         need: tuple[int, int], budget: int, target: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The richest library tier, then the richest world tier at or above ``need``, that fit the one section."""
+    for tier in tiers:
+        digest = _digest_at(model, tier, target)
+        for world_tier in WORLD_TIERS:
+            if world_tier[0] < need[0] or world_tier[1] < need[1]:
+                break
+            world = _world_block(model, level, world_tier)
+            if _chars(world) <= WORLD_BUDGET and len(_render({**digest, "world": world})) <= budget:
+                return {**digest, "world": world}
+    return None
 
 
 def render_library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET, *,
@@ -369,9 +488,87 @@ def _object_page(model: Mapping[str, Any], page: dict[str, Any], track_id: str, 
     raise ValueError(f"no object {track_id!r} in the library")
 
 
+def _event_rows(level: Mapping[str, Any], view: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from inference.framework.world_description import appearance
+
+    tracks = {track["track_id"]: track for track in level["observation"]["tracks"]}
+    owner = {e: p["pattern_id"] for p in view["patterns"] for e in p["events"]}
+    folds = {fold["event_id"]: fold for fold in view["folds"]}
+    rows = []
+    for record in level["description"]["transitions"]:
+        if record["record_status"] != "VERIFIED":
+            continue
+        for event in record["events"]:
+            delta = {k: event["delta"][k] for k in ("translation", "count", "class") if k in event["delta"]}
+            fold = folds.get(event["event_id"])
+            rows.append({"event_id": event["event_id"], "transition_id": record["transition_id"],
+                         "action": (record.get("action") or {}).get("action"), "verb": event["verb"],
+                         "object": appearance(tracks[event["subject"]["track_id"]])[0],
+                         "track_id": event["subject"]["track_id"], "delta": delta,
+                         "explanation": event["explanation"]["basis"], "pattern_id": owner.get(event["event_id"]),
+                         "folded": None if fold is None else {"basis": fold["basis"], "mirror_of": fold["mirror_of"]}})
+    return rows
+
+
+def _pattern_row(pattern: Mapping[str, Any]) -> dict[str, Any]:
+    return {"pattern_id": pattern["pattern_id"], "rank": pattern["rank"], "object": pattern["object"]["handle"],
+            "name": pattern["object"]["name"], "verb": pattern["verb"], "count": pattern["count"],
+            "sites": pattern["sites"], "explanations": pattern["explanations"],
+            "mirror_basis": pattern["mirror_basis"], "mirror_explanations": pattern["mirror_explanations"],
+            "first": pattern["transitions"][0], "last": pattern["transitions"][-1],
+            "observed_effect_type": pattern["observed_effect_type"], "sentence": pattern["sentence"]}
+
+
+def _world_page(model: Mapping[str, Any], page: dict[str, Any], chosen: Mapping[str, Any], kind: str,
+                options: Mapping[str, Any], offset: Any, limit: Any) -> dict[str, Any]:
+    """The six WO-DESC-B pages. Every continuation repeats every active filter."""
+    view = _world_view(model, chosen)
+    call = {"kind": kind, "level": chosen["level"]}
+    wanted = options.get("id")
+    if kind == "scene":
+        page.update(scene=view["scene"], open_identity=view["open_identity"], census=view["census"])
+        return _paged(page, view["objects"], offset, limit, call)
+    if kind == "events":
+        filters = {key: options.get(key) for key in ("transition", "from_transition", "to_transition", "object", "verb")}
+        folded = bool(options.get("include_folded"))
+        verb = None if filters["verb"] is None else str(filters["verb"]).upper()
+        rows = [row for row in _event_rows(chosen, view)
+                if (folded or row["pattern_id"] is not None)
+                and (filters["transition"] is None or row["transition_id"] == int(filters["transition"]))
+                and (filters["from_transition"] is None or row["transition_id"] >= int(filters["from_transition"]))
+                and (filters["to_transition"] is None or row["transition_id"] <= int(filters["to_transition"]))
+                and (filters["object"] is None or str(filters["object"]) in {row["object"], row["track_id"]})
+                and (verb is None or row["verb"] == verb)]
+        return _paged(page, rows, offset, limit, {**call, **filters, "verb": verb, "include_folded": folded})
+    if kind == "transformations":
+        if wanted is not None:
+            (pattern,) = [p for p in view["patterns"] if p["pattern_id"] == str(wanted)] or [None]
+            if pattern is None:
+                raise ValueError(f"no transformation {wanted!r} on level {chosen['level']}")
+            events = set(pattern["events"])
+            page["pattern"] = {k: v for k, v in _pattern_row(pattern).items()}
+            rows = [row for row in _event_rows(chosen, view) if row["event_id"] in events]
+            return _paged(page, rows, offset, limit, {**call, "id": str(wanted)})
+        return _paged(page, [_pattern_row(p) for p in view["patterns"]], offset, limit, call)
+    if kind == "residuals":
+        page["census"] = view["census"]
+        gaps = [gap for gap in chosen["gaps"] if gap["reason"] in ("RECORD_MISMATCH", "IDENTITY_UNRESOLVED", "CLASS_CHANGED")]
+        rows = ([{"residual": "QUESTION", **q} for q in view["questions"]]
+                + [{"residual": "OPEN_IDENTITY", **item} for item in view["open_identity"]]
+                + [{"residual": "GAP", **gap} for gap in gaps])
+        return _paged(page, rows, offset, limit, call)
+    rows = view[kind]
+    if wanted is not None:
+        rows = [row for row in rows if str(wanted) in {str(row.get("id")), str(row.get("gate_id")), str(row.get("product_id"))}]
+        if not rows:
+            raise ValueError(f"no {kind} entry {wanted!r} on level {chosen['level']}")
+    return _paged(page, rows, offset, limit, {**call, "id": wanted})
+
+
 def library_page(model: Mapping[str, Any], kind: str, *, id: Any = None, reason: Any = None,  # noqa: A002
                  subject: Any = None, level: Any = None, part: Any = None, offset: Any = 0,
-                 limit: Any = 10) -> dict[str, Any]:
+                 limit: Any = 10, transition: Any = None, from_transition: Any = None, to_transition: Any = None,
+                 object: Any = None, verb: Any = None, include_folded: Any = False) -> dict[str, Any]:  # noqa: A002
     """One bounded page of the validated library; ``next`` is the exact call for the rest.
 
     Unknown kinds, ids, parts and levels raise ``ValueError``. Every response fits ``PAGE_BUDGET``.
@@ -399,6 +596,10 @@ def library_page(model: Mapping[str, Any], kind: str, *, id: Any = None, reason:
         return _object_page(model, page, str(id), part, offset, limit)
     chosen = _level(model, level)
     page["level"] = chosen["level"]
+    if kind in WORLD_KINDS:
+        options = {"id": id, "transition": transition, "from_transition": from_transition, "to_transition": to_transition,
+                   "object": object, "verb": verb, "include_folded": include_folded}
+        return _world_page(model, page, chosen, kind, options, offset, limit)
     if kind == "role":
         wanted = str(id or "")
         roles = [role for role in chosen["certified"]["roles"]
@@ -418,5 +619,5 @@ def library_page(model: Mapping[str, Any], kind: str, *, id: Any = None, reason:
                   {"kind": "gaps", "reason": wanted_reason, "subject": subject, "level": chosen["level"]})
 
 
-__all__ = ["DIGEST_BUDGET", "GOAL_QUESTIONS", "HANDLES", "HEADER", "PAGE_BUDGET", "library_digest", "library_page",
-           "live_model", "render_library_digest"]
+__all__ = ["DIGEST_BUDGET", "GOAL_QUESTIONS", "HANDLES", "HEADER", "PAGE_BUDGET", "WORLD_BUDGET", "library_digest",
+           "library_page", "live_model", "render_library_digest"]

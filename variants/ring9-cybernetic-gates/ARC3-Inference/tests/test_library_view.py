@@ -73,7 +73,14 @@ def test_the_digest_names_the_goal_the_findings_and_the_typed_gaps(k013):
     assert digest["open_gaps"]["total"] == len(model["levels"][0]["gaps"])
     assert kinds[0].startswith("INCONCLUSIVE x5: Is this object a lever?")  # the active goal's questions first
     assert kinds[1].startswith("NOT_REACHED x8: Is this object a lever?")
-    assert digest["retrieve"] == list(HANDLES)
+    # WO-DESC-B revision 2 (Sol): a contract extension. The six accepted handles keep their text and order, the
+    # transformations handle is appended, and the world block's retrieval line names the same handle.
+    accepted = ["virelai('library', kind='levels')", "virelai('library', kind='objects', offset=0, limit=10)",
+                "virelai('library', kind='object', id=TRACK_ID)",
+                "virelai('library', kind='gaps', reason=REASON, subject=SUBJECT, offset=0, limit=10)",
+                "virelai('library', kind='role', id=ENTITY_ID_OR_ROLE)", "virelai('library', kind='evidence', id=REF)"]
+    assert digest["retrieve"] == list(HANDLES) == accepted + ["virelai('library', kind='transformations')"]
+    assert digest["world"]["retrieve"].endswith(HANDLES[-1])
     assert len(json.dumps(digest, sort_keys=True)) <= DIGEST_BUDGET
 
 

@@ -51,12 +51,15 @@ def _refused_state(machine: Any) -> dict[str, Any]:
 
 
 def _library_query(machine: Any, parameters: dict[str, Any]) -> dict[str, Any]:
-    """``virelai('library', kind=…, id=…, reason=…, subject=…, level=…, part=…, offset=…, limit=…)``: one
-    bounded page of the validated live library (WO-L2a library view); ``next`` names the call for the rest.
+    """``virelai('library', kind=…, id=…, reason=…, subject=…, level=…, part=…, offset=…, limit=…)``, and the
+    event filters ``transition``, ``from_transition``, ``to_transition``, ``object``, ``verb`` and
+    ``include_folded`` (WO-DESC-B): one bounded page of the validated live library; ``next`` names the call for the
+    rest, with every active filter.
     A census or lookup failure is the reply's error, never a crash."""
     from inference.framework.library_view import library_page, live_model
 
-    keys = ("id", "reason", "subject", "level", "part", "offset", "limit")
+    keys = ("id", "reason", "subject", "level", "part", "offset", "limit",
+            "transition", "from_transition", "to_transition", "object", "verb", "include_folded")  # WO-DESC-B
     options = {key: parameters[key] for key in keys if key in parameters}
     try:
         data = library_page(live_model(machine), str(parameters.get("kind") or "levels"), **options)

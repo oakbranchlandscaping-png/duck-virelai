@@ -384,7 +384,6 @@ class _HarnessGameSession:
                 self._write_observer_warning("WORLD_MODEL_NOT_OBSERVED", "no initial board was observed; no census")
             return
         try:
-            from inference.framework import world_model_v2
             from inference.framework.library_census import ExecutionRecord, compile_world_model
 
             run = self.game.game_run
@@ -401,9 +400,28 @@ class _HarnessGameSession:
         except Exception as exc:  # Virelai must never cost Duck the game.
             self._write_observer_warning("WORLD_MODEL_V2_COMPILE_FAILED", f"{type(exc).__name__}: {exc}")
             return
-        result = world_model_v2.write_canonical(payload, self.solver.job_dir / "virelai" / run_stem)
+        self._persist_l2a_world_model(payload, self.solver.job_dir / "virelai" / run_stem)
+
+    def _persist_l2a_world_model(self, payload: dict[str, Any], directory: Path) -> None:
+        """Seal once; write ``world_model.json``; only then write ``world_report.md`` from the same sealed model.
+
+        A model failure is ``WORLD_MODEL_V2_WRITE_FAILED`` and writes no report. A report failure is
+        ``WORLD_REPORT_WRITE_FAILED`` and never touches the model.
+        """
+        from inference.framework import world_model_v2, world_report
+
+        try:
+            sealed = world_model_v2.seal(payload)
+        except Exception as exc:  # the same failure write_canonical would have reported
+            self._write_observer_warning("WORLD_MODEL_V2_WRITE_FAILED", f"{type(exc).__name__}: {exc}")
+            return
+        result = world_model_v2.write_canonical(sealed, directory)
         if not result.ok:
             self._write_observer_warning("WORLD_MODEL_V2_WRITE_FAILED", str(result.error))
+            return
+        report = world_report.write_world_report(sealed, directory)
+        if not report.ok or report.content_sha256 != result.sha256:
+            self._write_observer_warning("WORLD_REPORT_WRITE_FAILED", str(report.error or "report hash mismatch"))
 
     def _write_l2a_interim_if_advanced(self) -> None:
         """WO-L2a: after a turn in which H1 froze a level, write the model with its checks still pending."""

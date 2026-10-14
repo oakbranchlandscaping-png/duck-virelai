@@ -60,6 +60,13 @@ tests = [
     "tests/test_wo_l2a_census_paths.py::test_a_zero_action_cancellation_writes_the_canonical_model",  # v3 on disk
 ]
 
+[T0.desc-b]
+tests = [
+    "tests/test_world_description.py",           # WO-DESC-B: folds, patterns, questions, pages, digest, report, writer
+    "tests/test_semantic_library_shadow.py",     # the legacy typing name still resolves to the neutral module
+    "tests/test_wo_l2a_census_paths.py::test_a_zero_action_cancellation_writes_the_canonical_model",  # the model the report follows
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
@@ -90,4 +97,6 @@ tests = [
     "tests/test_wo_l2a_close.py",                # the run-end write
     "tests/test_wo_l2a_hooks.py",                # H1 and H2, the frozen level and the journal check
     "tests/test_g3_ledger_frame_sync.py",        # reset continuity and board-record breaks
+    "tests/test_world_description.py",           # WO-DESC-B: the semantic view, pages, digest and report
+    "tests/test_semantic_library_shadow.py",     # the effect typing the view reads
 ]
