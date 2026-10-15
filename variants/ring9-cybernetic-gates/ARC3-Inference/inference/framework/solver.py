@@ -651,12 +651,26 @@ class _HarnessGameSession:
             if run.solver_note is None:
                 run.solver_note = f"tokens={total_tokens}"
             self._record_open_g3_outcome(run)
+            self._close_provenance()  # WO-PE-01: after final G3 handling, every G3 event journaled, then the seal
             self._finish_if_needed()
             self._write_l2a_world_model(final=True)  # WO-L2a H2
             self._close_game_observer()
             self.state_path.unlink(missing_ok=True)
             self._write_analysis_html()
             self.write_viewer_payload()
+
+    def _close_provenance(self) -> None:
+        """WO-PE-01: at every handled end (normal, controlled stop, budget stop, crash), once the open G3 outcome is
+        recorded: write the G3 choice events still pending, journal them, close a pending admitted probe and seal the
+        audit journal. A failure is an observer warning, never a raise."""
+        try:
+            from inference.agent.provenance_capture import close_session
+
+            warnings = close_session(self.analyzer, self.state_path)
+        except Exception as exc:  # noqa: BLE001 - provenance never costs Duck the game
+            warnings = [("PROVENANCE_WRITE_FAILED", f"{type(exc).__name__}: {exc}")]
+        for event, detail in warnings:
+            self._write_observer_warning(event, detail)
 
     def _record_open_g3_outcome(self, run: Any) -> None:
         """Moved unchanged out of ``play``'s ``finally`` (WO-L2a ratchet compensation)."""
@@ -1619,6 +1633,10 @@ class HarnessSolver(Solver):
             controller_executor_enabled=(
                 self.virelai_mode == "gated"
                 and os.environ.get("VIRELAI_CONTROLLER_EXECUTOR", "1").strip() != "0"
+            ),
+            provenance_enabled=(  # WO-PE-01: the provenance journal, on unless VIRELAI_PROVENANCE=0
+                self.virelai_mode == "gated"
+                and os.environ.get("VIRELAI_PROVENANCE", "1").strip() != "0"
             ),
         )
 

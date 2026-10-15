@@ -4369,10 +4369,10 @@ class _LeverTarget:
         self.revision += 1
         return event
 
-    def submit_answer(self, raw: Mapping[str, Any]) -> GateAnswer | LeverDossierAnswer:
+    def submit_answer(self, raw: Mapping[str, Any], *, executor: str = "DUCK") -> GateAnswer | LeverDossierAnswer:
         answer_kind = str(raw.get("answer_kind") or "").strip().upper()
         if answer_kind == "TARGET_REACHABILITY":
-            return self._submit_reachability(raw)
+            return self._submit_reachability(raw, executor=executor)
         if answer_kind == "LEVER_INVENTORY" or "lever_entities" in raw:
             return self._submit_inventory(raw)
         member_id = str(raw.get("target_member_id") or "").strip()
@@ -4420,7 +4420,7 @@ class _LeverTarget:
         self.revision += 1
         return answer
 
-    def _submit_reachability(self, raw: Mapping[str, Any]) -> GateAnswer:
+    def _submit_reachability(self, raw: Mapping[str, Any], *, executor: str = "DUCK") -> GateAnswer:
         pending = self._pending_reachability
         if pending is None:
             raise GateContractError(
@@ -4508,7 +4508,7 @@ class _LeverTarget:
             entity_id,
             "PRESUMED_UNREACHABLE",
             evidence_ref=evidence_refs[-1],
-            actor="DUCK",
+            actor=executor,  # WO-PE-01: the submitter, CONTROLLER on its semantic-reuse path
             reason="explained exhausted reachable component and released target",
         )
         record = {
@@ -6888,11 +6888,23 @@ class CyberneticGateMachine:
             )
 
     def submit_answer(
-        self, raw: Mapping[str, Any]
+        self, raw: Mapping[str, Any], *, executor: str = "DUCK"
     ) -> ActionMetadataAnswer | GateAnswer | CounterAnswer:
+        return self.submit_prepared(self.prepare_answer(raw), executor=executor)
+
+    def prepare_answer(self, raw: Mapping[str, Any]) -> Any:
+        """WO-PE-01: the payload the gate validates, the submission with any omitted certified field filled."""
         from inference.framework.card_builder import fill_certified_fields
 
-        return self._active_adapter().submit_answer(fill_certified_fields(self, raw))
+        return fill_certified_fields(self, raw)
+
+    def submit_prepared(self, effective: Mapping[str, Any], *, executor: str = "DUCK") -> Any:
+        """WO-PE-01: the active gate's decision on a prepared payload. Only G3 records who submitted (its lifecycle
+        actor); every other gate's contract is unchanged."""
+        adapter = self._active_adapter()
+        if isinstance(adapter, _LeverTarget):
+            return adapter.submit_answer(effective, executor=executor)
+        return adapter.submit_answer(effective)
 
     def record_reuse(self, raw: Mapping[str, Any]) -> dict[str, Any]:
         if self.target_journal.active_product(ACTION_METADATA_GATE_ID) is None:

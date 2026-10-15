@@ -74,14 +74,18 @@ def _chosen_probe(agent: Any, state_path: Path, machine: Any, question_id: str) 
     from inference.framework.library_agenda import selected_question
     from inference.framework.virelai_gates import GateContractError
 
+    from inference.agent import provenance_capture
     from inference.agent.gate_artifacts import flush_g3_selection_events
 
+    where, before = provenance_capture.context(machine), len(machine.g3_selection_events)
     try:
         machine.select_g3_question(question_id, actor="DUCK")
     except GateContractError as exc:
+        provenance_capture.g3_choice_refused_early(agent, state_path, machine, where, question_id, before, exc)
         return _reply("next_probe", {**_refused_state(machine), "question_id": selected_question(machine)}, str(exc))
     finally:
         flush_g3_selection_events(state_path, machine)
+        provenance_capture.sync(agent, state_path, machine)  # WO-PE-01: the choice event, translated
     capability = machine.next_probe_capability()
     return _reply("next_probe", capability, None if capability is not None else "No probe is admissible now.")
 
@@ -122,12 +126,17 @@ def gated_memory_query(
 
 
 def _submit(agent: Any, state_path: Path, machine: Any, operation: str, raw: Any) -> dict[str, Any]:
+    from inference.agent import provenance_capture
+
     source = "ORIENTATION" if operation == "orient" else "ANNOTATION"
+    where = provenance_capture.context(machine)
     try:
         notes = submit_notes(machine, raw, source=source)
     except AnnotationError as exc:
+        provenance_capture.notes(agent, state_path, machine, where, raw, refusal=exc)  # WO-PE-01
         return _reply(operation, _refused_state(machine), str(exc))
     record_notes(state_path, notes)
+    provenance_capture.notes(agent, state_path, machine, where, raw, stored=notes)
     if source == "ORIENTATION":
         agent._gate_transitioned_this_turn = True
     return _reply(operation, agent._binding_gate_payload(machine))

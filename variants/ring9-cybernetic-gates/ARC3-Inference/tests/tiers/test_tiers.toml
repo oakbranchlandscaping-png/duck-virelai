@@ -67,6 +67,16 @@ tests = [
     "tests/test_wo_l2a_census_paths.py::test_a_zero_action_cancellation_writes_the_canonical_model",  # the model the report follows
 ]
 
+[T0.provenance]
+tests = [
+    "tests/test_provenance_capture.py",          # WO-PE-01: the journal and its six capture points
+    "tests/test_gated_python_bridge.py",         # Duck's action and gate-answer paths the capture wraps
+    "tests/test_g3_directed_click.py::test_8_a_refused_choice_reaches_the_durable_event_log",
+    "tests/test_g3_directed_click.py::test_8_a_handoff_that_times_out_resumes_coverage_on_the_live_session_path",
+    "tests/test_nav_branch_foundations.py::test_reachability_answer_explains_limit_releases_target_and_stays_bounded",
+    "tests/test_wo_l2a_census_paths.py::test_a_zero_action_cancellation_writes_the_canonical_model",  # the close path
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
@@ -99,4 +109,21 @@ tests = [
     "tests/test_g3_ledger_frame_sync.py",        # reset continuity and board-record breaks
     "tests/test_world_description.py",           # WO-DESC-B: the semantic view, pages, digest and report
     "tests/test_semantic_library_shadow.py",     # the effect typing the view reads
+]
+
+[T1.paper-evidence]
+tests = [
+    "tests/test_provenance_capture.py",          # WO-PE-01: provenance capture
+    "tests/test_gated_python_bridge.py",         # Duck's gated tool paths
+    "tests/test_memory_m0.py",                   # the turn ledger and executor labels
+    "tests/test_memory_m1.py",
+    "tests/test_memory_m2.py",                   # the controller executor end to end
+    "tests/test_controller_end_to_end.py",
+    "tests/test_nav_branch_foundations.py",      # the G3 reachability answer and its lifecycle
+    "tests/test_virelai_gates.py",               # the gate machine whose answer path was split
+    "tests/test_wo_l2a_census_paths.py",         # every path that closes a session
+    "tests/test_wo_l2a_close.py",
+    "tests/test_tool_agent_no_tool_circuit_breaker.py",
+    "tests/test_g3_directed_click.py",           # G3 choices, the handoff, the selection-event log
+    "tests/test_g3_directed_nav.py",
 ]

@@ -179,15 +179,21 @@ def _log(analyzer_log: Path, text: str) -> None:
 def _controller_answer(agent: Any, state_path: Path, machine: Any, step: Any, analyzer_log: Path) -> None:
     from inference.framework.virelai_gates import GateContractError
 
+    from inference.agent.provenance_capture import AnswerTrace
+
     session: ControllerSession = agent._controller
     gate_id = machine.gate_id
+    payload = json.loads(json.dumps(step.answer))
+    trace = AnswerTrace(agent, state_path, machine, CONTROLLER, payload, payload)  # WO-PE-01
     try:
-        answer = machine.submit_answer(json.loads(json.dumps(step.answer)))
+        answer = trace.submit()
     except GateContractError as exc:
+        trace.refused(exc)
         session.refused.add(step.refusal_key)
         _log(analyzer_log, f"{gate_id} refused the controller's answer: {exc}")
         return
     agent._record_gate_answer(state_path, machine, gate_id, answer, executor=CONTROLLER)
+    trace.admitted(answer)
     session.answers += 1
     _log(analyzer_log, f"answered {gate_id} ({step.reason}); gate now {machine.gate_id}")
 
@@ -213,9 +219,9 @@ def _controller_action(
         and (not rerun_intent.startswith("NAV:") or rerun_intent.startswith("NAV:CONTACT_ATTEMPT:"))
     )
     try:
+        decision = {"probe_token": step.probe_token, **(step.decision or {})}
         probe, before_frame, actions_before = agent._gate_probe_begin(
-            state_path, machine, {"probe_token": step.probe_token, **(step.decision or {})},
-            [step.action], executor=CONTROLLER,
+            state_path, machine, decision, [step.action], executor=CONTROLLER,
         )
     except Exception as exc:  # a refused probe is a stop condition, never a crash
         session.wake = f"the gate refused the controller's action: {exc}"
@@ -229,6 +235,8 @@ def _controller_action(
         event = agent._gate_probe_record(
             state_path, machine, probe, [step.action], raw, before_frame, actions_before,
         )
+    else:
+        _not_executed(agent, state_path, machine, raw)
     result = agent._apply_step_result(raw, event)
     executed = bool(result.get("executed"))
     session.actions += int(executed)
@@ -250,6 +258,14 @@ def _controller_action(
     ))
     ledger.finish(gate_after=machine.gate_id, step_executed=executed, outcome="controller_step")
     return AnalyzerTurnResult(step_executed=executed)
+
+
+def _not_executed(agent: Any, state_path: Path, machine: Any, raw: dict[str, Any]) -> None:
+    """WO-PE-01: an admitted controller probe the environment did not execute is an EXECUTION / NOT_ATTEMPTED row."""
+    from inference.agent.provenance_capture import probe_not_attempted
+
+    probe_not_attempted(agent, state_path, machine, "NOT_EXECUTED",
+                        str(raw.get("error") or "the environment did not execute the action"))
 
 
 def request_rerun(agent: Any, machine: Any, parameters: dict[str, Any]) -> str | None:

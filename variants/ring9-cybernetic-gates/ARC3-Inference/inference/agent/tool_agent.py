@@ -33,6 +33,7 @@ from inference.agent.prompts import (
 )
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
 from inference.agent.controller_turn import ControllerSession, run_controller_turn
+from inference.agent import provenance_capture
 from inference.agent.gate_artifacts import record_gate_answer, record_probe_outcome
 from inference.agent.memory_queries import gated_memory_query, orientation_refusal, record_notes
 from inference.framework.annotation_lane import (
@@ -1262,6 +1263,7 @@ class ToolAgent:
         virelai_controller_enabled: bool = False,
         virelai_gates_enabled: bool = False,
         controller_executor_enabled: bool = False,
+        provenance_enabled: bool = False,
     ) -> None:
         resolved_model = _resolve_analyzer_model(model)
         if base_url is not None or provider is not None:
@@ -1300,6 +1302,11 @@ class ToolAgent:
             raise ValueError("controller and gated modes are mutually exclusive")
         self._gate_machine = None
         self._controller = ControllerSession(enabled=bool(controller_executor_enabled) and self._virelai_gates_enabled)
+        # WO-PE-01: the provenance journal (provenance_capture); gated mode only, off unless asked for
+        self._provenance_enabled = bool(provenance_enabled) and self._virelai_gates_enabled
+        self._provenance = None
+        self._provenance_pending = None
+        self._provenance_admissions = 0
         self._gate_reset_steps_observed: set[int] = set()
         self._controller_decision_results: dict[str, dict[str, Any]] = {}
         self._system_prompt = _build_system_prompt(
@@ -2332,19 +2339,27 @@ class ToolAgent:
         normalized_actions: list[dict[str, Any]],
         *,
         executor: str,
+        submitted: Any = None,
     ) -> tuple[Any, Any, list[str]]:
         """Validate a gate action and write its envelope before the environment moves.
 
         Shared by Duck's action path and the controller executor (DESIGN_VIRELAI_MEMORY_v1 §5.5),
-        so both leave identical evidence; ``executor`` records who acted.
+        so both leave identical evidence; ``executor`` records who acted. WO-PE-01: the admission or refusal is
+        also one provenance row, with ``submitted`` (the action as proposed).
         """
         from inference.framework.virelai_gates import GateContractError
 
+        where = provenance_capture.context(gate_machine)
+        proposal = submitted if submitted is not None else {"actions": normalized_actions, "decision": decision}
         if orientation_refusal(gate_machine):
+            provenance_capture.probe_refused(self, state_path, gate_machine, where, executor, proposal,
+                                             "ORIENTATION_DUE", orientation_refusal(gate_machine))
             raise ControllerContractError(orientation_refusal(gate_machine))
         try:
             gate_probe = gate_machine.validate_probe(decision, normalized_actions)
         except GateContractError as exc:
+            provenance_capture.probe_refused(self, state_path, gate_machine, where, executor, proposal,
+                                             "GATE_CONTRACT", str(exc))
             raise ControllerContractError(str(exc)) from None
         probe_path = state_path.with_name(
             state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_probe_envelopes.jsonl")
@@ -2358,6 +2373,7 @@ class ToolAgent:
                 "protocol": dict(getattr(gate_machine, "protocol", {}) or {}),
                 **asdict(gate_probe),
             }, sort_keys=True) + "\n")
+        provenance_capture.probe_admitted(self, state_path, gate_machine, where, executor, proposal, gate_probe)
         probe_before_frame, _ = load_runtime_state(state_path)
         return gate_probe, probe_before_frame, list(self._current_valid_actions)
 
@@ -2366,10 +2382,12 @@ class ToolAgent:
         raw_payload: dict[str, Any], probe_before_frame: Any, probe_actions_before: list[str],
     ) -> dict[str, Any]:
         """Compile the lossless outcome of an executed gate action and persist its evidence."""
-        return record_probe_outcome(
+        gate_event = record_probe_outcome(
             state_path, gate_machine, gate_probe, normalized_actions, raw_payload,
             probe_before_frame, probe_actions_before, list(self._current_valid_actions),
         )
+        provenance_capture.probe_executed(self, state_path, gate_machine, gate_probe, gate_event)  # WO-PE-01
+        return gate_event
 
     def _record_gate_answer(
         self, state_path: Path, gate_machine: Any, answering_gate_id: str, answer: Any,
@@ -2500,7 +2518,8 @@ class ToolAgent:
             if self._virelai_gates_enabled:
                 assert gate_machine is not None
                 gate_probe, probe_before_frame, probe_actions_before = self._gate_probe_begin(
-                    state_path, gate_machine, decision, normalized_actions, executor="DUCK"
+                    state_path, gate_machine, decision, normalized_actions, executor="DUCK",
+                    submitted={"actions": actions, "decision": decision},
                 )
             elif self._virelai_controller_enabled:
                 if not isinstance(decision, dict):
@@ -2622,17 +2641,22 @@ class ToolAgent:
                 if operation == "gate_answer":
                     answering_gate_id = gate_machine.gate_id
                     submitted, notes = split_annotations(parameters.get("answer"))
+                    trace = provenance_capture.AnswerTrace(  # WO-PE-01: both payloads and who wrote each field
+                        self, state_path, gate_machine, "DUCK", parameters.get("answer"), submitted,
+                    )
                     try:
                         if orientation_refusal(gate_machine):
                             raise GateContractError(orientation_refusal(gate_machine))
                         if notes is not None:
                             validate_notes(gate_machine, notes, "ANSWER")
-                        answer = gate_machine.submit_answer(submitted)
+                        answer = trace.submit()
                         if notes is not None:
-                            record_notes(state_path, submit_notes(
+                            trace.notes = submit_notes(
                                 gate_machine, notes, source="ANSWER", gate_id=answering_gate_id,
-                            ))
+                            )
+                            record_notes(state_path, trace.notes)
                     except (GateContractError, AnnotationError) as exc:
+                        trace.refused(exc)
                         interaction_kind = "CONTRACT_REPAIR"
                         repair_error = str(exc)
                         repair_signature = hashlib.sha256(
@@ -2662,6 +2686,7 @@ class ToolAgent:
                             "truncated": False,
                         }
                     self._record_gate_answer(state_path, gate_machine, answering_gate_id, answer)
+                    trace.admitted(answer)
                     self._gate_transitioned_this_turn = True
                     interaction_kind = "GATE_TRANSITION"
                     repair_signature = ""
@@ -2712,12 +2737,13 @@ class ToolAgent:
                 raise RuntimeError("Virelai did not return a JSON-like response.")
             return response
 
+        action_handler = provenance_capture.duck_action(self, state_path, _handle_action)  # WO-PE-01
         sandbox_result = run_sandboxed_python(
             code=code,
             timeout_seconds=self._python_timeout,
             initial_state=_serialized_runtime_state(),
-            action_handler=_handle_action,
-            decision_action_handler=_handle_action if (self._virelai_controller_enabled or self._virelai_gates_enabled) else None,
+            action_handler=action_handler,
+            decision_action_handler=action_handler if (self._virelai_controller_enabled or self._virelai_gates_enabled) else None,
             virelai_handler=_handle_virelai_query,
         )
 
