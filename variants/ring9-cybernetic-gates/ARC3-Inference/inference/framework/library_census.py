@@ -26,6 +26,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
+from inference.framework import provenance_hooks
 from inference.framework.descriptive_events import cell_runs, describe_level, restrict_description, role_ref, witness_sha256
 from inference.framework.virelai_continuity import (
     ComponentObservation,
@@ -589,13 +590,15 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
         "state": state,
         "entry": {**entry, "board_sha256": hashlib.sha256(repr([list(r) for r in board]).encode()).hexdigest(),
                   "valid_actions": valid_actions},
-        "record": {"transition_ids": [int(row["transition_id"]) for row in rows], "journal_check": {"status": "PENDING"}},
+        "record": {"transition_ids": [int(row["transition_id"]) for row in rows], "journal_check": {"status": "PENDING"},
+                   "reset_transition_ids": [int(row["transition_id"]) for row in rows if row.get("kind") == "RESET"]},
         "observation": {"tracks": projection["tracks"], "terrain": terrain},
         "certified": {"gates": dispositions, **certified},
         "receipts": receipts,
         "gaps": gaps,
         "accounting": {"status": "NOT_ACCOUNTED", "missing": missing},
         "description": description,
+        "product_answers": {} if machine is None else provenance_hooks.product_answers(machine),
     }
 
 

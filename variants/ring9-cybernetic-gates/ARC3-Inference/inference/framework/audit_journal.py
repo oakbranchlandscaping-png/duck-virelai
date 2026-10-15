@@ -477,8 +477,7 @@ def _verify_lines(lines: list[bytes], ended_with_newline: bool) -> tuple[Journal
     return JournalRead(rows, "OPEN", None, None, dict(chain.joins), chain.run), chain
 
 
-def _read(path: Path) -> tuple[JournalRead, _Chain]:
-    data = path.read_bytes() if path.exists() else b""
+def _parse_bytes(data: bytes) -> tuple[JournalRead, _Chain]:
     if not data:
         return JournalRead([], "OPEN"), _Chain()
     lines = data.split(b"\n")
@@ -488,9 +487,25 @@ def _read(path: Path) -> tuple[JournalRead, _Chain]:
     return _verify_lines(lines, ended)
 
 
+def _read(path: Path) -> tuple[JournalRead, _Chain]:
+    return _parse_bytes(path.read_bytes() if path.exists() else b"")
+
+
 def read_journal(path: str | Path) -> JournalRead:
     """The verified prefix and its status: SEALED, OPEN (no seal) or CORRUPT (a typed failure)."""
     return _read(Path(path))[0]
+
+
+def read_journal_bytes(data: bytes) -> JournalRead:
+    """WO-PE-02: the same verdict as ``read_journal``, from bytes already read, so that a caller can hash and parse
+    one buffer (no second read between the file hash and the parse)."""
+    return _parse_bytes(bytes(data))[0]
+
+
+def verify_embedded(rows: Sequence[Mapping[str, Any]], seal: Mapping[str, Any] | None) -> JournalRead:
+    """WO-PE-02: re-verify rows (and a seal) embedded in another artifact exactly as the reader verifies a file."""
+    lines = [_dumps(row) for row in rows] + ([_dumps(seal)] if seal is not None else [])
+    return _verify_lines(lines, True)[0]
 
 
 def validate_rows(rows: Sequence[Mapping[str, Any]]) -> None:
@@ -558,5 +573,6 @@ def field_sources(submitted: Any, effective: Any, certified: Sequence[str], *, a
 __all__ = [
     "EXECUTORS", "FAILURES", "G3_TRANSLATION", "JOIN_FIELDS", "JournalFault", "JournalRead", "ProvenanceError",
     "ProvenanceJournal", "REASON_CODES", "REF_KEYS", "SCHEMA", "STATUSES", "VALID", "canonical", "check_content",
-    "event_id", "field_sources", "make_refs", "normalized", "read_journal", "translate_g3_event", "validate_rows",
+    "event_id", "field_sources", "make_refs", "normalized", "read_journal", "read_journal_bytes", "translate_g3_event",
+    "validate_rows", "verify_embedded",
 ]

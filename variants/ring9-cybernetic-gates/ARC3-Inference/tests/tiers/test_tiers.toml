@@ -77,6 +77,15 @@ tests = [
     "tests/test_wo_l2a_census_paths.py::test_a_zero_action_cancellation_writes_the_canonical_model",  # the close path
 ]
 
+[T0.provenance-v4]
+tests = [
+    "tests/test_world_model_v4_provenance.py",   # WO-PE-02: the schema-v4 provenance chapter, H1, H2 and the guards
+    "tests/test_world_model_v2.py",              # the writer, the version-aware reader and seal()
+    "tests/test_wo_l2a_census_paths.py",         # every path that writes the canonical model
+    "tests/test_wo_l2a_close.py",                # the run-end write
+    "tests/test_provenance_capture.py::test_a_pending_g3_event_survives_every_handled_end",  # seal before H2
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
@@ -114,6 +123,7 @@ tests = [
 [T1.paper-evidence]
 tests = [
     "tests/test_provenance_capture.py",          # WO-PE-01: provenance capture
+    "tests/test_world_model_v4_provenance.py",   # WO-PE-02: the journal absorbed into schema v4
     "tests/test_gated_python_bridge.py",         # Duck's gated tool paths
     "tests/test_memory_m0.py",                   # the turn ledger and executor labels
     "tests/test_memory_m1.py",

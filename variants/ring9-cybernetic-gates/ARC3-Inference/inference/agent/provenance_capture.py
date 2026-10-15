@@ -38,6 +38,11 @@ def _run_stem(state_path: Path) -> str:
     return name[: -len(suffix)] if name.endswith(suffix) else Path(state_path).stem
 
 
+def journal_path(state_path: Path) -> Path:
+    """WO-PE-02: where a run's journal lives, beside its other sidecars. Pure: it touches no file."""
+    return Path(state_path).with_name(f"{_run_stem(state_path)}_provenance.jsonl")
+
+
 def journal(agent: Any, state_path: Path) -> pv.ProvenanceJournal | None:
     """The agent's journal, opened beside the other sidecars on first use."""
     if not _enabled(agent):
@@ -46,7 +51,7 @@ def journal(agent: Any, state_path: Path) -> pv.ProvenanceJournal | None:
     if existing is not None:
         return existing
     stem = _run_stem(state_path)
-    path = Path(state_path).with_name(f"{stem}_provenance.jsonl")
+    path = journal_path(state_path)
     game_id = stem.rsplit("_p", 1)[0] if "_p" in stem else stem
     try:
         opened = pv.ProvenanceJournal.open(path, run_stem=stem, game_id=game_id)
@@ -372,6 +377,7 @@ def close_session(agent: Any, state_path: Path) -> list[tuple[str, str]]:
 
 
 __all__ = [
-    "AnswerTrace", "close_session", "context", "portable", "duck_action", "g3_choice_refused_early", "journal", "notes",
+    "AnswerTrace", "close_session", "context", "portable", "duck_action", "g3_choice_refused_early", "journal",
+    "journal_path", "notes",
     "probe_admitted", "probe_executed", "probe_not_attempted", "probe_refused", "sync",
 ]

@@ -35,6 +35,7 @@ from inference.agent.runtime_state import (
     write_runtime_state,
 )
 from inference.agent.tool_agent import ToolAgent
+from inference.framework import provenance_hooks
 from inference.framework.kaggle import (
     DEFAULT_QWEN_MODEL_DATASET_SOURCE,
     DEFAULT_SERVED_MODEL_NAME,
@@ -213,6 +214,7 @@ class _HarnessGameSession:
     _l2a_entry: Any = field(default=None, init=False, repr=False)  # WO-L2a: the observed entry board
     _l2a_frozen_written: int = field(default=0, init=False, repr=False)  # level censuses already written
     _l2a_end_reason: str = field(default="", init=False, repr=False)  # why a turn ended the run (WO-L2a)
+    _l2a_writer_prefixes: list = field(default_factory=list, init=False, repr=False)  # WO-PE-02: H1's prefixes
 
     def _public_action_names(self) -> list[str]:
         names = _engine_action_names(self.game)
@@ -400,7 +402,13 @@ class _HarnessGameSession:
         except Exception as exc:  # Virelai must never cost Duck the game.
             self._write_observer_warning("WORLD_MODEL_V2_COMPILE_FAILED", f"{type(exc).__name__}: {exc}")
             return
+        payload["provenance"] = self._provenance_chapter(payload, final=final)  # WO-PE-02 (schema v4)
         self._persist_l2a_world_model(payload, self.solver.job_dir / "virelai" / run_stem)
+
+    def _provenance_chapter(self, payload: dict[str, Any], *, final: bool) -> dict[str, Any]:
+        """WO-PE-02: the H1 or H2 chapter (``provenance_hooks.chapter``)."""
+        return provenance_hooks.chapter(payload, final=final, analyzer=self.analyzer, state_path=self.state_path,
+                                        prefixes=self._l2a_writer_prefixes, warn=self._write_observer_warning)
 
     def _persist_l2a_world_model(self, payload: dict[str, Any], directory: Path) -> None:
         """Seal once; write ``world_model.json``; only then write ``world_report.md`` from the same sealed model.
@@ -1671,6 +1679,7 @@ class HarnessSolver(Solver):
             session.play()
         except Exception as exc:
             self._finish_after_error(game, exc)
+            provenance_hooks.note_model_not_written(self, game, pass_index, exc)  # WO-PE-02 ruling 7
 
     def _artifacts_dir(self) -> Path:
         root = self.job_dir or Path.cwd() / "taaf_harness_artifacts"
