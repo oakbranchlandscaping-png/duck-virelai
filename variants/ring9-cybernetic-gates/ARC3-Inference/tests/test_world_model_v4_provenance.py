@@ -56,9 +56,23 @@ def _model(*, persist_reason: str = "BUDGET_STOP") -> dict:
     level = model["levels"][0]
     level["record"]["reset_transition_ids"] = []
     level["receipts"]["products"] = {"G0-A": {"gate_id": "G0-ACTION-METADATA", "product_type": "ActionSurface",
-                                              "revision": 1, "payload_sha256": "0" * 64}}
+                                              "revision": 1, "payload_sha256": _g0_content()[1]}}
     level["product_answers"] = {"G0-A": _entry(G0_PAYLOAD)}
+    if _g0_content()[0] is not None:  # schema v5 (WO-PE-03A): the product's body beside its receipt
+        level["product_content"] = {"G0-A": _g0_content()[0]}
     return model
+
+
+def _g0_content():
+    """The G0 product's v5 content entry and the legacy receipt hash it agrees with; (None, zeros) before v5."""
+    try:
+        from inference.framework import product_content
+    except ImportError:  # before schema v5
+        return None, "0" * 64
+    product = SimpleNamespace(product_id="G0-A", product_type="ActionSurface", revision=1, dependencies=(),
+                              payload=G0_PAYLOAD)
+    return (product_content.entry("G0-ACTION-METADATA", product),
+            product_content.legacy_payload_sha256(product.payload))
 
 
 def _entry(record=G0_PAYLOAD, *, gate="G0-ACTION-METADATA", product_type="ActionSurface", basis="PRODUCT_IS_ANSWER",
@@ -139,7 +153,7 @@ def test_v4_a_sealed_reconciled_run_is_complete_with_every_row_embedded_and_inde
     data = _journal(tmp_path / "j.jsonl")
     sealed = _sealed(_model(), _h2(_model(), data))
     chapter = sealed["provenance"]
-    assert SCHEMA == "virelai-world-model-v4" and sealed["schema"] == SCHEMA
+    assert SCHEMA == "virelai-world-model-v5" and sealed["schema"] == SCHEMA
     assert (chapter["phase"], chapter["integrity"], chapter["completeness"], chapter["completeness_scope"]) == (
         "H2", "SEALED", "COMPLETE", "RUN")
     assert chapter["reasons"] == [] and chapter["reconciliation"]["findings"] == []
@@ -193,7 +207,7 @@ def test_v4_a_live_view_model_is_v4_not_evaluated_and_never_opens_the_journal(mo
 
     _forbid_journal_reads(monkeypatch)
     model = seal(_model(persist_reason="LIVE_VIEW"))
-    assert model["schema"] == "virelai-world-model-v4"
+    assert model["schema"] == "virelai-world-model-v5"
     chapter = model["provenance"]
     assert (chapter["phase"], chapter["integrity"], chapter["completeness"]) == ("LIVE_VIEW", "NOT_EVALUATED",
                                                                                 "NOT_EVALUATED")
@@ -446,7 +460,7 @@ def test_v4_a_zero_action_run_writes_a_sealed_complete_v4_model(tmp_path):
     session, _agent, folder = _session(tmp_path, stop=True)
     session.play()
     model = _model_of(folder)
-    assert model["schema"] == "virelai-world-model-v4"
+    assert model["schema"] == "virelai-world-model-v5"
     chapter = model["provenance"]
     assert (chapter["integrity"], chapter["completeness"], chapter["rows"]) == ("SEALED", "COMPLETE", [])
     assert chapter["stamp"]["run"]["run_stem"] == model["run_stem"]

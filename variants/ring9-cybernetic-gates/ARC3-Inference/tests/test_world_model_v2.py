@@ -61,6 +61,17 @@ def _description(lever: bool = True) -> dict:
     }
 
 
+def _product_content(product_id: str) -> tuple[dict, str]:
+    """Schema v5: a product's stored body and the legacy receipt hash it must agree with (WO-PE-03A)."""
+    from types import SimpleNamespace
+
+    from inference.framework import product_content
+
+    product = SimpleNamespace(product_id=product_id, product_type="EgoLaw", revision=1, dependencies=(),
+                              payload={"law_id": product_id})
+    return product_content.entry("G1-EGO", product), product_content.legacy_payload_sha256(product.payload)
+
+
 def _model() -> dict:
     """The smallest valid model: one level, one track at the entry board, one witnessed lever."""
     return {
@@ -87,9 +98,11 @@ def _model() -> dict:
             },
             "receipts": {
                 "evidence": {"E-1": {"transition_id": 1, "gate_id": "G3-LEVERS", "probe_id": "G3-LEVERS:CLICK:1"}},
-                "products": {"L-1": {"gate_id": "G1-EGO", "product_type": "EgoLaw", "revision": 1, "payload_sha256": "0" * 64}},
+                "products": {"L-1": {"gate_id": "G1-EGO", "product_type": "EgoLaw", "revision": 1,
+                                     "payload_sha256": _product_content("L-1")[1]}},
                 "witnesses": {"W-1": _witness()},
             },
+            "product_content": {"L-1": _product_content("L-1")[0]},  # schema v5 (WO-PE-03A): the product's body
             "gaps": [{"subject": "LEVEL-1", "archetype_question": "Is anything INERT?", "reason": "NOT_BUILT"},
                      {"subject": "E0003", "archetype_question": "Is this object a lever?", "reason": "INCONCLUSIVE"}],
             "accounting": {"status": "ACCOUNTED", "missing": []},

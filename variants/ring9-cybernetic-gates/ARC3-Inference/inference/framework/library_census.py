@@ -599,6 +599,7 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
         "accounting": {"status": "NOT_ACCOUNTED", "missing": missing},
         "description": description,
         "product_answers": {} if machine is None else provenance_hooks.product_answers(machine),
+        "product_content": {} if machine is None else provenance_hooks.product_content(machine),  # WO-PE-03A
     }
 
 

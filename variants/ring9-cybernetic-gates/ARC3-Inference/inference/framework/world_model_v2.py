@@ -1,4 +1,4 @@
-"""The canonical world model, schema v4: one validated, canonically hashed file per observed game.
+"""The canonical world model, schema v5: one validated, canonically hashed file per observed game.
 
 Author: Claude (Alpha build seat), 2026-10-10. WO-L2a (INTERFACE_WO_L2A_WORLD_MODEL_V2 v2; Sol's reviews
 REVIEW_WO_L2_00_CENSUS_ARCHITECTURE and REVIEW_WO_L2A_INTERFACE, 2026-10-10). Schema v3, 2026-10-13: WO-DESC-A
@@ -8,7 +8,9 @@ Schema v4, 2026-10-14: WO-PE-02 (INTERFACE_WO_PE_02_SCHEMA_V4_PROVENANCE_v2) add
 validated audit journal absorbed once with every level holding only its event-id index (``provenance_chapter``),
 and two census fields reconciliation needs (``record.reset_transition_ids``, ``product_answers``). A v3 artifact
 is still read, by the frozen v3 rules (``validate_v3``). The v3 ``journal_check`` fields keep their meaning: H2's
-record check, not the provenance journal.
+record check, not the provenance journal. Schema v5, 2026-10-15: WO-PE-03A (INTERFACE_WO_PE_03_CLAIMS_KEYS_GRADER_v2
+§9) adds each level's ``product_content``, every active product's exact body with a strict versioned digest
+(``product_content``). A v4 artifact is still read, by the frozen v4 rules (``validate_v4``).
 
 Two tiers, kept apart by the validator:
 
@@ -39,7 +41,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-world-model-v4"
+SCHEMA = "virelai-world-model-v5"
+V4_SCHEMA = "virelai-world-model-v4"
 V3_SCHEMA = "virelai-world-model-v3"
 V2_SCHEMA = "virelai-world-model-v2"
 V1_SCHEMA = "virelai-world-model-v1"
@@ -95,7 +98,8 @@ def seal(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Validate and stamp ``content_sha256``; the result is what ``canonical_bytes`` serializes.
 
     Schema v4: the provenance chapter is attached (the honest default for the persist reason when none was supplied)
-    and every level receives its event-id index."""
+    and every level receives its event-id index. Schema v5 adds nothing here: ``product_content`` comes from the
+    census and is validated."""
     from inference.framework.provenance_chapter import attach
 
     sealed = attach({k: v for k, v in dict(payload).items() if k != "content_sha256"})
@@ -111,8 +115,13 @@ def canonical_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def validate(payload: Mapping[str, Any]) -> None:
-    """The v4 contract: the v3 rules, plus the provenance chapter and every level's event-id index."""
+    """The v5 contract: the v4 rules, plus every level's product content."""
     _validate_payload(payload, SCHEMA)
+
+
+def validate_v4(payload: Mapping[str, Any]) -> None:
+    """The accepted v4 contract, frozen: how a v4 artifact written before schema v5 is still read."""
+    _validate_payload(payload, V4_SCHEMA)
 
 
 def validate_v3(payload: Mapping[str, Any]) -> None:
@@ -138,9 +147,11 @@ def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(len(open_levels) <= 1, "at most one level is open")
     for level in levels:
         _validate_level(level)
-        if schema in {V3_SCHEMA, SCHEMA}:
+        if schema in {V3_SCHEMA, V4_SCHEMA, SCHEMA}:
             _validate_v3_level(level)
     if schema == SCHEMA:
+        _validate_product_content(levels)
+    if schema in {V4_SCHEMA, SCHEMA}:
         from inference.framework.provenance_chapter import ProvenanceChapterError, validate_chapter
 
         try:
@@ -149,6 +160,16 @@ def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
             _fail(f"provenance: {exc}")
     if "content_sha256" in payload:
         _require(payload["content_sha256"] == content_sha256(payload), "content_sha256 does not match the content")
+
+
+def _validate_product_content(levels: list) -> None:
+    from inference.framework.product_content import ProductContentError, validate_level_content
+
+    for level in levels:
+        try:
+            validate_level_content(level)
+        except ProductContentError as exc:
+            _fail(f"product content: {exc}")
 
 
 def _validate_level(level: Mapping[str, Any]) -> None:
@@ -308,7 +329,7 @@ def _validate_role(role: Mapping[str, Any], known_tracks: set[str], receipts: Ma
 
 
 def read_world_model(payload: Mapping[str, Any]) -> Any:
-    """Version-aware reader: v1 through its own validator, v2 and v3 by their frozen rules, v4 by this module's;
+    """Version-aware reader: v1 through its own validator, v2, v3 and v4 by their frozen rules, v5 by this module's;
     anything else is refused."""
     schema = payload.get("schema")
     if schema == V1_SCHEMA:
@@ -322,6 +343,9 @@ def read_world_model(payload: Mapping[str, Any]) -> Any:
         return dict(payload)
     if schema == V3_SCHEMA:
         validate_v3(payload)
+        return dict(payload)
+    if schema == V4_SCHEMA:
+        validate_v4(payload)
         return dict(payload)
     if schema == SCHEMA:
         validate(payload)
@@ -361,7 +385,7 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
 
 
 __all__ = [
-    "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "V2_SCHEMA", "V3_SCHEMA", "WorldModelV2Error",
+    "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "V2_SCHEMA", "V3_SCHEMA", "V4_SCHEMA", "WorldModelV2Error",
     "WriteResult", "canonical_bytes", "content_sha256", "read_world_model", "seal", "validate", "validate_v2",
-    "validate_v3", "write_canonical",
+    "validate_v3", "validate_v4", "write_canonical",
 ]

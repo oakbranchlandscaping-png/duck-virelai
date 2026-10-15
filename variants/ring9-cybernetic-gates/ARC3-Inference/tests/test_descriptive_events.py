@@ -768,7 +768,7 @@ def test_a_frozen_genuine_v2_artifact_still_reads_after_the_v3_switch():
     from inference.framework.world_model_v2 import SCHEMA, read_world_model, validate, validate_v2
 
     payload = json.loads(FROZEN_V2.read_text())
-    assert payload["schema"] == "virelai-world-model-v2" and SCHEMA == "virelai-world-model-v4"
+    assert payload["schema"] == "virelai-world-model-v2" and SCHEMA == "virelai-world-model-v5"
     assert not any("description" in level or '"mask"' in json.dumps(level["receipts"]) for level in payload["levels"])
     assert read_world_model(payload)["schema"] == "virelai-world-model-v2"
     validate_v2(payload)
@@ -819,7 +819,7 @@ def k008():
 
 def test_k008_compiles_to_v3_with_one_record_per_recorded_transition(k008):
     model, _machine = k008
-    assert model["schema"] == "virelai-world-model-v4"
+    assert model["schema"] == "virelai-world-model-v5"
     for level in model["levels"]:
         records = level["description"]["transitions"]
         assert [r["transition_id"] for r in records] == level["record"]["transition_ids"]
@@ -908,7 +908,7 @@ def test_a_level_observed_but_never_acted_in_carries_its_description():
     model = seal(compile_world_model(None, ExecutionRecord(board, 1, ("ACTION1",), ()), game_id="g", run_stem="s",
                                      persist_reason="CANCELLED"))
     (level,) = model["levels"]
-    assert model["schema"] == "virelai-world-model-v4" and level["description"]["transitions"] == []
+    assert model["schema"] == "virelai-world-model-v5" and level["description"]["transitions"] == []
     assert {item["track_id"] for item in level["description"]["scene"]["present"]} == {
         track["track_id"] for track in level["observation"]["tracks"]}
 

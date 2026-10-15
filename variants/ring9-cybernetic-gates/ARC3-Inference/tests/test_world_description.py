@@ -880,7 +880,7 @@ def test_a_later_level_after_actions_cites_only_its_own_transitions():
     second = _entry_level(2, boards, _rows(boards, start=4, level=2), {"source": "LEVEL_ENTRY", "after_transition": 3})
     assert second["description"]["basis"]["entry_node"] == 3
     assert [r["record_status"] for r in second["description"]["transitions"]] == ["VERIFIED"] * 3
-    model = {"game_id": "g", "run_stem": "g_p0", "schema": "virelai-world-model-v4", "content_sha256": "0" * 64,
+    model = {"game_id": "g", "run_stem": "g_p0", "schema": "virelai-world-model-v5", "content_sha256": "0" * 64,
              "manifest": {"persist_reason": "RUN_END", "status": "ACTIVE"}, "levels": [first, second]}
     text = world_report.render_world_report(model)
     assert _scene_claims(text, 2)[0].startswith("- as of transition 6, life ")
@@ -926,7 +926,7 @@ def test_a_report_failure_keeps_the_model_and_records_a_warning(tmp_path, monkey
 
     monkeypatch.setattr(world_report, "render_world_report", lambda model: (_ for _ in ()).throw(RuntimeError("boom")))
     folder, _game, _calls = _cancelled_before_first_turn(tmp_path)
-    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v4"
+    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v5"
     assert not (folder / "world_report.md").exists()
     warnings = [json.loads(line) for line in (folder / "observer_warnings.jsonl").read_text().splitlines()]
     assert any(item.get("event") == "WORLD_REPORT_WRITE_FAILED" for item in warnings)

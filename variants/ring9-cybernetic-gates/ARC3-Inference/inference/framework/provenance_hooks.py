@@ -22,6 +22,7 @@ from typing import Any, Callable
 
 from inference.agent.runtime_state import RUNTIME_STATE_FILENAME
 from inference.framework import audit_journal
+from inference.framework import product_content as product_content_chapter
 from inference.framework import product_origins
 from inference.framework import provenance_chapter as pc
 
@@ -34,6 +35,11 @@ def product_answers(machine: Any) -> dict[str, Any]:
         if product is not None:
             refs[product.product_id] = product_origins.entry(machine, contract.target_id, product)
     return refs
+
+
+def product_content(machine: Any) -> dict[str, Any]:
+    """WO-PE-03A (schema v5): each active product's exact body and strict digest (``product_content.capture``)."""
+    return product_content_chapter.capture(machine)
 
 
 def gate_answer_records(state_path: Path) -> list[dict[str, Any]] | None:
