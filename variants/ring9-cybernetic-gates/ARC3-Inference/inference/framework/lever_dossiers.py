@@ -17,6 +17,10 @@ LEVER role. Chapters are statused independently (``lever_dossier_facts``):
 ``attach`` (called by ``library_census.compile_level``) and ``finalize`` (called by ``compile_world_model``) are the
 only hooks. Nothing here runs per controller action.
 
+WO-G4-DOSSIER-B (B1, 2026-10-18; schema v7): every dossier also holds ``observations`` derived from the level's
+own record (``lever_dossier_state``): the lever region's current state, persistence and reversal, scoped to one
+level and one life; the limits chapter reads persistence and reversal from them.
+
 Revision 2 (2026-10-17, Sol's directive): the identity chapter's ``actor`` names the chooser from the G3 selection
 event and leaves the executor to provenance (``lever_dossier_provenance``: pending until H2, reconciled at seal); a
 relation set names its submission source and the gate as certifier; anatomy channels carry their exact observed
@@ -31,6 +35,7 @@ from typing import Any, Mapping, Sequence
 from inference.framework import lever_dossier_facts as F
 from inference.framework import lever_dossier_links as L
 from inference.framework import lever_dossier_provenance as P
+from inference.framework import lever_dossier_state as S
 from inference.framework import strict_json
 from inference.framework.descriptive_events import cell_runs
 
@@ -376,10 +381,11 @@ def _law(entity_id: str, products: _Products, g4b: Mapping[str, Any], g4c: Mappi
     return _chapter("IN_PROGRESS", "STUDY_OPEN", "GATE_RETAINED", facts, open_items=items)
 
 
-def open_items(chapters: Mapping[str, Mapping[str, Any]]) -> dict:
-    """The derived chapter (R7): recomputed whenever any other chapter changes."""
+def open_items(chapters: Mapping[str, Mapping[str, Any]], observations: Mapping[str, Any] | None = None,
+               v7: bool = False) -> dict:
+    """The derived chapter (R7): recomputed whenever any other chapter or the observations change."""
     intervention = ((chapters["identity"].get("facts") or {}).get("activation") or {}).get("intervention")
-    facts = F.open_items_facts(chapters, intervention)
+    facts = F.open_items_facts(chapters, intervention, observations, v7)
     if F.open_items_complete(facts):
         return _chapter("COMPLETE", "NO_OPEN_ITEMS", "DERIVED", facts)
     return _chapter("IN_PROGRESS", "OPEN_ITEMS_REMAIN", "DERIVED", facts)
@@ -415,13 +421,31 @@ def _seal(entity_id: str, dossier: dict, level: Mapping[str, Any]) -> None:
     """Evidence refs, open items, the census label and digests: the last step whenever a dossier changes."""
     frozen = level.get("state") == "FROZEN"
     reason = dossier["census_context"]["persist_reason"]
-    chapters = dossier["chapters"]
-    chapters["open_items"] = open_items(chapters) if chapters["open_items"]["integrity"]["status"] == "OK" else chapters["open_items"]
+    chapters, observations = dossier["chapters"], dossier.get("observations")
+    v7 = "observations" in dossier
+    if v7:
+        _observe_limits(chapters["limits"], observations)
+    chapters["open_items"] = (open_items(chapters, observations, v7) if chapters["open_items"]["integrity"]["status"] == "OK"
+                              else chapters["open_items"])
     for name in F.CHAPTERS:
         _label(chapters[name], frozen, reason)
         chapter = chapters[name]
         chapter["evidence_refs"] = sorted(F.evidence_ids(chapter["facts"]) | F.evidence_ids(chapter["history"]))
         chapter["digest"] = chapter_digest(entity_id, name, chapter)
+    if v7:
+        S.seal(entity_id, observations)
+
+
+def _observe_limits(limits: dict, observations: Mapping[str, Any]) -> None:
+    """B1: the limits chapter reads persistence and reversal from the observations; owed until the record shows."""
+    if limits["integrity"]["status"] != "OK":
+        return
+    limits["facts"] = F.limits_overlay(limits["facts"], observations)
+    kept = [item for item in limits["open"] if item.get("kind") not in ("PROBE_OWED", "UNAVAILABLE")]
+    limits["open"] = kept + F.limits_open(observations, True)
+    key = "prior_basis" if limits["prior_status"] == "IN_PROGRESS" else "basis"  # a census label keeps the basis it closed
+    if limits[key] in (F.LIMITS_OWED, F.LIMITS_SHOWN):  # revision 2: the basis follows what is still owed, both ways
+        limits[key] = F.limits_basis(observations)
 
 
 def _resolution(dossier: dict, level: Mapping[str, Any]) -> None:
@@ -454,6 +478,7 @@ def build(level: Mapping[str, Any], view: Mapping[str, Any] | None) -> dict[str,
     frozen = level.get("state") == "FROZEN"
     relations_product, _pid, origin = products.get("relations")
     relations_open = relations_product is not None and (origin or {}).get("origin") == "ANSWER_CERTIFIED"
+    scope = view.get("scope")
     dossiers = {}
     for entity_id in sorted(set(roles) | withdrawn):
         role = roles.get(entity_id)
@@ -467,10 +492,12 @@ def build(level: Mapping[str, Any], view: Mapping[str, Any] | None) -> dict[str,
                    "track_join": dict(role["identity"]) if role else dict(NULL_JOIN),
                    "census_context": {"census": "H1_FROZEN" if frozen else "OPEN",
                                       "persist_reason": "LEVEL_ADVANCE" if frozen else None},
-                   "chapters": chapters}
+                   "chapters": chapters,
+                   "observations": S.with_phase(S.derive(scope, entity_id), scope, entity_id, orbit)}
         if entity_id in withdrawn:
             for name in F.CHAPTERS:
                 _fail(chapters[name], "RECORD_MISMATCH", [entity_id])
+            S.fail(dossier["observations"], "RECORD_MISMATCH", [entity_id])
         _resolution(dossier, level)
         _seal(entity_id, dossier, level)
         dossiers[entity_id] = dossier
@@ -478,8 +505,13 @@ def build(level: Mapping[str, Any], view: Mapping[str, Any] | None) -> dict[str,
 
 
 def attach(machine: Any, level: dict[str, Any]) -> dict[str, Any]:
-    """``compile_level``'s one hook: the level with its dossiers (an H1 freeze labels them at once)."""
-    level["lever_dossiers"] = build(level, gate_view(machine))
+    """``compile_level``'s one hook: the level with its dossiers (an H1 freeze labels them at once). B1: the scope
+    of the level's own record is read here, once, beside the gate view."""
+    view = gate_view(machine)
+    if view is not None:
+        view = {**view, "scope": S.observe(machine, int(level["level"]), view["g41"]["anatomies"],
+                                           level["receipts"]["evidence"])}
+    level["lever_dossiers"] = build(level, view)
     return level
 
 
@@ -503,11 +535,16 @@ def finalize(levels: Sequence[Mapping[str, Any]], persist_reason: str) -> list[d
                 dossier["track_join"] = dict(NULL_JOIN)
                 for name in F.CHAPTERS:
                     _fail(dossier["chapters"][name], "RECORD_MISMATCH", [entity_id])
+                if "observations" in dossier:
+                    S.fail(dossier["observations"], "RECORD_MISMATCH", [entity_id])
             for name in F.CHAPTERS[:-1]:
                 chapter = dossier["chapters"][name]
                 cited = {evidence[ref]["transition_id"] for ref in chapter["evidence_refs"] if ref in evidence}
                 if cited & broken:
                     _fail(chapter, "RECORD_MISMATCH", sorted(cited & broken))
+            observed = S.cited_transitions(dossier.get("observations") or {})
+            if observed & broken:  # B1: a derived fact resting on a mismatched transition states nothing
+                S.fail(dossier["observations"], "RECORD_MISMATCH", sorted(observed & broken))
             _seal(entity_id, dossier, level)
         level["lever_dossiers"] = dossiers
         out.append(level)

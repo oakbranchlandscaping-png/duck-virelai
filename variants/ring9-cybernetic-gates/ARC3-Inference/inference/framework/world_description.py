@@ -31,6 +31,7 @@ import json
 from collections import Counter
 from typing import Any, Iterable, Mapping, Sequence
 
+from inference.framework import lever_dossier_state
 from inference.framework.descriptive_events import cell_runs, run_cells
 from inference.framework.effect_typing import classify_effect_channel
 from inference.framework.world_model_v2 import WorldModelV2Error
@@ -420,6 +421,25 @@ def dossier_channels(facts: Mapping[str, Any] | None) -> list[dict[str, Any]]:
     return out
 
 
+def dossier_observations(level: Mapping[str, Any], entity_id: str) -> dict[str, Any] | None:
+    """WO-G4-DOSSIER-B (B1): a lever's record-derived observations as one line of text and the evidence ids it names
+    outright; None for a v6 dossier (none stored). The report also cites the observations' own canonical path."""
+    observations = (level.get("lever_dossiers") or {}).get(entity_id, {}).get("observations")
+    if observations is None:
+        return None
+    if observations["status"] != "OBSERVED":
+        return {"text": f"{observations['status'].lower().replace('_', ' ')} ({observations['basis']})", "refs": []}
+    persistence, state, scope = observations["persistence"], observations["current_region_state"], observations["scope"]
+    readings = "; ".join(f"{name.replace('_', ' ')} {observations['reversal'][name]['status']}"
+                         for name in lever_dossier_state.CATEGORIES)
+    phase = state["orbit_phase"]
+    where = f"orbit position {phase['position']} of {phase['period']}" if phase else f"no orbit phase ({state['phase_basis']})"
+    entry = f" from reset t{scope['entry_reset']}" if scope.get("entry_reset") is not None else ""
+    return {"text": (f"level {scope['level']} life {scope['life']}{entry}; current region state {state['label']} ({where}); "
+                     f"persistence {persistence['status']} ({persistence['unchanged']} of {persistence['tested']} unchanged); "
+                     + readings), "refs": lever_dossier_state.evidence_refs(observations)[:3]}
+
+
 def dossier_chapters(level: Mapping[str, Any], entity_id: str) -> list[dict[str, Any]]:
     """The page rows of one stored dossier, chapter by chapter (the report renders the same rows)."""
     chapters = level["lever_dossiers"][entity_id]["chapters"]
@@ -580,5 +600,5 @@ def validate_view(view: Mapping[str, Any], model: Mapping[str, Any]) -> None:
 
 
 __all__ = ["CAUSAL_WORDS", "DOSSIER_CHAPTERS", "FOLD_BASES", "VIEW_SCHEMA", "appearance", "describe_level_view",
-           "describe_world", "dossier_channels", "dossier_chapters", "dossier_digest_lines", "fold_transition", "validate_level_view",
+           "describe_world", "dossier_channels", "dossier_chapters", "dossier_digest_lines", "dossier_observations", "fold_transition", "validate_level_view",
            "validate_view"]

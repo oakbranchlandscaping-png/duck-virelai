@@ -45,7 +45,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-world-model-v6"
+SCHEMA = "virelai-world-model-v7"  # WO-G4-DOSSIER-B (B1): every lever dossier holds its record-derived observations
+V6_SCHEMA = "virelai-world-model-v6"
 V5_SCHEMA = "virelai-world-model-v5"
 V4_SCHEMA = "virelai-world-model-v4"
 V3_SCHEMA = "virelai-world-model-v3"
@@ -123,8 +124,13 @@ def canonical_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def validate(payload: Mapping[str, Any]) -> None:
-    """The v6 contract: the v5 rules, plus strict canonical JSON and every level's lever dossiers."""
+    """The v7 contract: the v6 rules, and every lever dossier's record-derived observations (WO-G4-DOSSIER-B, B1)."""
     _validate_payload(payload, SCHEMA)
+
+
+def validate_v6(payload: Mapping[str, Any]) -> None:
+    """The accepted v6 contract, frozen: how a v6 artifact written before schema v7 is still read."""
+    _validate_payload(payload, V6_SCHEMA)
 
 
 def validate_v5(payload: Mapping[str, Any]) -> None:
@@ -149,7 +155,7 @@ def validate_v2(payload: Mapping[str, Any]) -> None:
 
 def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(payload.get("schema") == schema, f"schema must be {schema}")
-    if schema == SCHEMA:
+    if schema in {V6_SCHEMA, SCHEMA}:
         _strict(payload)
     manifest = payload.get("manifest") or {}
     _require(manifest.get("status") in MANIFEST_STATUSES, "manifest.status is not a known status")
@@ -162,19 +168,19 @@ def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(len(open_levels) <= 1, "at most one level is open")
     for level in levels:
         _validate_level(level)
-        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, SCHEMA}:
+        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, SCHEMA}:
             _validate_v3_level(level)
-    if schema in {V5_SCHEMA, SCHEMA}:
+    if schema in {V5_SCHEMA, V6_SCHEMA, SCHEMA}:
         _validate_product_content(levels)
-    if schema in {V4_SCHEMA, V5_SCHEMA, SCHEMA}:
+    if schema in {V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, SCHEMA}:
         from inference.framework.provenance_chapter import ProvenanceChapterError, validate_chapter
 
         try:
             validate_chapter(payload)
         except ProvenanceChapterError as exc:
             _fail(f"provenance: {exc}")
-    if schema == SCHEMA:  # after the provenance chapter: the dossiers' provenance facts are checked against it
-        _validate_lever_dossiers(levels, manifest, payload.get("provenance"))
+    if schema in {V6_SCHEMA, SCHEMA}:  # after the provenance chapter: the dossiers' provenance facts are checked against it
+        _validate_lever_dossiers(levels, manifest, payload.get("provenance"), v7=schema == SCHEMA)
     if "content_sha256" in payload:
         _require(payload["content_sha256"] == content_sha256(payload), "content_sha256 does not match the content")
 
@@ -198,12 +204,12 @@ def _strict(payload: Mapping[str, Any]) -> None:
         _fail(str(exc))
 
 
-def _validate_lever_dossiers(levels: list, manifest: Mapping[str, Any], provenance: Any) -> None:
+def _validate_lever_dossiers(levels: list, manifest: Mapping[str, Any], provenance: Any, *, v7: bool) -> None:
     from inference.framework.lever_dossier_schema import DossierError, validate_level
 
     for level in levels:
         try:
-            validate_level(level, manifest, provenance)
+            validate_level(level, manifest, provenance, v7=v7)
         except DossierError as exc:
             _fail(f"lever dossiers: {exc}")
 
@@ -365,7 +371,7 @@ def _validate_role(role: Mapping[str, Any], known_tracks: set[str], receipts: Ma
 
 
 def read_world_model(payload: Mapping[str, Any]) -> Any:
-    """Version-aware reader: v1 through its own validator, v2-v5 by their frozen rules, v6 by this module's;
+    """Version-aware reader: v1 through its own validator, v2-v6 by their frozen rules, v7 by this module's;
     anything else is refused."""
     schema = payload.get("schema")
     if schema == V1_SCHEMA:
@@ -385,6 +391,9 @@ def read_world_model(payload: Mapping[str, Any]) -> Any:
         return dict(payload)
     if schema == V5_SCHEMA:
         validate_v5(payload)
+        return dict(payload)
+    if schema == V6_SCHEMA:
+        validate_v6(payload)
         return dict(payload)
     if schema == SCHEMA:
         validate(payload)
@@ -425,6 +434,7 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
 
 __all__ = [
     "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "V2_SCHEMA", "V3_SCHEMA", "V4_SCHEMA", "V5_SCHEMA",
+    "V6_SCHEMA",
     "WorldModelV2Error", "WriteResult", "canonical_bytes", "content_sha256", "read_world_model", "seal", "validate",
-    "validate_v2", "validate_v3", "validate_v4", "validate_v5", "write_canonical",
+    "validate_v2", "validate_v3", "validate_v4", "validate_v5", "validate_v6", "write_canonical",
 ]

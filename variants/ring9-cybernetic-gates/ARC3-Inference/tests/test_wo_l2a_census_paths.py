@@ -65,7 +65,7 @@ def test_the_cancelled_path_is_the_77_game_shape(tmp_path):
 def test_a_zero_action_cancellation_writes_the_canonical_model(tmp_path):
     folder, _game, _calls = _cancelled_before_first_turn(tmp_path)
     model = json.loads((folder / "world_model.json").read_text())
-    assert model["schema"] == "virelai-world-model-v6"
+    assert model["schema"] == "virelai-world-model-v7"
     assert model["manifest"]["status"] == "OBSERVED_NEVER_ACTED"
     assert model["levels"][0]["entry"]["source"] == "INITIAL_FRAME"
     assert {gate["disposition"] for gate in model["levels"][0]["certified"]["gates"]} == {"NOT_STARTED"}

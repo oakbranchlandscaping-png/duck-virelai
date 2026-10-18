@@ -114,6 +114,11 @@ def _dossier_lines(view: Mapping[str, Any], level: Mapping[str, Any], at: str) -
     for row in view["dossiers"]:
         lines.append(_claim(f"- dossier {row['id']}: {row['status']}; witnesses {len(row['witnesses'])}",
                             [f"{at}.lever_dossiers", row["id"], *row["witnesses"]]))
+        observed = world_description.dossier_observations(level, row["id"])  # B1: the record-derived observations
+        if observed is not None:
+            path = f"{at}.lever_dossiers[{row['id']}].observations"  # revision 2: the observations themselves
+            lines.append(_claim(f"  - dossier {row['id']} observations: {observed['text']}",
+                                [row["id"], path, *observed["refs"]]))
         for chapter in world_description.dossier_chapters(level, row["id"]):
             refs = [row["id"], *([chapter["product_id"]] if chapter["product_id"] else []), *chapter["evidence_refs"][:3]]
             lines.append(_claim(f"  - dossier {row['id']} {chapter['chapter']}: {chapter['status']} ({chapter['basis']}); "

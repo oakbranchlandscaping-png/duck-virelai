@@ -153,7 +153,7 @@ def test_v4_a_sealed_reconciled_run_is_complete_with_every_row_embedded_and_inde
     data = _journal(tmp_path / "j.jsonl")
     sealed = _sealed(_model(), _h2(_model(), data))
     chapter = sealed["provenance"]
-    assert SCHEMA == "virelai-world-model-v6" and sealed["schema"] == SCHEMA
+    assert SCHEMA == "virelai-world-model-v7" and sealed["schema"] == SCHEMA
     assert (chapter["phase"], chapter["integrity"], chapter["completeness"], chapter["completeness_scope"]) == (
         "H2", "SEALED", "COMPLETE", "RUN")
     assert chapter["reasons"] == [] and chapter["reconciliation"]["findings"] == []
@@ -207,7 +207,7 @@ def test_v4_a_live_view_model_is_v4_not_evaluated_and_never_opens_the_journal(mo
 
     _forbid_journal_reads(monkeypatch)
     model = seal(_model(persist_reason="LIVE_VIEW"))
-    assert model["schema"] == "virelai-world-model-v6"
+    assert model["schema"] == "virelai-world-model-v7"
     chapter = model["provenance"]
     assert (chapter["phase"], chapter["integrity"], chapter["completeness"]) == ("LIVE_VIEW", "NOT_EVALUATED",
                                                                                 "NOT_EVALUATED")
@@ -460,7 +460,7 @@ def test_v4_a_zero_action_run_writes_a_sealed_complete_v4_model(tmp_path):
     session, _agent, folder = _session(tmp_path, stop=True)
     session.play()
     model = _model_of(folder)
-    assert model["schema"] == "virelai-world-model-v6"
+    assert model["schema"] == "virelai-world-model-v7"
     chapter = model["provenance"]
     assert (chapter["integrity"], chapter["completeness"], chapter["rows"]) == ("SEALED", "COMPLETE", [])
     assert chapter["stamp"]["run"]["run_stem"] == model["run_stem"]

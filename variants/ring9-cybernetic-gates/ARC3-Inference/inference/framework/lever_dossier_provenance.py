@@ -173,6 +173,13 @@ def reconcile_dossier(entity_id: str, dossier: dict, level: Mapping[str, Any], c
         if hit and chapters[name]["integrity"]["status"] == "OK":
             _unlabel(chapters[name])
             D.fail_closed(chapters[name], INCOMPLETE, hit)
+    from inference.framework import lever_dossier_state as S
+
+    receipts = (level.get("receipts") or {}).get("evidence") or {}
+    cited = S.cited_transitions(dossier.get("observations") or {})
+    observed = sorted(ref for ref in contradicted if receipts.get(ref, {}).get("transition_id") in cited)
+    if observed:  # B1: derived facts resting on a contradicted receipt state nothing
+        S.fail(dossier["observations"], INCOMPLETE, observed)
     identity, relations, anatomy = chapters["identity"], chapters["relations"], chapters["anatomy"]
     anatomy["facts"] = L.link_anatomy(anatomy["facts"], level)  # the description the model stores now
     if identity["facts"] is not None and identity["facts"].get("actor") is not None:

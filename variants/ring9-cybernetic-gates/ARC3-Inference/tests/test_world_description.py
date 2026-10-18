@@ -695,31 +695,41 @@ def _model_ids(value, out):
     return out
 
 
-def _resolves(token, model, ids, level):
+def _resolves(token, model, ids, level, subject=None):
     """A report reference resolves: ``manifest`` or a top-level key; a canonical JSON path; a transition range; a
     stored id; or a pattern or question id of the view. Revision 3 (Sol): a path names only the level whose section
-    it sits in, and a range lies inside that level: after its entry board and within its recorded transitions."""
+    it sits in, and a range lies inside that level: after its entry board and within its recorded transitions.
+
+    WO-G4-DOSSIER-B (B1 revision 2): a path may key a mapping by a stored id (``levels[i].lever_dossiers[E].
+    observations``); such a path resolves only on the line about that lever (``subject``)."""
     import re
 
     if token in ("manifest", "game_id", "run_stem", "schema", "levels"):
         return token in model
     if token.startswith("levels["):
-        if not re.fullmatch(r"levels\[\d+\](\.[a-z_]+(\[\d+\])?)*", token):
+        if not re.fullmatch(r"levels\[\d+\](\.[a-z_]+(\[(\d+|[A-Z][A-Z0-9_-]*)\])?)*", token):
             return False
         if level is None or int(re.match(r"levels\[(\d+)\]", token).group(1)) != level:
             return False
+        keyed = re.findall(r"\.lever_dossiers\[([A-Z][A-Z0-9_-]*)\]", token)
+        if keyed and keyed != [subject]:
+            return False  # another lever's dossier never supports this line
         node = model
-        for name, index in re.findall(r"\.?([a-z_]+)?(?:\[(\d+)\])?", token):
+        for name, index in re.findall(r"\.?([a-z_]+)?(?:\[(\d+|[A-Z][A-Z0-9_-]*)\])?", token):
             if not name and not index:
                 continue
             if name:
                 if not isinstance(node, dict) or name not in node:
                     return False
                 node = node[name]
-            if index:
+            if index.isdigit():
                 if not isinstance(node, list) or int(index) >= len(node):
                     return False
                 node = node[int(index)]
+            elif index:
+                if not isinstance(node, dict) or index not in node:
+                    return False
+                node = node[index]
         return True
     span = re.fullmatch(r"t(\d+)-t(\d+)", token)
     if span:
@@ -752,7 +762,12 @@ def _assert_report_refs(model, text):
         assert re.match(r"^\s*(- |\d+\. )", line), line  # only headings and claim lines are written
         assert "; refs: " in line, line
         tokens = line.rsplit("refs: ", 1)[1].split(", ")
-        assert tokens and all(_resolves(token, model, ids, current) for token in tokens), line
+        about = re.match(r"^\s*- dossier (\S+)[ :]", line)
+        subject = about.group(1) if about else None
+        assert tokens and all(_resolves(token, model, ids, current, subject) for token in tokens), line
+        observations = re.match(r"^\s*- dossier (\S+) observations: ", line)
+        if observations:  # B1 revision 2: an observations line cites the observations it renders
+            assert f"levels[{current}].lever_dossiers[{subject}].observations" in tokens, line
         claims += 1
     return claims
 
@@ -933,7 +948,7 @@ def test_a_report_failure_keeps_the_model_and_records_a_warning(tmp_path, monkey
 
     monkeypatch.setattr(world_report, "render_world_report", lambda model: (_ for _ in ()).throw(RuntimeError("boom")))
     folder, _game, _calls = _cancelled_before_first_turn(tmp_path)
-    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v6"
+    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v7"
     assert not (folder / "world_report.md").exists()
     warnings = [json.loads(line) for line in (folder / "observer_warnings.jsonl").read_text().splitlines()]
     assert any(item.get("event") == "WORLD_REPORT_WRITE_FAILED" for item in warnings)

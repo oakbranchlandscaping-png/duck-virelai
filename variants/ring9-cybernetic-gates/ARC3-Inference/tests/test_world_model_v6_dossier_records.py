@@ -25,7 +25,7 @@ import pytest
 import dossier_fixtures as fx
 import dossier_provenance_fixtures as pf
 
-V6 = "virelai-world-model-v6"
+WRITER = "virelai-world-model-v7"  # the writer since WO-G4-DOSSIER-B (B1)
 CHAPTERS = ("identity", "anatomy", "orbit", "limits", "relations", "law_tests", "open_items")
 RELATIONS, LAW = "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW"
 _SHARED: dict = {}
@@ -105,7 +105,7 @@ def test_v6_01_29_first_witness_levers_have_dossiers_before_g4_and_before_the_in
     machine = _through(70)
     assert machine.gate_id == "G3-LEVERS" and machine.target_journal.active_product("G3-LEVERS") is None
     model = _compiled(("ft09", 70), machine, "LEVEL_ADVANCE")
-    assert model["schema"] == V6
+    assert model["schema"] == WRITER
     level = fx.open_level(model)
     levers = {role["entity_id"] for role in level["certified"]["roles"] if role["role"] == "LEVER"}
     assert levers and set(level["lever_dossiers"]) == levers  # every witness-certified lever, inventory PENDING
@@ -146,12 +146,17 @@ def test_v6_03_27_two_levers_at_different_stages_and_limits_stay_open_while_prob
     assert (running["status"], running["basis"], running["source"]) == ("IN_PROGRESS", "RUN_OPEN", "GATE_RETAINED")
     assert done["facts"]["run"]["run_status"] == "CONFIRMED" and done["facts"]["period"] is not None
     limits = fx.chapter(level, "E0053", "limits")
-    assert (limits["status"], limits["basis"]) == ("IN_PROGRESS", "ENDPOINT_OBSERVED_PROBES_OWED")  # R5
-    assert limits["facts"]["persistence"] == "PROBE_OWED" and limits["facts"]["reversal"] == "PROBE_OWED"
+    # R5: limits stays IN_PROGRESS (no product certifies it). B1 revision 2 (Sol): with both fields observed and no
+    # limits probe owed, the basis says so instead of claiming probes are owed
+    assert (limits["status"], limits["basis"]) == ("IN_PROGRESS", "RECORD_OBSERVED_NOT_GATE_CERTIFIED")
+    # B1 (Sol's ruling 2): persistence and reversal are read from the level's record, owed only where it is silent
+    observations = level["lever_dossiers"]["E0053"]["observations"]
+    assert (limits["facts"]["persistence"], limits["facts"]["reversal"]) == ("OBSERVED", "OBSERVED")
+    assert observations["persistence"]["status"] == "TESTED"
+    assert observations["reversal"]["toggle_reversal"]["status"] == "OBSERVED"
     owed = {item["field"] for item in limits["open"] if item["kind"] == "PROBE_OWED"}
-    assert {"LIMITS_PERSISTENCE", "LIMITS_REVERSAL"} <= owed
     items = fx.chapter(level, "E0053", "open_items")
-    assert items["status"] == "IN_PROGRESS" and "LIMITS_PERSISTENCE" in items["facts"]["probe_owed"]  # R7
+    assert not owed & {"LIMITS_PERSISTENCE", "LIMITS_REVERSAL"} and items["status"] == "IN_PROGRESS"  # R7
 
 
 # ---- 4, 5, 6, 7, 8, 28 · stops keep partial work and never promote it ----------------------------------------
@@ -254,7 +259,7 @@ def test_v6_15_compilation_is_byte_identical():
     machine = _through(80)
     first = canonical_bytes(fx.compiled(machine, persist_reason="BUDGET_STOP"))
     second = canonical_bytes(fx.compiled(machine, persist_reason="BUDGET_STOP"))
-    assert first == second and json.loads(first)["schema"] == V6
+    assert first == second and json.loads(first)["schema"] == WRITER
 
 
 def test_v6_17_live_view_is_noncanonical_and_refreshes_after_an_answer_with_no_transition(tmp_path):
@@ -560,3 +565,147 @@ def test_v6_r2_24_remote_channels_link_several_events_and_never_guess_a_subject(
         assert channel["subject"] == {"status": "UNRESOLVED_REGION", "reason": "NO_EXACT_MATCH"}
     unavailable = fx.chapter(model["levels"][0], "E0004", "open_items")["facts"]["unavailable"]
     assert "AFFECTED_SUBJECT_IDENTITY" in unavailable and "CROSS_LEVEL_LIMITS" in unavailable
+
+
+# ---- WO-G4-DOSSIER-B · B1 on the records: derived state, persistence and reversal ------------------------------
+
+def test_b1_10_ft09_levers_hold_under_other_presses_and_only_this_lifes_evidence_counts(described):
+    from inference.framework import lever_dossier_state
+
+    """The record dies once (life 1 -> 2) before G4-B: everything is read from life 2 alone (Sol's ruling 3).
+
+    Revision 2 (Sol's review): life 2 opens at the reset t89, so its entry board is the board after that reset and no
+    state of life 1 is a state of life 2. Revision 1 read E0053's one life-2 press as a toggle back to the state the
+    death left: a leak across lives. Recomputed, E0053, E0054 and E0055 each owe reversal (B3's real-record cases)."""
+    model = fx.compiled(described, persist_reason="BUDGET_STOP")
+    level = fx.open_level(model)
+    owed_reversal, phased = set(), set()
+    for entity, dossier in sorted(level["lever_dossiers"].items()):
+        observations = dossier["observations"]
+        persistence, reversal, state = observations["persistence"], observations["reversal"], observations["current_region_state"]
+        assert observations["scope"]["life"] == 2 and observations["scope"]["level"] == 1
+        assert observations["scope"]["entry_reset"] == 89 and 89 not in lever_dossier_state.cited_transitions(observations)
+        assert (persistence["status"], persistence["changed"]) == ("TESTED", 0) and persistence["unchanged"] >= 20
+        assert reversal["self_recurrence"]["status"] == "NOT_OBSERVED"  # a two-state lever never recurs longer
+        assert reversal["cross_reversal"]["status"] == "NOT_OBSERVED" and reversal["cross_reversal"]["tested"] > 0
+        limits, items = dossier["chapters"]["limits"], dossier["chapters"]["open_items"]["facts"]
+        assert limits["facts"]["persistence"] == "OBSERVED" and "LIMITS_PERSISTENCE" not in items["probe_owed"]
+        assert (limits["status"], limits["basis"], limits["prior_status"]) == ("INTERRUPTED", "BUDGET_STOP", "IN_PROGRESS")
+        if reversal["toggle_reversal"]["status"] == "OBSERVED":
+            assert limits["facts"]["reversal"] == "OBSERVED" and "LIMITS_REVERSAL" not in items["probe_owed"]
+            assert limits["prior_basis"] == "RECORD_OBSERVED_NOT_GATE_CERTIFIED"  # nothing left to probe
+        else:  # pressed once in this life: no return seen, so an experiment is still owed (B3's evidence)
+            owed_reversal.add(entity)
+            assert reversal["toggle_reversal"]["tested"] == 1 and not reversal["toggle_reversal"]["cases"]
+            assert limits["facts"]["reversal"] == "PROBE_OWED" and "LIMITS_REVERSAL" in items["probe_owed"]
+            assert limits["prior_basis"] == "ENDPOINT_OBSERVED_PROBES_OWED"
+        if state["phase_basis"] == "EXACT_ORBIT_MAPPING":
+            phased.add(entity)
+            assert state["orbit_phase"]["period"] == 2 and "ORBIT_PHASE_NOW" not in items["unavailable"]
+        else:  # its accepted run lies in life 1: never carried into life 2
+            assert (state["phase_basis"], state["orbit_phase"]) == ("ORBIT_OUTSIDE_SCOPE", None)
+            assert "ORBIT_PHASE_NOW" in items["unavailable"]
+    assert owed_reversal == {"E0053", "E0054", "E0055"} and phased == {"E0056", "E0057", "E0060", "E0061", "E0062"}
+
+
+def test_b1_11_a_death_starts_an_empty_life_that_carries_nothing():
+    result = fx.ft09_through(77)
+    fx.deliver(result, fx.GAME_OVER)
+    level = fx.open_level(fx.compiled(result.machine, persist_reason="BUDGET_STOP"))
+    for dossier in level["lever_dossiers"].values():
+        observations = dossier["observations"]
+        assert observations["scope"]["life"] == 2 and observations["scope"]["as_of_transition"] is None
+        assert observations["persistence"]["status"] == "UNTESTED" and observations["persistence"]["tested"] == 0
+        assert all(item["status"] == "UNTESTED" for item in observations["reversal"].values())
+        assert observations["current_region_state"]["orbit_phase"] is None
+        owed = dossier["chapters"]["open_items"]["facts"]["probe_owed"]
+        assert "LIMITS_PERSISTENCE" in owed and "LIMITS_REVERSAL" in owed  # absent evidence stays owed
+
+
+def test_b1_12_h1_freezes_the_observations_and_h2_keeps_them_byte_identical():
+    from inference.framework import lever_dossier_state
+    from inference.framework.library_census import freeze_level_census
+
+    census = freeze_level_census(copy.deepcopy(_through(79)), level_before=1)
+    frozen = census["lever_dossiers"]["E0053"]["observations"]
+    assert frozen["status"] == "OBSERVED" and frozen["scope"] == {**frozen["scope"], "level": 1, "life": 1}
+    carried = _compiled(("carry",), _shared(("carry",), fx.carry_v7).machine, "RUN_END")
+    stored = carried["levels"][0]["lever_dossiers"]
+    census_time = _shared(("carry",), fx.carry_v7).machine.level_censuses[0]["lever_dossiers"]
+    for entity, dossier in stored.items():
+        assert dossier["observations"]["scope"] == census_time[entity]["observations"]["scope"]
+        assert dossier["observations"]["persistence"] == census_time[entity]["observations"]["persistence"]
+    resealed = _wm().seal(copy.deepcopy(carried))
+    assert _wm().canonical_bytes(resealed) == _wm().canonical_bytes(carried)
+    assert lever_dossier_state.CATEGORIES == ("toggle_reversal", "self_recurrence", "cross_reversal", "other_return")
+
+
+def test_b1_13_the_live_view_derives_observations_without_touching_the_machine():
+    from inference.framework.library_view import _CACHE, live_model
+
+    machine = copy.deepcopy(_through(80))
+    before = pickle.dumps(machine)
+    _CACHE.clear()
+    model = live_model(machine)
+    assert pickle.dumps(machine) == before
+    assert model["manifest"]["persist_reason"] == "LIVE_VIEW"
+    assert fx.open_level(model)["lever_dossiers"]["E0053"]["observations"]["status"] == "OBSERVED"
+
+
+def test_b1_14_page_and_report_render_the_observations(t80_model):
+    from inference.framework import world_report
+    from test_world_description import _assert_report_refs
+
+    text = world_report.render_world_report(t80_model)
+    line = next(line for line in text.splitlines() if "dossier E0053 observations" in line)
+    assert "persistence TESTED" in line and "toggle reversal" in line
+    assert _assert_report_refs(t80_model, text) > 0
+
+
+# ---- WO-G4-DOSSIER-B · B1 revision 2 (Sol's review): every observation line cites its canonical path -----------
+
+def _observation_lines(text: str) -> dict[str, str]:
+    return {match.group(1): line for line in text.splitlines()
+            for match in [re.search(r"dossier (\S+) observations: ", line)] if match}
+
+
+def test_b1_20_a_persistence_only_observation_line_cites_its_canonical_path(described):
+    """A lever with persistence tested but no changed trial and no reversal case names no evidence id outright; its
+    report line is supported by the observations it renders, cited by their canonical path."""
+    from inference.framework import lever_dossier_state, world_report
+    from test_world_description import _assert_report_refs
+
+    model = fx.compiled(described, persist_reason="BUDGET_STOP")
+    index = len(model["levels"]) - 1
+    level = model["levels"][index]
+    quiet = sorted(entity for entity, dossier in level["lever_dossiers"].items()
+                   if dossier["observations"]["status"] == "OBSERVED"
+                   and dossier["observations"]["persistence"]["tested"] > 0
+                   and not lever_dossier_state.evidence_refs(dossier["observations"]))
+    assert quiet  # the record holds a persistence-only lever (no reversal case, no changed trial)
+    text = world_report.render_world_report(model)
+    lines = _observation_lines(text)
+    assert set(lines) == set(level["lever_dossiers"])
+    for entity, line in lines.items():
+        refs = line.rsplit("refs: ", 1)[1].split(", ")
+        assert f"levels[{index}].lever_dossiers[{entity}].observations" in refs, line
+    assert "persistence TESTED" in lines[quiet[0]]
+    assert _assert_report_refs(model, text) > 0
+
+
+def test_b1_21_the_reference_checker_refuses_another_levers_or_levels_observation_path(described):
+    from inference.framework import world_report
+    from test_world_description import _assert_report_refs
+
+    model = fx.compiled(described, persist_reason="BUDGET_STOP")
+    index = len(model["levels"]) - 1
+    text = world_report.render_world_report(model)
+    entities = sorted(_observation_lines(text))
+    own, other = (f"levels[{index}].lever_dossiers[{entity}].observations" for entity in entities[:2])
+    line = _observation_lines(text)[entities[0]]
+    for forged in (other, f"levels[{index + 1}].lever_dossiers[{entities[0]}].observations",
+                   f"levels[{index}].lever_dossiers[E9999].observations"):
+        with pytest.raises(AssertionError):
+            _assert_report_refs(model, text.replace(line, line.replace(own, forged)))
+    with pytest.raises(AssertionError):  # the observation line must cite its own path
+        _assert_report_refs(model, text.replace(line, line.replace(f", {own}", "")))

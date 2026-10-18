@@ -9,6 +9,11 @@ chapter built from a stored product equals that product's projection; retained c
 never COMPLETE; the derived chapter equals its recomputation; every digest recomputes. What it cannot prove: that a
 retained fact came from the gate machine (the honest limit of the receipts index, unchanged).
 
+WO-G4-DOSSIER-B (B1, schema v7): each dossier's ``observations`` are checked for scope (one level, one life, every
+cited transition inside it), counts, the four reversal readings, an orbit phase only through an exact accepted mapping,
+and the limits chapter's reading of them. What it cannot prove: the region contents themselves, which come from the
+machine's board record (the same honest limit as retained facts). A frozen v6 level is read by the v6 rules.
+
 Revision 2 (2026-10-17, Sol's directive): every provenance-dependent fact (the activation's executor, the relation
 set's submitter, a receipt an execution contradicts) is recomputed from the model's embedded provenance chapter;
 every anatomy channel's event links and affected subject are recomputed from the level's description.
@@ -20,6 +25,7 @@ from typing import Any, Mapping
 from inference.framework import lever_dossier_facts as F
 from inference.framework import lever_dossier_links as L
 from inference.framework import lever_dossier_provenance as P
+from inference.framework import lever_dossier_state as O
 from inference.framework import lever_dossiers as D
 from inference.framework import strict_json
 
@@ -29,6 +35,7 @@ BASES = {
     "NOT_BUILT": frozenset({"GATE_NOT_SEEDED", "NO_EVIDENCE"}),
     "IN_PROGRESS": frozenset({"LIFECYCLE_REOPENED", "ANSWER_REQUIRED", "RUN_OPEN", "RUN_ENDED_RESTART_NEEDED",
                               "INTERRUPTED_RESTUDY_PENDING", "ENDPOINT_OBSERVED_PROBES_OWED", "STUDY_OPEN",
+                              "RECORD_OBSERVED_NOT_GATE_CERTIFIED",
                               "REOPENED_BY_CONTRADICTION", "OPEN_ITEMS_REMAIN"}),
     "PRODUCT_PENDING": frozenset({"ANSWER_ACCEPTED_AGGREGATE_OPEN", "RUN_CONFIRMED_EXPLANATION_PENDING",
                                   "AGGREGATE_INVALIDATED"}),
@@ -52,10 +59,12 @@ def _require(condition: bool, message: str) -> None:
         raise DossierError(message)
 
 
-def validate_level(level: Mapping[str, Any], manifest: Mapping[str, Any], provenance: Any = None) -> None:
+def validate_level(level: Mapping[str, Any], manifest: Mapping[str, Any], provenance: Any = None, *,
+                   v7: bool = True) -> None:
     dossiers = level.get("lever_dossiers")
     context = P.Context(provenance)
     context.level_contradicted = context.contradicted(level)
+    context.v7, context.mismatched = v7, D._mismatched(level)
     _require(isinstance(dossiers, Mapping), f"level {level.get('level')} has a lever_dossiers chapter")
     roles = {role["entity_id"]: role for role in level["certified"]["roles"] if role.get("role") == "LEVER"}
     withdrawn = D.withdrawn_levers(level)
@@ -70,8 +79,10 @@ def validate_level(level: Mapping[str, Any], manifest: Mapping[str, Any], proven
 
 def _dossier(entity_id: str, dossier: Any, level: Mapping[str, Any], role: Mapping[str, Any] | None,
              manifest: Mapping[str, Any], context: P.Context) -> None:
-    _require(isinstance(dossier, Mapping) and set(dossier) == {"subject", "track_join", "census_context", "chapters"},
-             "a dossier holds subject, track_join, census_context and chapters")
+    keys = {"subject", "track_join", "census_context", "chapters"} | ({"observations"} if context.v7 else set())
+    _require(isinstance(dossier, Mapping) and set(dossier) == keys,
+             "a dossier holds subject, track_join, census_context and chapters" + (" and observations" if context.v7 else ""))
+    context.observations = dossier.get("observations")
     _require(dossier["subject"] == {"kind": "G3_ENTITY", "entity_id": entity_id, "level": int(level["level"])},
              "the subject is this level's G3 entity")
     _require(dossier["track_join"] == (dict(role["identity"]) if role else dict(D.NULL_JOIN)),
@@ -84,6 +95,8 @@ def _dossier(entity_id: str, dossier: Any, level: Mapping[str, Any], role: Mappi
     _require(isinstance(chapters, Mapping) and tuple(sorted(chapters)) == tuple(sorted(F.CHAPTERS)), "seven chapters")
     for name in F.CHAPTERS:
         _chapter(entity_id, name, chapters[name], chapters, level, role, manifest, frozen, context)
+    if context.v7:  # after the chapters: a forged chapter is reported as itself first
+        _observations(entity_id, dossier, level, context)
 
 
 def _chapter(entity_id: str, name: str, chapter: Any, chapters: Mapping[str, Any], level: Mapping[str, Any],
@@ -117,6 +130,8 @@ def _chapter(entity_id: str, name: str, chapter: Any, chapters: Mapping[str, Any
         _links(where, chapter["facts"], level)
     if name == "relations" and chapter["facts"] is not None:
         _submission(where, chapter["facts"], level, context)
+    if name == "limits":
+        _limits_reading(where, chapter, context.observations, context.v7)
     {"identity": _identity, "open_items": _open_items}.get(name, _gated)(entity_id, name, chapter, chapters, level, role,
                                                                        context)
 
@@ -142,6 +157,158 @@ def _submission(where: str, facts: Mapping[str, Any], level: Mapping[str, Any], 
     answer_id = (facts["description"] or {}).get("answer_id")
     _require(stored == P.attest_submission(stored, answer_id, level.get("level"), context),
              f"{where}: the submitter is not what the embedded provenance records")
+
+
+def _limits_reading(where: str, chapter: Mapping[str, Any], observations: Any, v7: bool) -> None:
+    """B1: the limits chapter reads persistence and reversal from the observations, and owes what they lack; its
+    open basis (revision 2) says whether a probe is still owed. A v6 dossier knows only the owed basis."""
+    key = "prior_basis" if chapter["prior_status"] == "IN_PROGRESS" else "basis"
+    open_basis = chapter[key] if chapter[key] in (F.LIMITS_OWED, F.LIMITS_SHOWN) else None
+    if not v7:
+        _require(open_basis != F.LIMITS_SHOWN, f"{where}: a v6 limits basis is {F.LIMITS_OWED}")
+        return
+    _require(open_basis is None or open_basis == F.limits_basis(observations),
+             f"{where}: the limits {key} {open_basis} is not what the observations still owe")
+    if chapter["facts"] is not None:
+        expected = F.limits_overlay(chapter["facts"], observations)
+        _require(chapter["facts"] == expected, f"{where}: persistence and reversal are not what the observations show")
+    owed = [item for item in chapter["open"] if item.get("kind") in ("PROBE_OWED", "UNAVAILABLE")]
+    _require(owed == F.limits_open(observations, True), f"{where}: owes exactly what the observations lack")
+
+
+def _observations(entity_id: str, dossier: Mapping[str, Any], level: Mapping[str, Any], context: P.Context) -> None:
+    """B1: record-derived observations — one level and one life, counted and cited, never a guess."""
+    observations = dossier["observations"]
+    where = "observations"
+    _require(isinstance(observations, Mapping) and tuple(sorted(observations)) == tuple(sorted(O.OBSERVATION_KEYS))
+             and observations["status"] in O.STATUSES, f"{where} hold exactly the declared keys and a known status")
+    expected_digest = None if observations["status"] == "NOT_BUILT" else O.seal(entity_id, dict(observations))["digest"]
+    _require(observations["digest"] == expected_digest, f"{where}: the digest recomputes")
+    if observations["status"] != "OBSERVED":
+        return _observations_closed(where, observations, entity_id, level, context)
+    _require(entity_id not in D.withdrawn_levers(level), f"{where}: a withdrawn lever's observations fail closed")
+    scope = observations["scope"]
+    _require(scope["level"] == level["level"] and isinstance(scope["life"], int), f"{where}: scoped to this level")
+    _require(tuple(sorted(scope)) == ("as_of_transition", "entry_reset", "excluded", "level", "life"),
+             f"{where}: the scope holds level, life, entry_reset, as_of_transition and excluded")
+    _entry_reset(where, observations, level)
+    _observed_scope(where, observations, level, context)
+    _observed_counts(where, entity_id, observations)
+    _observed_phase(where, observations, dossier["chapters"]["orbit"])
+
+
+def _observations_closed(where: str, observations: Mapping[str, Any], entity_id: str, level: Mapping[str, Any],
+                         context: P.Context) -> None:
+    empty = all(observations[key] is None for key in ("region", "current_region_state", "persistence", "reversal"))
+    _require(empty, f"{where}: unbuilt or failed observations state nothing")
+    if observations["status"] == "NOT_BUILT":
+        _require(observations["basis"] in ("NO_RECORD", "NO_REGION") and observations["failure"] is None,
+                 f"{where}: NOT_BUILT names why")
+        return
+    failure = observations["failure"] or {}
+    _require(observations["basis"] in ("RECORD_MISMATCH", P.INCOMPLETE, O.RESET_INSIDE_LIFE)
+             and failure.get("basis") == observations["basis"]
+             and bool(failure.get("refs")), f"{where}: FAILED_CLOSED names its reason and refs")
+    if observations["basis"] == O.RESET_INSIDE_LIFE:
+        _reset_failure(where, observations, level)
+    if observations["basis"] == P.INCOMPLETE:
+        _require(set(failure["refs"]) <= context.level_contradicted,
+                 f"{where}: PROVENANCE_INCOMPLETE names evidence the embedded journal contradicts")
+
+
+def _resets(level: Mapping[str, Any]) -> set[int]:
+    return {int(item) for item in (level.get("record") or {}).get("reset_transition_ids") or ()}
+
+
+def _life_transitions(level: Mapping[str, Any], life: Any) -> list[int]:
+    return sorted(int(record["transition_id"]) for record in (level.get("description") or {}).get("transitions") or ()
+                  if record.get("life") == life)
+
+
+def _reset_failure(where: str, observations: Mapping[str, Any], level: Mapping[str, Any]) -> None:
+    """Revision 2: a reset inside the life names recorded resets of the scope's life that do not open it."""
+    scope = observations["scope"] or {}
+    refs = {int(ref) for ref in observations["failure"]["refs"] if str(ref).isdigit()}
+    _require(len(refs) == len(observations["failure"]["refs"]) and refs <= _resets(level)
+             and scope.get("level") == level["level"],
+             f"{where}: RESET_INSIDE_LIFE names the level's recorded reset transitions")
+    life = _life_transitions(level, scope.get("life"))
+    _require(not life or (refs <= set(life) and life[0] not in refs),
+             f"{where}: RESET_INSIDE_LIFE names resets inside the scope's life, never the reset that opens it")
+
+
+def _entry_reset(where: str, observations: Mapping[str, Any], level: Mapping[str, Any]) -> None:
+    """Revision 2: the reset that opens the life is named as its entry, and only that reset."""
+    scope = observations["scope"]
+    entry, life = scope["entry_reset"], _life_transitions(level, scope["life"])
+    _require(entry is None or (isinstance(entry, int) and entry in _resets(level)),
+             f"{where}: the entry reset {entry} is a recorded reset transition")
+    if life:
+        opened = life[0] in _resets(level)
+        _require(entry == (life[0] if opened else None),
+                 f"{where}: the entry reset is exactly the reset that opens life {scope['life']}")
+        cited = O.cited_transitions(observations) | ({scope["as_of_transition"]} - {None})
+        _require(not cited & (_resets(level) - {entry}) and entry not in cited,
+                 f"{where}: no reset is a trial or a reading")
+
+
+def _observed_scope(where: str, observations: Mapping[str, Any], level: Mapping[str, Any], context: P.Context) -> None:
+    """Every cited transition has exactly one evidence receipt on this level, lies in the scope's life and is neither
+    mismatched nor contradicted; every named evidence id lies on its case's transition."""
+    evidence, life = level["receipts"]["evidence"], observations["scope"]["life"]
+    by_transition: dict[Any, list[str]] = {}
+    for ref, receipt in evidence.items():
+        by_transition.setdefault(receipt.get("transition_id"), []).append(ref)
+    lives = {record["transition_id"]: record.get("life") for record in (level.get("description") or {}).get("transitions") or ()}
+    for transition in sorted(O.cited_transitions(observations)):
+        refs = by_transition.get(transition, [])
+        _require(len(refs) == 1, f"{where}: transition {transition} has no single evidence receipt on this level")
+        _require(lives.get(transition, life) == life, f"{where}: transition {transition} lies outside the scope's life {life}")
+        _require(transition not in context.mismatched, f"{where}: transition {transition} is a mismatched transition")
+        _require(refs[0] not in context.level_contradicted,
+                 f"{where}: rest on an evidence receipt the embedded journal contradicts and are not failed closed")
+    for case in O._cases(observations):
+        _require(case["evidence_ref"] in evidence and evidence[case["evidence_ref"]]["transition_id"] == case["transition_id"],
+                 f"{where}: evidence {case['evidence_ref']} does not lie on its case's transition")
+    as_of = observations["scope"]["as_of_transition"]
+    _require(as_of is None or as_of in (level.get("record") or {}).get("transition_ids", ()),
+             f"{where}: the scope ends at a recorded transition")
+
+
+def _observed_counts(where: str, entity_id: str, observations: Mapping[str, Any]) -> None:
+    persistence, reversal = observations["persistence"], observations["reversal"]
+    tested = persistence["unchanged"] + persistence["changed"]
+    _require(persistence["tested"] == tested == len(persistence["unchanged_transitions"]) + len(persistence["changed_cases"])
+             and persistence["unchanged"] == len(persistence["unchanged_transitions"])
+             and persistence["status"] == ("TESTED" if tested else "UNTESTED")
+             and all(case["acting_lever"] != entity_id for case in persistence["changed_cases"]),
+             f"{where}: persistence counts every cited intervention once")
+    _require(sorted(reversal) == sorted(O.CATEGORIES), f"{where}: reversal holds the four readings")
+    owner = {"toggle_reversal": lambda a, c: a == entity_id and c == 2,
+             "self_recurrence": lambda a, c: a == entity_id and c > 2,
+             "cross_reversal": lambda a, c: a not in (entity_id, None) and c >= 2,
+             "other_return": lambda a, c: a is None and c >= 2}
+    for name, item in reversal.items():
+        _require(item["status"] == ("UNTESTED" if not item["tested"] else "OBSERVED" if item["cases"] else "NOT_OBSERVED")
+                 and all(owner[name](case["acting_lever"], case["cycle_length"]) for case in item["cases"]),
+                 f"{where}: {name} reversal readings fit their actor and cycle")
+
+
+def _observed_phase(where: str, observations: Mapping[str, Any], orbit: Mapping[str, Any]) -> None:
+    """An orbit phase is named only through an accepted orbit that maps the run's states exactly."""
+    state = observations["current_region_state"]
+    _require(state["phase_basis"] in O.PHASE_BASES and state["label"] == f"S{int(state['label'][1:])}"
+             and int(state["label"][1:]) < state["states_seen"], f"{where}: the current region state is labelled")
+    phase = state["orbit_phase"]
+    if phase is None:
+        _require(state["phase_basis"] != "EXACT_ORBIT_MAPPING", f"{where}: no exact mapping, no orbit phase")
+        return
+    facts = orbit.get("facts") or {}
+    expected = O.phase_mapping(phase.get("run_states") or [], facts.get("period"), state["label"])
+    _require(orbit.get("status") == "COMPLETE" and state["phase_basis"] == "EXACT_ORBIT_MAPPING"
+             and phase.get("run_id") == (facts.get("run") or {}).get("run_id") and expected is not None
+             and phase == {"run_id": phase.get("run_id"), **expected},
+             f"{where}: an orbit phase needs the accepted orbit's exact mapping")
 
 
 def _failed(entity_id: str, name: str, chapter: Mapping[str, Any], level: Mapping[str, Any], context: P.Context) -> None:
@@ -259,6 +426,8 @@ def _projection(name: str, payload: Mapping[str, Any], entity_id: str, level: Ma
     facts, answer = F.product_body(name, payload, entity_id)
     if name == "anatomy":
         facts = L.link_anatomy(facts, level)
+    if name == "limits" and context.v7:
+        facts = F.limits_overlay(facts, context.observations)
     if name == "relations":
         submission = facts["submission"]
         facts = {**facts, "submission": P.attest_submission(
@@ -301,7 +470,7 @@ def _retained(where: str, name: str, chapter: Mapping[str, Any], level: Mapping[
 
 def _open_items(entity_id: str, name: str, chapter: Mapping[str, Any], chapters: Mapping[str, Any],
                 level: Mapping[str, Any], role: Mapping[str, Any] | None, context: P.Context) -> None:
-    derived = D.open_items(chapters)
+    derived = D.open_items(chapters, context.observations, context.v7)
     _require(chapter["source"] == "DERIVED" and chapter["facts"] == derived["facts"],
              "open_items equals its recomputation from the other chapters")
     complete = derived["status"] == "COMPLETE"

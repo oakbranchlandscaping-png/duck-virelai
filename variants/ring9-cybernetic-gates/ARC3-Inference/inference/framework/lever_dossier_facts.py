@@ -344,7 +344,47 @@ def _runs(chapter: Mapping[str, Any]) -> list[Mapping[str, Any]]:
             and "run_status" in run]
 
 
-def open_items_facts(chapters: Mapping[str, Mapping[str, Any]], intervention: Any) -> dict[str, Any]:
+LIMIT_FIELDS = (("persistence", "LIMITS_PERSISTENCE"), ("reversal", "LIMITS_REVERSAL"))
+
+
+def limit_readings(observations: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """WO-G4-DOSSIER-B (B1): what the record-derived observations say of persistence and reversal (None: v6, or
+    nothing derived, so the product's own ``PROBE_OWED`` stands)."""
+    from inference.framework import lever_dossier_state as S
+
+    persistence, reversal = S.persistence_reading(observations), S.reversal_reading(observations)
+    return None if persistence is None else {"persistence": persistence, "reversal": reversal}
+
+
+def limits_overlay(facts: Mapping[str, Any] | None, observations: Mapping[str, Any] | None) -> Any:
+    """Limits facts with persistence and reversal read from the observations (``limit_readings``); with nothing
+    derived (or derived facts failed closed) both stay ``PROBE_OWED``, the product's own reading."""
+    if facts is None:
+        return None
+    return {**facts, **(limit_readings(observations) or {"persistence": "PROBE_OWED", "reversal": "PROBE_OWED"})}
+
+
+def limits_open(observations: Mapping[str, Any] | None, v7: bool) -> list[dict[str, str]]:
+    """The limits chapter's typed open items: a field is owed until the record shows it."""
+    readings = limit_readings(observations) or {}
+    owed = [{"kind": "PROBE_OWED", "field": field} for name, field in LIMIT_FIELDS
+            if not v7 or readings.get(name) != "OBSERVED"]
+    return owed + [{"kind": "UNAVAILABLE", "field": "CROSS_LEVEL_LIMITS"}]
+
+
+LIMITS_OWED, LIMITS_SHOWN = "ENDPOINT_OBSERVED_PROBES_OWED", "RECORD_OBSERVED_NOT_GATE_CERTIFIED"
+
+
+def limits_basis(observations: Mapping[str, Any] | None) -> str:
+    """B1 revision 2 (Sol): the limits chapter's IN_PROGRESS basis. ``ENDPOINT_OBSERVED_PROBES_OWED`` while either
+    field is owed; ``RECORD_OBSERVED_NOT_GATE_CERTIFIED`` once the record shows both and no limits probe remains — the
+    chapter stays IN_PROGRESS (no product certifies limits), incomplete but with nothing left to probe."""
+    owed = [item for item in limits_open(observations, True) if item["kind"] == "PROBE_OWED"]
+    return LIMITS_OWED if owed else LIMITS_SHOWN
+
+
+def open_items_facts(chapters: Mapping[str, Mapping[str, Any]], intervention: Any,
+                     observations: Mapping[str, Any] | None = None, v7: bool = False) -> dict[str, Any]:
     contradictions: list[dict[str, Any]] = []
     for name in ("relations", "law_tests"):
         for test in (chapters[name].get("facts") or {}).get("tests") or ():
@@ -362,12 +402,20 @@ def open_items_facts(chapters: Mapping[str, Mapping[str, Any]], intervention: An
     contradictions.sort(key=lambda item: strict_json.canonical_json(item))
     channels = (chapters["anatomy"].get("facts") or {}).get("channels") or ()
     unresolved = any((channel.get("subject") or {}).get("status") != "EXACT_TRACK" for channel in channels)
+    probe_owed, unavailable = list(PROBE_OWED), [field for field in UNAVAILABLE
+                                                 if field != "AFFECTED_SUBJECT_IDENTITY" or unresolved]
+    if v7:  # B1: owed until the record shows it; an orbit phase is named only through an exact mapping
+        from inference.framework import lever_dossier_state as S
+
+        shown = {item["field"] for item in limits_open(observations, True) if item["kind"] == "PROBE_OWED"}
+        probe_owed = [field for field in PROBE_OWED if field in shown]
+        unavailable += [] if S.phase_named(observations) else ["ORBIT_PHASE_NOW"]
     return {
         "incomplete_chapters": [name for name in CHAPTERS[:-1] if chapters[name]["status"] != "COMPLETE"],
         "contradictions": contradictions,
         "rejected_models": [dict(item) for item in chapters["relations"].get("history") or ()],
-        "probe_owed": list(PROBE_OWED),
-        "unavailable": [field for field in UNAVAILABLE if field != "AFFECTED_SUBJECT_IDENTITY" or unresolved],
+        "probe_owed": probe_owed,
+        "unavailable": unavailable,
         "next_test": next_test(chapters["orbit"].get("facts"), intervention),
         "provenance_incomplete": [{"chapter": name, **item} for name in CHAPTERS[:-1]
                                   for item in chapters[name].get("open") or () if item.get("kind") == "PROVENANCE_INCOMPLETE"],
@@ -383,4 +431,5 @@ __all__ = ["CHAPTERS", "CLOSES", "CLOSING_BASIS", "ENDPOINTS", "FACT_KEYS", "GAT
            "PROSE", "answer_ref", "anatomy_facts", "closes", "covers", "entity_entry", "evidence_ids", "has_endpoint",
            "interruption_facts", "intervention_key", "involves", "law_facts", "limits_facts", "next_test",
            "open_items_complete", "open_items_facts", "orbit_facts", "plain", "prediction_facts", "product_body",
-           "relation_struct", "relations_facts", "run_facts", "submission"]
+           "relation_struct", "relations_facts", "run_facts", "submission", "limit_readings", "limits_open",
+           "limits_overlay"]

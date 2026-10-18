@@ -27,7 +27,7 @@ import dossier_fixtures as fx
 import dossier_provenance_fixtures as pf
 
 FIXTURES = Path(__file__).parent / "fixtures"
-V6 = "virelai-world-model-v6"
+WRITER = "virelai-world-model-v7"  # the writer since WO-G4-DOSSIER-B (B1)
 RELATIONS = "G4-B-LEVER-RELATIONS"
 _SHARED: dict = {}
 
@@ -139,7 +139,7 @@ def test_v6_13_an_unresolved_join_or_another_levers_witness_cannot_contaminate_a
 def test_v6_16_frozen_v5_reads_by_its_frozen_rules_and_v6_is_the_writer():
     wm = _wm()
     v5 = json.loads((FIXTURES / "world_model_v5_frozen.json").read_text())  # sealed by e8984c2's v5 code
-    assert wm.SCHEMA == V6 and wm.V5_SCHEMA == "virelai-world-model-v5"
+    assert wm.SCHEMA == WRITER and wm.V5_SCHEMA == "virelai-world-model-v5"
     assert wm.read_world_model(v5)["schema"] == "virelai-world-model-v5"
     wm.validate_v5(v5)
 
@@ -522,3 +522,269 @@ def test_v6_r3_07_the_corrected_two_level_model_seals_and_validates_deterministi
     assert resealed == first
     _wm().validate(first)
     _wm().validate(resealed)
+
+
+# ---- WO-G4-DOSSIER-B · B1: derived current state, persistence and reversal (Sol's rulings 2 and 3) ------------
+
+def _state():
+    from inference.framework import lever_dossier_state
+
+    return lever_dossier_state
+
+
+def _scope(rows, initial=None, regions=("A", "B")):
+    return {"level": 1, "life": 1, "initial": initial or {"A": "a0", "B": "b0"},
+            "regions": {entity: 4 for entity in regions}, "rows": rows}
+
+
+def _row(transition_id, actor, contents, *, cited=True, boundary=None):
+    return {"transition_id": transition_id, "boundary": boundary, "actor": actor, "contents": contents,
+            "evidence_ref": f"E-{transition_id}" if cited else None}
+
+
+def test_b1_01_persistence_counts_cited_interventions_and_zero_trials_stays_untested():
+    rows = [_row(1, "B", {"A": "a0", "B": "b1"}), _row(2, "B", {"A": "a0", "B": "b0"}),
+            _row(3, None, {"A": "a1", "B": "b0"})]
+    first = _state().derive(_scope(rows), "A")["persistence"]
+    assert (first["status"], first["tested"], first["unchanged"], first["changed"]) == ("TESTED", 3, 2, 1)
+    assert first["unchanged_transitions"] == [1, 2]
+    assert first["changed_cases"] == [{"transition_id": 3, "evidence_ref": "E-3", "acting_lever": None}]
+    alone = _state().derive(_scope([_row(1, "A", {"A": "a1", "B": "b0"})]), "A")
+    assert (alone["persistence"]["status"], alone["persistence"]["tested"]) == ("UNTESTED", 0)
+    assert alone["reversal"]["cross_reversal"]["status"] == "UNTESTED"
+    empty = _state().derive(_scope([]), "A")
+    assert empty["current_region_state"]["label"] == "S0" and empty["scope"]["as_of_transition"] is None
+    assert all(item["status"] == "UNTESTED" for item in empty["reversal"].values())
+
+
+def test_b1_02_a_two_state_toggle_is_reversal_and_a_longer_cycle_is_only_recurrence():
+    toggle = _state().derive(_scope([_row(1, "A", {"A": "a1", "B": "b0"}), _row(2, "A", {"A": "a0", "B": "b0"})]), "A")
+    assert toggle["reversal"]["toggle_reversal"]["status"] == "OBSERVED"
+    (case,) = toggle["reversal"]["toggle_reversal"]["cases"]
+    assert (case["from_state"], case["to_state"], case["cycle_length"], case["acting_lever"]) == ("S1", "S0", 2, "A")
+    cycle = _state().derive(_scope([_row(1, "A", {"A": "a1", "B": "b0"}), _row(2, "A", {"A": "a2", "B": "b0"}),
+                                    _row(3, "A", {"A": "a0", "B": "b0"})]), "A")
+    assert cycle["reversal"]["toggle_reversal"]["status"] == "NOT_OBSERVED"
+    (case,) = cycle["reversal"]["self_recurrence"]["cases"]
+    assert (case["to_state"], case["cycle_length"]) == ("S0", 3)
+
+
+def test_b1_03_cross_reversal_names_the_other_lever_and_other_actions_stay_apart():
+    model = _state().derive(_scope([_row(1, "A", {"A": "a1", "B": "b0"}), _row(2, "B", {"A": "a0", "B": "b1"}),
+                                    _row(3, None, {"A": "a1", "B": "b1"}), _row(4, None, {"A": "a0", "B": "b1"})]), "A")
+    (cross,) = model["reversal"]["cross_reversal"]["cases"]
+    assert (cross["acting_lever"], cross["transition_id"], cross["cycle_length"]) == ("B", 2, 2)
+    assert [(case["acting_lever"], case["transition_id"]) for case in model["reversal"]["other_return"]["cases"]] == [
+        (None, 3), (None, 4)]
+    assert model["reversal"]["toggle_reversal"]["status"] == "NOT_OBSERVED"  # its own press never returned it
+
+
+def test_b1_04_a_boundary_ends_the_scope_a_reset_inside_a_life_fails_closed_and_an_uncited_row_is_never_a_trial():
+    """Revision 2 (Sol): a reset is never skipped inside a life. Only a reset that opens the life is its entry
+    (``observe`` takes the board after it); any other reset leaves the observations failed closed."""
+    rows = [_row(1, "B", {"A": "a0", "B": "b1"}), _row(2, "B", {"A": "a0", "B": "b0"}, cited=False),
+            _row(3, "B", {"A": "a9", "B": "b9"}, boundary="END"), _row(4, "B", {"A": "a0", "B": "b1"})]
+    model = _state().derive(_scope(rows), "A")
+    assert model["persistence"]["tested"] == 1 and model["scope"]["excluded"] == {"uncited": 1, "boundary": 1}
+    assert model["scope"]["as_of_transition"] == 2 and _state().cited_transitions(model) == {1}
+    reset = _state().derive(_scope([_row(1, "A", {"A": "a1", "B": "b0"}), _row(2, None, {"A": "a0", "B": "b0"},
+                                                                            boundary="RESET")]), "A")
+    assert (reset["status"], reset["basis"], reset["failure"]) == (
+        "FAILED_CLOSED", "RESET_INSIDE_LIFE", {"basis": "RESET_INSIDE_LIFE", "refs": ["2"]})
+    assert reset["persistence"] is None and reset["reversal"] is None and reset["current_region_state"] is None
+
+
+def test_b1_05_an_orbit_phase_needs_an_exact_mapping_inside_the_scope():
+    state = _state()
+    assert state.phase_mapping(["S0", "S1", "S0", "S1"], 2, "S1") == {
+        "position": 1, "period": 2, "run_states": ["S0", "S1", "S0", "S1"]}
+    assert state.phase_mapping(["S0", "S1", "S2"], 2, "S1") is None  # the run does not repeat with its period
+    assert state.phase_mapping(["S0", "S1", "S0"], 2, "S2") is None  # the present state is outside the orbit
+    rows = [_row(5, "A", {"A": "a1", "B": "b0"}), _row(6, "A", {"A": "a0", "B": "b0"})]
+    assert state.run_states(_scope(rows), "A", {"steps": [{"transition_id": 5}, {"transition_id": 6}]}) == [
+        "S0", "S1", "S0"]
+    assert state.run_states(_scope(rows), "A", {"steps": [{"transition_id": 4}]}) is None  # another life's run
+
+
+def test_b1_06_schema_v7_writes_observations_and_frozen_v6_reads_by_its_rules():
+    wm = _wm()
+    v6 = json.loads((FIXTURES / "world_model_v6_frozen.json").read_text())  # sealed by 87639d7's v6 code
+    assert wm.SCHEMA == WRITER and wm.V6_SCHEMA == "virelai-world-model-v6"
+    assert wm.read_world_model(v6)["schema"] == "virelai-world-model-v6"
+    wm.validate_v6(v6)
+    dossier = next(iter(wm.seal(pf.model("BUDGET_STOP"))["levels"][0]["lever_dossiers"].values()))
+    assert dossier["observations"]["status"] == "NOT_BUILT"  # no anatomy region: nothing derived, nothing claimed
+
+
+def _observations(model, entity):
+    return fx.open_level(model)["lever_dossiers"][entity]["observations"]
+
+
+def test_b1_07_derived_facts_cite_only_this_levels_life_and_resolve(t80_model):
+    level = fx.open_level(t80_model)
+    lives = {t["transition_id"]: t["life"] for t in level["description"]["transitions"]}
+    for entity, dossier in level["lever_dossiers"].items():
+        observations = dossier["observations"]
+        assert observations["status"] == "OBSERVED" and observations["scope"]["level"] == level["level"]
+        cited = _state().cited_transitions(observations)
+        assert cited and all(lives[transition] == observations["scope"]["life"] for transition in cited)
+        by_transition = {receipt["transition_id"] for receipt in level["receipts"]["evidence"].values()}
+        assert cited <= by_transition  # every cited transition has its evidence receipt on this level
+        persistence = observations["persistence"]
+        assert persistence["tested"] == persistence["unchanged"] + persistence["changed"]
+
+
+def test_b1_08_forged_observations_are_refused_even_rehashed(t80_model):
+    from inference.framework import lever_dossier_state
+
+    def refused(edit, match):
+        model = copy.deepcopy(t80_model)
+        observations = _observations(model, "E0053")
+        edit(observations, model)
+        lever_dossier_state.seal("E0053", observations)
+        _refused(model, match)
+
+    refused(lambda o, m: o["persistence"].update(unchanged=o["persistence"]["unchanged"] + 1), "persistence")
+    refused(lambda o, m: o["scope"].update(life=2), "life")  # every cited transition lies in life 1
+    refused(lambda o, m: o["reversal"]["toggle_reversal"]["cases"][0].update(cycle_length=3), "toggle|reversal")
+    from inference.framework import lever_dossiers
+
+    unmapped = copy.deepcopy(t80_model)  # E0054's orbit is still open: no phase may be named
+    dossier = fx.open_level(unmapped)["lever_dossiers"]["E0054"]
+    observations = dossier["observations"]
+    observations["current_region_state"].update(orbit_phase={"run_id": "R", "position": 0, "period": 2,
+                                                             "run_states": ["S0", "S1", "S0"]},
+                                                phase_basis="EXACT_ORBIT_MAPPING")
+    lever_dossier_state.seal("E0054", observations)
+    chapters = dossier["chapters"]  # a thorough forger recomputes the derived chapter too
+    chapters["open_items"]["facts"] = lever_dossiers.open_items(chapters, observations, True)["facts"]
+    _refused(unmapped, "phase|orbit")
+
+
+def test_b1_09_a_written_model_reads_back_whatever_its_key_order(t80_model):
+    """Found by T1 (test_wo_l2a_hooks): a written model is canonical JSON with sorted keys; reading it back must
+    validate (the reversal readings are a set of four, not an ordered tuple)."""
+    reread = json.loads(_wm().canonical_bytes(t80_model))
+    assert list(_observations(reread, "E0053")["reversal"]) == sorted(_state().CATEGORIES)
+    _wm().validate(reread)
+    assert _wm().read_world_model(reread)["schema"] == WRITER
+
+
+# ---- WO-G4-DOSSIER-B · B1 revision 2 (Sol's review): reset entry, the limits basis --------------------------------
+
+def _stub_machine(rows, life):
+    """A minimal gate machine for ``observe``: a 1x2 board, lever A at (0,0) and lever B at (0,1), each pressed on
+    its own cell; the current board is the initial board with every recorded change applied."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(transition_index=rows, lives=SimpleNamespace(level=1, life=life), _adapters={},
+                           counter=SimpleNamespace(initial_grid=[[0, 0]]))
+
+
+_STUB_ANATOMIES = {entity: {"entity_id": entity, "intervention": {"action": "ACTION6", "row": 0, "col": col},
+                            "channels": [{"locality": "LOCAL", "cells": [[0, col]]}]}
+                   for entity, col in (("A", 0), ("B", 1))}
+
+
+def _stub_row(transition_id, life, changed, *, col=None, kind="PROBE", boundary="NOT_FINISHED"):
+    action = {"action": "RESET"} if kind == "RESET" else {"action": "ACTION6", "row": 0, "col": col}
+    return {"transition_id": transition_id, "level": 1, "life": life, "kind": kind, "boundary_state": boundary,
+            "action": action, "changed": changed, "evidence_id": None if kind == "RESET" else f"E-{transition_id}"}
+
+
+def _reset_record(extra=()):
+    """Life 1 leaves lever A in state 5 (the press at t1) and dies at t2; the reset t3 opens life 2 with A in state
+    7; the press at t4 turns A back to 5 — a state only life 1 ever held."""
+    return [_stub_row(1, 1, [(0, 0, 0, 5)], col=0), _stub_row(2, 1, [(0, 1, 0, 9)], col=1, boundary="GAME_OVER"),
+            _stub_row(3, 2, [(0, 0, 5, 7), (0, 1, 9, 0)], kind="RESET", boundary="RESET"),
+            _stub_row(4, 2, [(0, 0, 7, 5)], col=0), *extra]
+
+
+def test_b1_15_a_reset_opens_its_life_at_the_post_reset_board_and_carries_no_history():
+    """Sol's fail-first case: life 1 holds state A; the reset opens life 2 at B; one press then produces A. Life 2
+    reports A as a new state and no reversal: nothing before the reset is this life's."""
+    state = _state()
+    rows = _reset_record()
+    scope = state.observe(_stub_machine(rows, 2), 1, _STUB_ANATOMIES, {f"E-{t}": {} for t in (1, 2, 4)})
+    lever = state.derive(scope, "A")
+    assert all(not item["cases"] for item in lever["reversal"].values())  # life 1's state is not this life's
+    current = lever["current_region_state"]
+    assert (current["label"], current["states_seen"]) == ("S1", 2)  # a new state of life 2, not life 1's S0
+    assert lever["reversal"]["toggle_reversal"]["status"] == "NOT_OBSERVED"  # tested once: no return in this life
+    assert scope["life"] == 2 and scope["entry_reset"] == 3
+    assert [row["transition_id"] for row in scope["rows"]] == [4]  # the reset row is the entry, not an intervention
+    assert lever["status"] == "OBSERVED" and lever["scope"]["entry_reset"] == 3
+    assert lever["scope"]["excluded"] == {"uncited": 0, "boundary": 0}
+    other = state.derive(scope, "B")
+    assert other["persistence"]["unchanged_transitions"] == [4] and other["current_region_state"]["label"] == "S0"
+
+
+def test_b1_16_a_reset_anywhere_else_in_the_life_fails_closed():
+    state = _state()
+    rows = _reset_record([_stub_row(5, 2, [(0, 0, 5, 7)], kind="RESET", boundary="RESET"),
+                          _stub_row(6, 2, [(0, 0, 7, 5)], col=0)])
+    scope = state.observe(_stub_machine(rows, 2), 1, _STUB_ANATOMIES, {f"E-{t}": {} for t in (1, 2, 4, 6)})
+    for entity in ("A", "B"):
+        lever = state.derive(scope, entity)
+        assert (lever["status"], lever["basis"], lever["failure"]["refs"]) == ("FAILED_CLOSED", "RESET_INSIDE_LIFE", ["5"])
+        assert lever["scope"]["life"] == 2 and lever["current_region_state"] is None
+
+
+def test_b1_17_the_limits_basis_says_whether_a_probe_is_still_owed(t80_model):
+    """Sol: ``ENDPOINT_OBSERVED_PROBES_OWED`` while either field is owed; ``RECORD_OBSERVED_NOT_GATE_CERTIFIED``
+    once the record shows both and no limits probe remains. Limits stays IN_PROGRESS: no product certifies it."""
+    from inference.framework import lever_dossier_facts
+
+    state = _state()
+    both = state.derive(_scope([_row(1, "A", {"A": "a1", "B": "b0"}), _row(2, "A", {"A": "a0", "B": "b0"}),
+                                _row(3, "B", {"A": "a0", "B": "b1"})]), "A")
+    persistence_only = state.derive(_scope([_row(1, "B", {"A": "a0", "B": "b1"})]), "A")
+    untested = state.derive(_scope([]), "A")
+    assert lever_dossier_facts.limits_basis(both) == "RECORD_OBSERVED_NOT_GATE_CERTIFIED"
+    for owed in (persistence_only, untested, None, state.failed("RESET_INSIDE_LIFE", ["2"], None)):
+        assert lever_dossier_facts.limits_basis(owed) == "ENDPOINT_OBSERVED_PROBES_OWED"
+    limits = fx.chapter(fx.open_level(t80_model), "E0053", "limits")
+    assert (limits["status"], limits["basis"]) == ("IN_PROGRESS", "RECORD_OBSERVED_NOT_GATE_CERTIFIED")
+    assert not [item for item in limits["open"] if item["kind"] == "PROBE_OWED"]
+    assert "RECORD_OBSERVED_NOT_GATE_CERTIFIED" in __import__(
+        "inference.framework.lever_dossier_schema", fromlist=["BASES"]).BASES["IN_PROGRESS"]
+
+
+def test_b1_18_the_limits_basis_is_pinned_and_reverts_when_the_observations_fail(t80_model):
+    from inference.framework import lever_dossiers
+
+    def forged(basis):
+        model = copy.deepcopy(t80_model)
+        dossier = fx.open_level(model)["lever_dossiers"]["E0053"]
+        dossier["chapters"]["limits"]["basis"] = basis
+        chapters = dossier["chapters"]
+        chapters["open_items"]["facts"] = lever_dossiers.open_items(chapters, dossier["observations"], True)["facts"]
+        return model
+
+    _refused(forged("ENDPOINT_OBSERVED_PROBES_OWED"), "limits.*basis")
+    failed = copy.deepcopy(t80_model)
+    level = fx.open_level(failed)
+    dossier = level["lever_dossiers"]["E0053"]
+    _state().fail(dossier["observations"], "RECORD_MISMATCH", ["E0053"])
+    lever_dossiers.reseal("E0053", dossier, level)  # the observations no longer show anything: both fields owed
+    limits = dossier["chapters"]["limits"]
+    assert (limits["status"], limits["basis"]) == ("IN_PROGRESS", "ENDPOINT_OBSERVED_PROBES_OWED")
+    assert [item["field"] for item in limits["open"] if item["kind"] == "PROBE_OWED"] == [
+        "LIMITS_PERSISTENCE", "LIMITS_REVERSAL"]
+
+
+def test_b1_19_a_reset_entry_or_a_reset_failure_must_name_the_records_reset(t80_model):
+    """The validator resolves the reset an observation scope names against the level's recorded resets."""
+    from inference.framework import lever_dossiers
+
+    entry = copy.deepcopy(t80_model)
+    observations = _observations(entry, "E0053")
+    observations["scope"]["entry_reset"] = 40  # transition 40 is a press, not a reset
+    _state().seal("E0053", observations)
+    _refused(entry, "reset")
+    closed = copy.deepcopy(t80_model)
+    level = fx.open_level(closed)
+    dossier = level["lever_dossiers"]["E0053"]
+    dossier["observations"] = _state().failed("RESET_INSIDE_LIFE", ["40"], dossier["observations"]["scope"])
+    lever_dossiers.reseal("E0053", dossier, level)
+    _refused(closed, "reset")
