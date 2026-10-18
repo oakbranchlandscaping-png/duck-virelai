@@ -14,6 +14,11 @@ and the parse come from one buffer), and the sidecar verifier is a separate, exp
 * ``attach()`` gives every level its event-id index (rows are never duplicated); ``validate_chapter()`` re-verifies
   the embedded journal and recomputes everything derivable from the model, so a forged verdict fails.
 
+Versions (WO-G4-DOSSIER-B, B2 revision 2): chapter v1 (world models v4-v7, frozen) embeds only audit-v1 rows and
+re-verifies them with the frozen v1 reader; chapter v2 (world model v8) embeds a v1 or a v2 journal, each verified
+under its own schema's vocabulary (``audit_journal``). The rows are embedded verbatim, so the audit schema is part of
+the chapter contract: a v2 journal is never placed under a v1 chapter.
+
 Integrity (what the bytes are) and reconciliation (whether admissions, executions, transitions, evidence and gate
 products join) are kept apart. The existing ``journal_check`` fields are H2's record check and are not touched.
 """
@@ -29,7 +34,8 @@ from inference.framework import audit_journal as aj
 from inference.framework import product_origins as origins
 from inference.framework.answer_shapes import sha16  # re-exported: the census and tests hash with it
 
-CHAPTER_SCHEMA = "virelai-provenance-chapter-v1"
+CHAPTER_V1 = "virelai-provenance-chapter-v1"  # frozen: world models v4-v7, audit-v1 rows only
+CHAPTER_SCHEMA = "virelai-provenance-chapter-v2"  # world model v8: audit v1 or v2 rows
 PHASES = ("H1", "H2", "LIVE_VIEW")
 H2_INTEGRITY = ("SEALED", "OPEN", "CORRUPT", "UNAVAILABLE")
 CAPTURE = ("ENABLED", "DISABLED", "FAILED", "UNKNOWN")
@@ -136,7 +142,8 @@ def _category(row: Mapping[str, Any]) -> str:
     operation, event = row["operation"], row["event"]
     if operation == "PROBE":
         return "admissions" if event == "ADMISSION" else "executions"
-    return {"ANSWER": "answers", "G3_SELECTION": "selections", "ANNOTATION": "annotations"}[operation]
+    return {"ANSWER": "answers", "G3_SELECTION": "selections", "G4_SELECTION": "selections",
+            "ANNOTATION": "annotations"}[operation]
 
 
 def indexes(levels: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]
@@ -468,11 +475,13 @@ def _expected_phase(persist_reason: Any) -> str:
     return LIVE_VIEW if persist_reason == LIVE_VIEW else "H2" if persist_reason in FINAL_REASONS else "H1"
 
 
-def validate_chapter(payload: Mapping[str, Any]) -> None:
-    """The v4 provenance contract (pure): shape, the embedded journal re-verified, every derivable field recomputed."""
+def validate_chapter(payload: Mapping[str, Any], *, frozen_v1: bool = False) -> None:
+    """The provenance contract (pure): shape, the embedded journal re-verified, every derivable field recomputed.
+    ``frozen_v1``: the chapter-v1 contract of world models v4-v7 (audit-v1 rows only)."""
     chapter = payload.get("provenance")
-    _require(isinstance(chapter, Mapping) and chapter.get("schema") == CHAPTER_SCHEMA,
-             "a v4 model carries a provenance chapter")
+    expected = CHAPTER_V1 if frozen_v1 else CHAPTER_SCHEMA
+    _require(isinstance(chapter, Mapping) and chapter.get("schema") == expected,
+             f"the model carries a {expected} provenance chapter")
     phase = chapter.get("phase")
     _require(phase == _expected_phase((payload.get("manifest") or {}).get("persist_reason")),
              f"provenance phase {phase!r} does not fit persist_reason")
@@ -498,7 +507,7 @@ def validate_chapter(payload: Mapping[str, Any]) -> None:
                                       and bool(_HEX64.fullmatch(str(reported["head_hash"])))),
                  "an H1 prefix is WRITER_REPORTED {event_count, head_hash}")
         return
-    _validate_h2(payload, chapter, rows, unscoped)
+    _validate_h2(payload, chapter, rows, unscoped, (aj.V1_SCHEMA,) if frozen_v1 else aj.SCHEMAS)
 
 
 def _validate_product_answers(level: Mapping[str, Any]) -> None:
@@ -511,7 +520,8 @@ def _validate_product_answers(level: Mapping[str, Any]) -> None:
         _require(problem is None, f"product_answers[{product_id}]: {problem}")
 
 
-def _validate_h2(payload: Mapping[str, Any], chapter: Mapping[str, Any], rows: list, unscoped: list) -> None:
+def _validate_h2(payload: Mapping[str, Any], chapter: Mapping[str, Any], rows: list, unscoped: list,
+                 accepted: Sequence[str] = aj.SCHEMAS) -> None:
     _require(set(chapter) == H2_KEYS, "an H2 chapter has exactly the declared keys")
     integrity = chapter["integrity"]
     _require(integrity in H2_INTEGRITY, "H2 integrity is SEALED, OPEN, CORRUPT or UNAVAILABLE")
@@ -521,7 +531,7 @@ def _validate_h2(payload: Mapping[str, Any], chapter: Mapping[str, Any], rows: l
                  "an UNAVAILABLE chapter has no rows, seal or stamp, and a typed reason")
     else:
         _require(chapter["unavailable_reason"] is None, "only an UNAVAILABLE chapter names an unavailable reason")
-        read = aj.verify_embedded(rows, chapter["seal"])
+        read = aj.verify_embedded(rows, chapter["seal"], accepted)
         expected = "SEALED" if integrity == "SEALED" else "OPEN"
         _require(read.status == expected and len(read.rows) == len(rows),
                  f"the embedded rows do not re-verify as a {expected} journal ({read.status}: {read.failure})")
@@ -586,6 +596,6 @@ def verify_sidecar(model: Mapping[str, Any], path: str | Path) -> dict[str, Any]
 
 
 __all__ = [
-    "CHAPTER_SCHEMA", "FINAL_REASONS", "INDEX_KEYS", "ProvenanceChapterError", "attach", "cross_check", "default_for", "derive", "h1", "h2", "indexes", "live", "sha16",
+    "CHAPTER_SCHEMA", "CHAPTER_V1", "FINAL_REASONS", "INDEX_KEYS", "ProvenanceChapterError", "attach", "cross_check", "default_for", "derive", "h1", "h2", "indexes", "live", "sha16",
     "validate_chapter", "verdict", "verify_sidecar",
 ]

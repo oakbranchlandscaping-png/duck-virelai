@@ -76,7 +76,7 @@ from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
 from inference.framework.mu_bucket import MuBucket
 from inference.framework.g3_inventory import check_inventory_claims
-from inference.framework import g3_selection, mu_return
+from inference.framework import g3_selection, g4_selection, mu_return
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
@@ -5897,6 +5897,9 @@ class _LeverStudyTarget:
         "The counter is masked: only non-counter changes count as the board changing.",
         "Explain a lever with virelai('gate_answer', answer={...}) once its run is CONFIRMED or "
         "DIVERGED; the answer template for that lever is on this card.",
+        "On a turn you already hold you may choose which lever runs next: virelai('next_probe', "
+        "question_id='Q:L<level>:G4.2-LEVER-ORBITS:<ENTITY_ID>:ORBIT'). The gate admits a lever not yet run "
+        "(or ended, or released), never during a run; otherwise the controller keeps its order.",
     )
 
     def __init__(self, machine: "CyberneticGateMachine") -> None:
@@ -5916,6 +5919,7 @@ class _LeverStudyTarget:
         self._level_closed: dict[str, Any] | None = None
         self._life_restudies: dict[str, int] = {}  # D4: same-level deaths per lever
         self._seeded_from: str | None = None  # R9-R23 D15: a revised G4.1 product adds late levers
+        self._g4_selection: dict[str, Any] | None = None  # WO-G4-DOSSIER-B (B2): an admitted choice in flight
 
     def _reaction_product(self) -> MemoryProduct:
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
@@ -6046,6 +6050,7 @@ class _LeverStudyTarget:
 
     def next_probe(self) -> ProbeEnvelope | None:
         self._seed()
+        g4_selection.settle(self)  # B2: a finished or stale choice ends here, at the gate's own step
         if not self._studying():
             return None
         admissible = tuple(sorted(
@@ -6054,7 +6059,7 @@ class _LeverStudyTarget:
         ))
         if not admissible:
             return None
-        return ProbeEnvelope(
+        return g4_selection.bound_probe(self, ProbeEnvelope(  # B2: a standing choice names itself
             probe_id=f"{ORBIT_GATE_ID}:GUIDED:{self._action_count + 1}",
             gate_id=ORBIT_GATE_ID,
             purpose="GUIDED_ACTION",
@@ -6071,7 +6076,7 @@ class _LeverStudyTarget:
                     for item in self._ordered_entities
                 ],
             },
-        )
+        ))
 
     def validate_probe(
         self, decision: Mapping[str, Any] | None, actions: Sequence[Mapping[str, Any]]
@@ -6170,7 +6175,7 @@ class _LeverStudyTarget:
                     "gate_id": ORBIT_GATE_ID, "probe_id": probe.probe_id,
                     "action": action, "lever_entity_id": nav_entity,
                     "decision_intent": probe.intent, "outcome": compact_probe_outcome(outcome),
-                    "run": {"kind": "NAV_APPROACH", "orbit_advanced": False},
+                    "run": {"kind": "NAV_APPROACH", "orbit_advanced": False}, **g4_selection.receipt(probe),
                     "counter_baseline": counter_baseline,
                     "new_visual_entity_ids": sorted(entities_after - entities_before),
                 }
@@ -6196,7 +6201,7 @@ class _LeverStudyTarget:
             "run": run_event,
             "counter_baseline": counter_baseline,
             "new_visual_entity_ids": sorted(entities_after - entities_before),
-            **nav_record,
+            **nav_record, **g4_selection.receipt(probe),  # B2: the question a chosen run answers to
         }
         self._events.append(event)
         if is_terminal(boundary_state):
@@ -6540,6 +6545,8 @@ class CyberneticGateMachine:
         self.level_censuses: list[dict[str, Any]] = []  # WO-L2a H1: each ended level's census, check pending
         self.g3_selection_events: list[dict[str, Any]] = []  # WO-G3-DIRECTED: every choice event, game-long
         self.g3_selection_flushed = 0  # how many of them the run has written to disk
+        self.g4_selection_events: list[dict[str, Any]] = []  # WO-G4-DOSSIER-B (B2): G4 choice events, game-long
+        self.g4_selection_flushed = 0
         self._capability_secret = secrets.token_bytes(32)
         self._consumed_capabilities: set[str] = set()
         # The record tier's in-memory index (DESIGN_VIRELAI_MEMORY_v1 §5.1): one sparse, lossless
@@ -6576,6 +6583,7 @@ class CyberneticGateMachine:
         """
         from inference.framework.library_census import freeze_census_or_failure
 
+        g4_selection.close_at_level_change(self._adapters[ORBIT_GATE_ID])  # B2 r4: no G4-A choice outlives its level
         # WO-L2a H1: census the ended level (its boundary's level_before) before freeze_level; errors are recorded.
         self.level_censuses.append(freeze_census_or_failure(self, outcome))
         grids = grids_from_probe_outcome(outcome)
@@ -6730,6 +6738,13 @@ class CyberneticGateMachine:
         capability["question_id"] = selected_question(self)  # the card, the agenda and the probe agree
         return capability
 
+    def select_question(self, question_id: str, *, actor: str = "DUCK") -> dict[str, Any]:
+        """B2: admit Duck's choice in the gate its question names: G3's own, else G4-A's (``g4_selection``; G4.1 is
+        controller work and refuses)."""
+        if str(question_id).split(":")[2:3] == [LEVER_GATE_ID]:
+            return self.select_g3_question(question_id, actor=actor)
+        return g4_selection.select(self, str(question_id), actor=str(actor))
+
     def select_g3_question(self, question_id: str, *, actor: str = "DUCK") -> dict[str, Any]:
         """WO-G3-DIRECTED: admit a choice among G3's selectable rows; the next capability binds it."""
         if self.gate_id != LEVER_GATE_ID:
@@ -6791,6 +6806,7 @@ class CyberneticGateMachine:
                 )
             intent = str(decision.get("intent") or "").strip()[:240] or None
             admitted_probe = replace(probe, actions=supplied_actions, intent=intent)
+            admitted_probe = g4_selection.admitted_action(self._active_adapter(), admitted_probe)  # B2 r4
             getattr(self._active_adapter(), "admit", lambda _probe: None)(admitted_probe)  # R9-R24 R-8
         elif probe.admissible_actions:
             if len(supplied_actions) != 1 or supplied_actions[0]["action"] not in probe.admissible_actions:

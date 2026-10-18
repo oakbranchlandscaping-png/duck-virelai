@@ -69,17 +69,18 @@ def _library_query(machine: Any, parameters: dict[str, Any]) -> dict[str, Any]:
 
 
 def _chosen_probe(agent: Any, state_path: Path, machine: Any, question_id: str) -> dict[str, Any]:
-    """``virelai('next_probe', question_id=Q)`` (WO-G3-DIRECTED): admit Duck's G3 choice, then return the freshly
-    bound capability. A refusal is the reply's error, with the current question; the coverage head is unchanged."""
+    """``virelai('next_probe', question_id=Q)`` (WO-G3-DIRECTED; G4.1 and G4-A since WO-G4-DOSSIER-B B2): admit Duck's
+    choice in the gate its question names, then return the freshly bound capability. A refusal is the reply's
+    error, with the current question; the coverage head is unchanged."""
     from inference.framework.library_agenda import selected_question
     from inference.framework.virelai_gates import GateContractError
 
     from inference.agent import provenance_capture
     from inference.agent.gate_artifacts import flush_g3_selection_events
 
-    where, before = provenance_capture.context(machine), len(machine.g3_selection_events)
+    where, before = provenance_capture.context(machine), provenance_capture.selection_event_count(machine)
     try:
-        machine.select_g3_question(question_id, actor="DUCK")
+        machine.select_question(question_id, actor="DUCK")
     except GateContractError as exc:
         provenance_capture.g3_choice_refused_early(agent, state_path, machine, where, question_id, before, exc)
         return _reply("next_probe", {**_refused_state(machine), "question_id": selected_question(machine)}, str(exc))

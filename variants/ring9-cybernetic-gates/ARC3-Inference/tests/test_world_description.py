@@ -948,7 +948,7 @@ def test_a_report_failure_keeps_the_model_and_records_a_warning(tmp_path, monkey
 
     monkeypatch.setattr(world_report, "render_world_report", lambda model: (_ for _ in ()).throw(RuntimeError("boom")))
     folder, _game, _calls = _cancelled_before_first_turn(tmp_path)
-    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v7"
+    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v8"
     assert not (folder / "world_report.md").exists()
     warnings = [json.loads(line) for line in (folder / "observer_warnings.jsonl").read_text().splitlines()]
     assert any(item.get("event") == "WORLD_REPORT_WRITE_FAILED" for item in warnings)

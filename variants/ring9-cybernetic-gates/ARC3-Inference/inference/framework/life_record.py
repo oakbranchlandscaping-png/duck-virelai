@@ -34,6 +34,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_legacy_confirmation_replay": GAME,
         "transition_index": GAME, "lives": GAME, "levels": GAME, "level_censuses": GAME, "_adapters": LEVEL, "_issued_capabilities": LEVEL,
         "g3_selection_events": GAME, "g3_selection_flushed": GAME,
+        "g4_selection_events": GAME, "g4_selection_flushed": GAME,  # WO-G4-DOSSIER-B (B2)
         "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL, "carry": LEVEL,
         "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL, "mu": LEVEL, "duck_budget": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
@@ -76,7 +77,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "machine": GAME, "revision": LEVEL, "_action_count": LEVEL, "_answers": LEVEL, "_completed": LEVEL,
         "_events": LEVEL, "_interruptions": LEVEL, "_interventions": LEVEL, "_level_closed": LEVEL,
         "_life_restudies": LEVEL, "_ordered_entities": LEVEL, "_runs": LEVEL, "_active_run": TRANSIENT,
-        "_seeded_from": LEVEL,
+        "_seeded_from": LEVEL, "_g4_selection": TRANSIENT,  # B2: a choice is in flight until its run ends
     },
     "LeverRelationsTarget": {
         "machine": GAME, "revision": LEVEL, "_answer": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,

@@ -42,7 +42,7 @@ certified content is the structured part (M7). It is marked as controller-render
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from inference.framework.annotation_lane import orientation_due
 from inference.framework.card_builder import world_budgets
@@ -218,37 +218,7 @@ def _nav_step(
             decision={"pilot_intent": planned.intent},
         )
     if machine.gate_id == ORBITS:
-        capability = machine.next_probe_capability()
-        if capability is not None and rerun and int(rerun.get("left") or 0) > 0:
-            entity = str(rerun.get("entity_id") or "")
-            planned = machine._adapters[ORBITS].planned_nav_step(entity)
-            if planned is None:
-                return _duck(machine, f"no evidence-bounded route for the extra run of {entity}")
-            return OwnedStep(
-                CONTROLLER, ORBITS, f"G4-A NAV extra run {planned.intent.lower()} for {entity}",
-                ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
-                decision={"intent": f"NAV:{planned.intent}:{entity}"},
-            )
-        view = machine.gate_view()
-        awaiting = [item for item in view.get("answer_templates") or () if isinstance(item, Mapping)]
-        if awaiting:
-            return _duck(machine, f"the NAV run of {awaiting[0].get('entity_id')} is confirmed: explaining it is Duck's")
-        if capability is None:
-            return _duck(machine, "G4-A NAV has no active lever procedure")
-        levers = [item for item in (capability.get("target") or {}).get("levers") or () if isinstance(item, Mapping)]
-        for status in STUDY_ORDER:
-            lever = next((item for item in levers if item.get("status") == status), None)
-            if lever is None:
-                continue
-            planned = machine._adapters[ORBITS].planned_nav_step(str(lever.get("entity_id")))
-            if planned is None:
-                return _duck(machine, f"no evidence-bounded route to {lever.get('entity_id')}")
-            return OwnedStep(
-                CONTROLLER, ORBITS, f"G4-A NAV {planned.intent.lower()} for {lever.get('entity_id')}",
-                ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
-                decision={"intent": f"NAV:{planned.intent}:{lever.get('entity_id')}"},
-            )
-        return _duck(machine, "G4-A NAV has no lever the controller can route to")
+        return _nav_orbit_step(machine, machine.next_probe_capability(), rerun)
     if machine.gate_id == "G4-REACTIONS":
         # G4.1 consumes certified G3 channels.  Its answer is world-independent; NAV must reuse
         # the same renderer as CLICK instead of waking Duck merely because contact is embodied.
@@ -304,6 +274,62 @@ def _g3_pilot_step(machine: Any, capability: Mapping[str, Any], g3_choice_handof
     )
 
 
+def _nav_orbit_step(machine: Any, capability: Mapping[str, Any] | None, rerun: Mapping[str, Any] | None) -> OwnedStep:
+    """G4-A NAV: Duck's rerun, Duck's explanation, then the next lever routed to (moved out of ``_nav_step``
+    unchanged except the lever, now ``_orbit_lever``'s: an admitted B2 choice before ``STUDY_ORDER``)."""
+    if capability is not None and rerun and int(rerun.get("left") or 0) > 0:
+        entity = str(rerun.get("entity_id") or "")
+        planned = machine._adapters[ORBITS].planned_nav_step(entity)
+        if planned is None:
+            return _duck(machine, f"no evidence-bounded route for the extra run of {entity}")
+        return OwnedStep(
+            CONTROLLER, ORBITS, f"G4-A NAV extra run {planned.intent.lower()} for {entity}",
+            ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+            decision={"intent": f"NAV:{planned.intent}:{entity}"},
+        )
+    awaiting = [item for item in machine.gate_view().get("answer_templates") or () if isinstance(item, Mapping)]
+    if awaiting:
+        return _duck(machine, f"the NAV run of {awaiting[0].get('entity_id')} is confirmed: explaining it is Duck's")
+    if capability is None:
+        return _duck(machine, "G4-A NAV has no active lever procedure")
+    levers = [item for item in (capability.get("target") or {}).get("levers") or () if isinstance(item, Mapping)]
+    lever, _status = _orbit_lever(machine, levers)
+    if lever is None:
+        return _duck(machine, "G4-A NAV has no lever the controller can route to")
+    entity = str(lever.get("entity_id"))
+    planned = machine._adapters[ORBITS].planned_nav_step(entity)
+    if planned is None:
+        return _duck(machine, f"no evidence-bounded route to {entity}")
+    return OwnedStep(
+        CONTROLLER, ORBITS, f"G4-A NAV {planned.intent.lower()} for {entity}" + _chosen_note(machine, entity),
+        ACTION, action={"action": planned.action}, probe_token=str(capability["probe_token"]),
+        decision={"intent": f"NAV:{planned.intent}:{entity}"},
+    )
+
+
+def _orbit_lever(machine: Any, levers: Sequence[Mapping[str, Any]]) -> tuple[Mapping[str, Any] | None, str | None]:
+    """The lever G4-A runs next and its status: an admitted B2 choice when no run is under way, else the first
+    lever by ``STUDY_ORDER`` (the coverage order, unchanged)."""
+    from inference.framework import g4_selection
+
+    lever = g4_selection.controller_lever(machine, levers)
+    if lever is not None:
+        return lever, str(lever.get("status"))
+    for status in STUDY_ORDER:
+        lever = next((item for item in levers if item.get("status") == status), None)
+        if lever is not None:
+            return lever, status
+    return None, None
+
+
+def _chosen_note(machine: Any, entity: str) -> str:
+    """B2: a step on the lever Duck chose names the question it answers (empty on the coverage path)."""
+    from inference.framework import g4_selection
+
+    selection = g4_selection.chosen(machine)
+    return "" if selection is None or selection["entity_id"] != entity else f"; Duck's choice {selection['question_id']}"
+
+
 def _certified_answer_step(
     machine: Any, view: Mapping[str, Any], *, refused: frozenset | set = frozenset(),
 ) -> OwnedStep:
@@ -357,14 +383,14 @@ def _orbit_step(
     if capability is None:
         return _duck(machine, "G4-A has no lever left to run")
     levers = [item for item in (capability.get("target") or {}).get("levers") or () if isinstance(item, Mapping)]
-    for status in STUDY_ORDER:
-        lever = next((item for item in levers if item.get("status") == status), None)
-        if lever is not None:
-            return OwnedStep(
-                CONTROLLER, ORBITS, f"G4-A: run {lever.get('entity_id')} ({status})", ACTION,
-                action=dict(lever["click"]), probe_token=str(capability["probe_token"]),
-            )
-    return _duck(machine, "G4-A has no lever the controller can run")
+    lever, status = _orbit_lever(machine, levers)
+    if lever is None:
+        return _duck(machine, "G4-A has no lever the controller can run")
+    entity = str(lever.get("entity_id"))
+    return OwnedStep(
+        CONTROLLER, ORBITS, f"G4-A: run {entity} ({status})" + _chosen_note(machine, entity), ACTION,
+        action=dict(lever["click"]), probe_token=str(capability["probe_token"]),
+    )
 
 
 def _g3_click_step(machine: Any, capability: Mapping[str, Any], g3_choice_handoff: bool) -> OwnedStep:

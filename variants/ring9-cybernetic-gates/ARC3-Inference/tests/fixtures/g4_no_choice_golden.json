@@ -1,0 +1,1229 @@
+{
+ "ft09_controller": {
+  "frozen_levels_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "gate": "G4-C-LEVER-LAW",
+  "orbit_events_sha": "7b7f80ab123564f8c8a54e7a84537c2da018f82caa3de0c678ef5cdb6c869a8c",
+  "products": [
+   {
+    "payload_sha": "a051f270df256a387731d2e353b0884567bf760c22555434b9c27c21a3a4dd05",
+    "product_id": "G0-replay",
+    "product_type": "ActionSurface",
+    "revision": 2,
+    "target_id": "G0-ACTION-METADATA"
+   },
+   {
+    "payload_sha": "f012af4ece74b52a800f55c2f157134cb184d596d33b6fe2bcca3bff5be44300",
+    "product_id": "EL-016e2e620f95e141",
+    "product_type": "EgoLaw",
+    "revision": 2,
+    "target_id": "G1-EGO"
+   },
+   {
+    "payload_sha": "0520fd83f858d4c35dfd28c506ab9763340a68ad96bbd7a3858bee8d74e000e9",
+    "product_id": "COUNTER-8463d12ab461d12e",
+    "product_type": "CounterGateProduct",
+    "revision": 59,
+    "target_id": "G2-COUNTER"
+   },
+   {
+    "payload_sha": "1b3652f1b99f4f7545190aa61fdea7449b8935d5869955e90ca9a2931f3841f3",
+    "product_id": "G3-INVENTORY-6d8462853194f3e4",
+    "product_type": "LeverInventory",
+    "revision": 27,
+    "target_id": "G3-LEVERS"
+   },
+   {
+    "payload_sha": "fd308ecb8771e59f2792a0587347cf70f5d72f8a16fa6ce97de71ee5c277fbd7",
+    "product_id": "G4-ANATOMY-317ef54d9f789ea2",
+    "product_type": "LeverEffectAnatomySet",
+    "revision": 9,
+    "target_id": "G4-REACTIONS"
+   },
+   {
+    "payload_sha": "c1b2985347b0829514dca028354914fb162027ffbf1adfeb097845372329af61",
+    "product_id": "G4-ORBITS-4a4d405aa264d1f6",
+    "product_type": "LeverOrbitSet",
+    "revision": 41,
+    "target_id": "G4.2-LEVER-ORBITS"
+   },
+   {
+    "payload_sha": "0880aa6e15936481c5c5afe34490b17d85c52d8a0e46351524f9ca7121ce676c",
+    "product_id": "G4-RELATIONS-67aa34d2e86266e9",
+    "product_type": "LeverRelationSet",
+    "revision": 2,
+    "target_id": "G4-B-LEVER-RELATIONS"
+   }
+  ],
+  "steps": [
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the orientation turn is due"
+   },
+   {
+    "evidence_id": "E-9fc04e29c0a538cf",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:1",
+    "probe_sha": "7b7314eae8d28b9050d1b41c9edc6188e669c8576a12521ad0fb127fc9fe0e0e",
+    "reason": "G4-A: run E0053 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-79b9d3b2cc06c8d7",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:2",
+    "probe_sha": "b8552c39b98a61d3c6ce7ef0e2e1c4efb9b515f88b263b0bec23dabf3b2df184",
+    "reason": "G4-A: run E0053 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-05157db65c31a74f",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:3",
+    "probe_sha": "3768e123291831586caece4f2552c9213d96c5e8ec24c0fa18a2145c6aece8dc",
+    "reason": "G4-A: run E0053 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-c5654b043af8e947",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:4",
+    "probe_sha": "a2a5e65d2444c2579d4e16ef1de8cff9e386e0c1a29493464cd24776ebaf8762",
+    "reason": "G4-A: run E0053 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0053 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-01f7ab6d2c0c9187",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:5",
+    "probe_sha": "dd406bd74322fb227661d8311179c1eafa3ef051cf40d7193e9214dd75215c4d",
+    "reason": "G4-A: run E0054 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-9b1dbf1427da17b4",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:6",
+    "probe_sha": "f53f7bbff979c252a3fc68c7e35f7f5ffaafb3bac6109b621b806a239d3545f0",
+    "reason": "G4-A: run E0054 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-96a931274e0aeb92",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:7",
+    "probe_sha": "2f657951c72539ea2b6778343a97aa5e940ec5b002df241a4770fc3710309107",
+    "reason": "G4-A: run E0054 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-a37e44c3b4af4de2",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:8",
+    "probe_sha": "b8841fa0b7bcf6d1d914a8913fc22b36cceabe2405877c102907ad09580c10b2",
+    "reason": "G4-A: run E0054 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0054 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-0f0b703bf988ef6f",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:9",
+    "probe_sha": "f77b8fc3a31484d9886eea9a0a65708f141db200902d06d9d3674e0974f8011e",
+    "reason": "G4-A: run E0055 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-401842b296dc8ea2",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:10",
+    "probe_sha": "b086067f4301b295aabb50023502120904afc94d46cd2f83a4b768f454c28389",
+    "reason": "G4-A: run E0055 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-f76351f976efc788",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:11",
+    "probe_sha": "a12ecfdfecb220baa6e105995b81cdc95f1059d59dc7c46db213a20b8f1a2b18",
+    "reason": "G4-A: run E0055 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-27992fca0a2c3ee1",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:12",
+    "probe_sha": "65eb35a1611079d137c8a9da3ccf23e8d97389117ca2c8a37d4fd644b0656164",
+    "reason": "G4-A: run E0055 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0055 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-8ed4c60075b91ec8",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:13",
+    "probe_sha": "8648a849e5515e4efa4bb946194cebe444e604d9f24287e1e364aa87965fd937",
+    "reason": "G4-A: run E0056 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-98ab8e903f0b79f8",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:14",
+    "probe_sha": "af486a731f8b4f1d57ca87a2416a36537736c36166080bca7c7ffdf346ad056c",
+    "reason": "G4-A: run E0056 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-c16105e6ea99e4b0",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:15",
+    "probe_sha": "d2be9c2cef747896d3191977d2d410542eeb3657045ce8bdd20d586793221ed9",
+    "reason": "G4-A: run E0056 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-df7b39d615930144",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:16",
+    "probe_sha": "6b0f796c489809d296f72425293026489295932889898e8ed52e6b3a06e122dc",
+    "reason": "G4-A: run E0056 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0056 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-c1fae96acc88502c",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:17",
+    "probe_sha": "da03199ff583b24f24cb01cba10cddc13fc6f5511025815c4010312632533f41",
+    "reason": "G4-A: run E0057 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-65a27f22bc6f6de1",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:18",
+    "probe_sha": "173df556a137e17abb9fb60004c4e62aecd80641eb8331c0d9caa1579f7ded84",
+    "reason": "G4-A: run E0057 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-9b0bd5b99d246b11",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:19",
+    "probe_sha": "5d9f8fc0a0adcc1e66cb846b62fcbb90167534f9d7e9042253af6774214ca625",
+    "reason": "G4-A: run E0057 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-1cf4f34a0c6a89b9",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:20",
+    "probe_sha": "b315d4a1f8ad78f70d56f6f8d19469acdb6a31c7db5147e26b952e5cc4ba2824",
+    "reason": "G4-A: run E0057 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0057 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-6303f56ae25d6fe9",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:21",
+    "probe_sha": "569e9dfe9fcf5930acaa2f8f235df473be8fafbe17a5d5179cf2eb0cb7b73ca2",
+    "reason": "G4-A: run E0060 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-d4886fe463dbec9f",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:22",
+    "probe_sha": "34b51e745df0c94bf60f5c17ae77d4eff92cc2c34dc48ca0634eb6d8be2cb84c",
+    "reason": "G4-A: run E0060 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-6fedd96253b17359",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:23",
+    "probe_sha": "66ab2c4e65cd3deec88f58dfc7d44ad678626bc149aadbda9dde2748f6e6ccda",
+    "reason": "G4-A: run E0060 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-320a11a8abc9ba7b",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:24",
+    "probe_sha": "fc939862a0ef21c6f5fd046b34009b59b107f154fc2b22a345896307eb32d062",
+    "reason": "G4-A: run E0060 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0060 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-a88fec05d8ae26b7",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:25",
+    "probe_sha": "7c2699864ee84f665201161f5c01d358865a0deea4259ba1537487136a683859",
+    "reason": "G4-A: run E0061 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-ccca4eade6ad17da",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:26",
+    "probe_sha": "a1f03528fea938050ea846f0fd20fa8b0e375b43e8e7805eba719c993d975360",
+    "reason": "G4-A: run E0061 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-121d711dc13c49fe",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:27",
+    "probe_sha": "2e62834a931f63a3e40b5d444a10ff4b02f82a0a8f919092e3b1d07a1e0852b7",
+    "reason": "G4-A: run E0061 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-c40ad9e7c9fa22f7",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:28",
+    "probe_sha": "bb243de982010a5fa43ed180d8d58ec30030de8ee62796f74a9f63b880c2263c",
+    "reason": "G4-A: run E0061 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0061 is confirmed: explaining it is Duck's"
+   },
+   {
+    "evidence_id": "E-79d4297df688ee96",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:29",
+    "probe_sha": "16229021c857a27d444c135cbdf9fb0438fd7ccf5391b0f4985abc7961bbabce",
+    "reason": "G4-A: run E0062 (NOT_STARTED)"
+   },
+   {
+    "evidence_id": "E-9fdf6e608a58da6f",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:30",
+    "probe_sha": "76e53845ad3c5f2d1d0ea3b83ccb760a45cc49eb5c97694d311e9438b5217627",
+    "reason": "G4-A: run E0062 (RUNNING)"
+   },
+   {
+    "evidence_id": "E-1898669fc19b5f9e",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:31",
+    "probe_sha": "ce5b9d476cd2b19093462b649b62cf0c0c86aaf05f6be6cdd3972f37d79aa395",
+    "reason": "G4-A: run E0062 (CONFIRMING)"
+   },
+   {
+    "evidence_id": "E-8c98df6e5b7763fd",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:32",
+    "probe_sha": "86b3367d1c983b92d86f43909c8a14f3c504deb29b42c26caff2e4c446176678",
+    "reason": "G4-A: run E0062 (CONFIRMING)"
+   },
+   {
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0062 is confirmed: explaining it is Duck's"
+   },
+   {
+    "gate_id": "G4-B-LEVER-RELATIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4-B: the level's record certifies the relations (ruling G-1)"
+   },
+   {
+    "gate_id": "G4-C-LEVER-LAW",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "testing the description with one new prediction is Duck's"
+   }
+  ],
+  "transition_index_sha": "32e01e8b5525079652632be4c3ce7ca4f50d60ece98ee8efebcdc85bc90b3554"
+ },
+ "ft09_record": {
+  "events": [
+   {
+    "evidence_id": "E-5d9416b7f9cf8a4e",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:1",
+    "probe_sha": "408425556e6f8774a63667b85808fb0549ed567d4f5a87f8d124e1f7ad1dbffd"
+   },
+   {
+    "evidence_id": "E-950b30aba59e0868",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:2",
+    "probe_sha": "ead9e85760c31ae847d492b1deb958f2db37a55a5348df86327ec2fb97f27917"
+   },
+   {
+    "evidence_id": "E-b7671d27603e5d87",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:3",
+    "probe_sha": "d29f28fe57bdfb2fc97c1d09563bfe55525081a0d15c2ff1bb21b45e6c99f729"
+   },
+   {
+    "evidence_id": "E-6192abf64147e895",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:4",
+    "probe_sha": "a30264d74d9d3df644f83219c78deadb2ebb91dd5f00fc6bae2d0b270b7f248c"
+   },
+   {
+    "evidence_id": "E-8403cd7b17e76c3d",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:5",
+    "probe_sha": "a4d09b9a7fa609e34d7be3d4492eb0b203fb8318f107e6632862851fd411b33d"
+   },
+   {
+    "evidence_id": "E-7d731092212c772a",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:6",
+    "probe_sha": "50dfbb8377dff8059aa3481816d813225aa83b63c13828e8088c6ec2f3e08dba"
+   },
+   {
+    "evidence_id": "E-fb4772a0e265b1b7",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:7",
+    "probe_sha": "86b5023e596278318e8d6e83e1eda8469025b2a34ea40cecabeca1f63b34c7ef"
+   },
+   {
+    "evidence_id": "E-f8be242a7bbb2cca",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:8",
+    "probe_sha": "1109e258f3ec34d565c89f3ec165a64dd67eee6b5248c55d4155d1ab896c739c"
+   },
+   {
+    "evidence_id": "E-c59c5daf23d71b33",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:9",
+    "probe_sha": "57c4e5ef8471767e0fc30fc0ae303c8cef66ff3e81e212448d1513cc452be2af"
+   },
+   {
+    "evidence_id": "E-3c9d91000418bd60",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:10",
+    "probe_sha": "8c58d2fe15d0397c7c124240a8635a6ac23e31de0928889b58dc5b9efd118dbf"
+   },
+   {
+    "evidence_id": "E-087dd00939ec2700",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:11",
+    "probe_sha": "50bcf163bf7571a3b57e0a61895cd7a3d01f234e264058e644fff7a8ca52109f"
+   },
+   {
+    "evidence_id": "E-2d602916373941a2",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:12",
+    "probe_sha": "34ce1fbcb7ffe3275748a12f7e9eefa184fea8c5899b24a08f54fa84c929d0d1"
+   },
+   {
+    "evidence_id": "E-0ce54e0948c25170",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:13",
+    "probe_sha": "ba849dd6b146625d9d9fcff465059f10bcb415268819f8b3654c7548d7369cbc"
+   },
+   {
+    "evidence_id": "E-d03ee303d7f89f3b",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:14",
+    "probe_sha": "3689d6a872a6d880046b39fbca07a991f492c57710319f349449a4f2613a7268"
+   },
+   {
+    "evidence_id": "E-8d02c8d37ce49788",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:15",
+    "probe_sha": "c71a9dae2d04a78f7713042f500b9036134d7e47bced0580eaf2bed70dbfe7cb"
+   },
+   {
+    "evidence_id": "E-d858d993ea4a7cbc",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:16",
+    "probe_sha": "567af7da26e7497b8c16b8e7ac0cd02bff770e824dd9175ea06f73d2cbdff642"
+   },
+   {
+    "evidence_id": "E-b9bf67c722a256b3",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:17",
+    "probe_sha": "08c9bf64c710d697c2f610c5e5ce3d3e6ad08eeb8a79af0058f80478b354c0eb"
+   },
+   {
+    "evidence_id": "E-64a5bdfb4c2abeb3",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:18",
+    "probe_sha": "58d57560d8ffa12143b7cbbfb85504758dfaf0257aa66753840ce1a8cb5e823f"
+   },
+   {
+    "evidence_id": "E-d99903f5c651b99e",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:19",
+    "probe_sha": "3a2c71de3d1eaa3c8b8e5b34b20da1a44a9e613b6901093042195851abd27806"
+   },
+   {
+    "evidence_id": "E-0274eff0b2dacf19",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:20",
+    "probe_sha": "c3c4ad0de90c098aa0bc754483c989adc81c9c682ef56c1c0e93eae5493e7cb3"
+   },
+   {
+    "evidence_id": "E-b235d03abe64f403",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:21",
+    "probe_sha": "da963f65a8473e9ad47e2d5b79f3e82c8932fb857327dc2c54118373a7acf4c9"
+   },
+   {
+    "evidence_id": "E-1e1f37a5b04511f4",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:22",
+    "probe_sha": "1610e333644025beac5db460eb41836ef30dbd0f5f70c768721bc522a92fe70e"
+   },
+   {
+    "evidence_id": "E-ff981d9832a111e6",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:23",
+    "probe_sha": "ab0d755ea6ccf5de32806e0cf96759668d3928e84edcf08939677f3b3d408d6e"
+   },
+   {
+    "evidence_id": "E-b0ff9c994babe992",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:24",
+    "probe_sha": "a74caca20e6ff50dbc0a98347092710e558deb54729af6e730e2f0ce3392a973"
+   },
+   {
+    "evidence_id": "E-494dcd1584d7a52f",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:25",
+    "probe_sha": "c7d41df6dc05b0137b035b99c5e85740fa1af7dd59a95a00234d32cc36f166ab"
+   },
+   {
+    "evidence_id": "E-3f13342b6727edd8",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:26",
+    "probe_sha": "e023652339636b8c8b4a7f0ca28a4ab0581c249eb541a9d703ae22eaa5a3c677"
+   },
+   {
+    "evidence_id": "E-ef6a015db953b2b7",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:27",
+    "probe_sha": "e8cbea96677fa4a3a58448c269aa2a85303fb84609e0c8a33d88e6bafc0a00ed"
+   },
+   {
+    "evidence_id": "E-bb0ee96edf034255",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:28",
+    "probe_sha": "13b126e91882e71435949b47e9a4580907dcae9b515db1bbe3a99b494d76b45b"
+   },
+   {
+    "evidence_id": "E-53e8f08bc8475389",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:29",
+    "probe_sha": "699416b3e0ba2e2b9b3506cc60151a49d9c24957a6248c5aaa51fe53e8bffbc0"
+   },
+   {
+    "evidence_id": "E-1458e8c008181e43",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:30",
+    "probe_sha": "f56c03ccefa9d0d2beeb55794644329e2da9c103baf5094b9d95a53c427c6d1d"
+   },
+   {
+    "evidence_id": "E-396acaed70e179d9",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:31",
+    "probe_sha": "c0881d67b599c994baaf41be37a3314ca7ba1f517cab48e16f8491882cdabbac"
+   },
+   {
+    "evidence_id": "E-a532ed2afd1260a4",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:32",
+    "probe_sha": "da911e2637d3ccdc0c0d4a5796efaa3d4828b2b83bc3f28b73e7f74d930ddbe6"
+   },
+   {
+    "evidence_id": "E-6c8059f0af9f0961",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:33",
+    "probe_sha": "a169a57c19b90e8daf07fe0764abf61f1070b03d56d62dc925b34a10a2f1aa24"
+   },
+   {
+    "evidence_id": "E-a0fa442bfba63325",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:34",
+    "probe_sha": "688dd82510e0bb58c05693d6f27cdc78897d16891c91c9d185de613dc0084978"
+   },
+   {
+    "evidence_id": "E-ce8b24a86843cb9a",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:35",
+    "probe_sha": "8d0c4162d4d6ea4bcc31688d239aff43e1ab9241e0436cbb34b57eae1764e0b2"
+   },
+   {
+    "evidence_id": "E-5d7cb55bf38ae172",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:36",
+    "probe_sha": "5ac42a0e5327a2415d7911ef63648f97eb8e0a82c82f438a93d59d0de74589a3"
+   },
+   {
+    "evidence_id": "E-960be40455ab4af3",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:37",
+    "probe_sha": "c82dfef34efa90f5a25b72d705ea299ca72e78b21aef5cd81c97b14b40f01c3a"
+   },
+   {
+    "evidence_id": "E-85bfd80c94855394",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:38",
+    "probe_sha": "c664d7320a9760a5f00aeecf50b53a1c983e1795bcd581359142d59f3b99c009"
+   },
+   {
+    "evidence_id": "E-dd480f94e7c2dfde",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:39",
+    "probe_sha": "2fe62ebfc2ad02dfc69ef034b508780e3fe4ab399e7679cf56b99dd28ea345ec"
+   },
+   {
+    "evidence_id": "E-6d261e168c5cec97",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:40",
+    "probe_sha": "2d59fc53343790453f38860f156c8758b5e19e9e0aad1ad322b7b22a949e403b"
+   },
+   {
+    "evidence_id": "E-2d510b2ba84024c9",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:41",
+    "probe_sha": "4ef1173bd48d1cd0dd27f44ee60c83b40c27656e9f5d19fda7464e29652b7ff8"
+   },
+   {
+    "evidence_id": "E-86b78f990a178329",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:42",
+    "probe_sha": "35482b77f0c50ead40a35d086b017e59dd5075c0b71868c8c5ab3aea599d37d8"
+   },
+   {
+    "evidence_id": "E-505adef116c73b2c",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:43",
+    "probe_sha": "eefe30f73928fc345d1350c950e84abc2a9bc4121c9802212e7ed6cc8a1b0a23"
+   },
+   {
+    "evidence_id": "E-dece8e090693b4d0",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:44",
+    "probe_sha": "d010cbbb58d566b21416a90b1743c797a80e2f31a0cb1ddf8d7c5a477fab1bda"
+   },
+   {
+    "evidence_id": "E-a53c81b9adff08e6",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:45",
+    "probe_sha": "ccd6057881c85993a1d3cec3ce4ce7c08965ff2bcd1a6f1e4d021dd7f599a603"
+   },
+   {
+    "evidence_id": "E-f9837b25bf809e4f",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:46",
+    "probe_sha": "5b7b8d52c77874b9de76bc8c5a4e07ab61ad1745d7f6f2b2aba8de447e37e082"
+   },
+   {
+    "evidence_id": "E-5d91bc57254e7164",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:47",
+    "probe_sha": "c99b82344d411733b47827988440d8c8883b0cc25461ca20160ad39531968314"
+   },
+   {
+    "evidence_id": "E-fc2ee696d5f68020",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:48",
+    "probe_sha": "610ee394c5d7d63315ca64390a06920b2410a94f2a7030b1bdfa937bd40fc263"
+   },
+   {
+    "evidence_id": "E-a286067f6569ecb7",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:49",
+    "probe_sha": "4c83dc6f0698ab351d486cab28f6d72ac8b5ec674acd7cbca818d123772061c9"
+   },
+   {
+    "evidence_id": "E-2ea25ed149bc73a0",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:50",
+    "probe_sha": "34de71cac79e148fe814cd7b513ed2532388abf9754bbeef3ec350c5797abfdf"
+   },
+   {
+    "evidence_id": "E-773d558d6dcb3dc0",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:51",
+    "probe_sha": "4a9def5d6d2f56a7fcd385bde35653cd69bdc3d5472b55eab9a2803562bbbf36"
+   },
+   {
+    "evidence_id": "E-c379f12a70c9ccf9",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:52",
+    "probe_sha": "d56c3c0bf627ff045605200bd3d3332999af98e71c106608c5552f2dd48d9686"
+   },
+   {
+    "evidence_id": "E-d7240746d13faedb",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:53",
+    "probe_sha": "c0b6093ddb0ab991b2f0486a15d4e1edf9e64840473f197e7acda9f4f60bd43d"
+   },
+   {
+    "evidence_id": "E-64e51fbdd6a3efd3",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:54",
+    "probe_sha": "a851560541c34cb72193e6ccd611f6da68806c9d9adaf2d6afdaf74452da639c"
+   },
+   {
+    "evidence_id": "E-1dc790d7e76b6a1f",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:55",
+    "probe_sha": "e0dc77f15475a05ee60e3dd43152aea07970f2d780401325c1dcc68742f8625b"
+   },
+   {
+    "evidence_id": "E-13042cf4fac71eef",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:GUIDED:56",
+    "probe_sha": "5b56d4d2802549caec3321cb713b34f43c5962f165cf5fdb9a12be37bb9bfccc"
+   },
+   {
+    "evidence_id": "E-85da17287a060604",
+    "gate_id": "G2-COUNTER",
+    "probe_id": "G2-COUNTER:DEMONSTRATE:57",
+    "probe_sha": "3cf09cf19c48b56f40500df3925b9b4e1708749ec413e9caf7797a480810959d"
+   },
+   {
+    "evidence_id": "E-fd21a915790d09b7",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:55",
+    "probe_sha": "b12db155257531c65a06b848b3af99057f3bd35af9acae3ed356fb9de761433d"
+   },
+   {
+    "evidence_id": "E-1d0d9917b25ada45",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0040:E-fd21a915790d09b7",
+    "probe_sha": "4e55249d466990d0f325c0823daf1513e4907177de966b88f96420f37043c42e"
+   },
+   {
+    "evidence_id": "E-1e52f4b4f381566e",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:56",
+    "probe_sha": "f3b5a2ce0b3c4043981d88ff51207b9fa882df25d04e1d1584312e6d6025349a"
+   },
+   {
+    "evidence_id": "E-1f9b9df3d00695e5",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0041:E-1e52f4b4f381566e",
+    "probe_sha": "3440e7a67c234a61ed10806512a2377e47324df103eff1560b90cae7b6e61c31"
+   },
+   {
+    "evidence_id": "E-41a0337bea2c15a0",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:57",
+    "probe_sha": "e9897217e60851ca3a5e4660d96f6bbd245aa43d1c7c348b5389275edbeb7669"
+   },
+   {
+    "evidence_id": "E-2c59adea08d62d91",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0047:E-41a0337bea2c15a0",
+    "probe_sha": "fc9cd6a72397aae0e8f8224f21a591666e2a703d8033343ebbbfe3f895f1903c"
+   },
+   {
+    "evidence_id": "E-247cd6b2ca948d25",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:58",
+    "probe_sha": "7aaa71198bc413e2c56259b0b065141c22dee604bd5804368f3de7960dbe8631"
+   },
+   {
+    "evidence_id": "E-90904775c8841710",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0042:E-247cd6b2ca948d25",
+    "probe_sha": "72b1f4a47b7313d89b8ca81409d6df1b108d53381c2542c7116579bb81bce140"
+   },
+   {
+    "evidence_id": "E-967a5d985b5b3fc0",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:59",
+    "probe_sha": "09760deb23bec6dd99c0341883261405896a996a6941f6a2b09ee14f2669787b"
+   },
+   {
+    "evidence_id": "E-160567c54802616b",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0060:E-967a5d985b5b3fc0",
+    "probe_sha": "60d8a05c52552eb1689cc100bf55e1a540c4831387f9dce8ee8c851ea6ea9f6b"
+   },
+   {
+    "evidence_id": "E-f28e4971269358aa",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:60",
+    "probe_sha": "308768e20867ca49facef74b654784cf7f29043f70ba7ef53a2eba1f2fde2a88"
+   },
+   {
+    "evidence_id": "E-ff47c7543282a9e2",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0050:E-f28e4971269358aa",
+    "probe_sha": "c32661eadd302d434de9cd3f85d72ebc69d3ddcd0425c8609cbc80dce5106e91"
+   },
+   {
+    "evidence_id": "E-5b20e0561c8f2e3b",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:61",
+    "probe_sha": "c3d549984fce6ace729ca2d9f7f66a84bcaf920ed2279ee349bfc0a9bdfb4f06"
+   },
+   {
+    "evidence_id": "E-d365ab278f86aeff",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0061:E-5b20e0561c8f2e3b",
+    "probe_sha": "42a4f553606f0f7abe27b5d69ba65bac5fcfcb24af1c4d712ec518e0a8f94959"
+   },
+   {
+    "evidence_id": "E-b262372de620251a",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:62",
+    "probe_sha": "b738635617b6e92edf8becb9dc78e282d18aaf4745b84a0c54956870b9e56c2c"
+   },
+   {
+    "evidence_id": "E-9d72cce794ac8e69",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CONFIRM:M0062:E-b262372de620251a",
+    "probe_sha": "0103cd656d7ff0192532165ba0faf1fbc05542c6ffe90f82e6d42b7ff80aaaf1"
+   },
+   {
+    "evidence_id": "E-d77375214bb54348",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:63",
+    "probe_sha": "8bdcf7596953ce72b441f328da4dbce32e4bead0bfb1a6c91c56588092586f3e"
+   },
+   {
+    "evidence_id": "E-0eb10e269c5b90f6",
+    "gate_id": "G3-LEVERS",
+    "probe_id": "G3-LEVERS:CLICK:64",
+    "probe_sha": "771f29779ea1131734b7880b71741709401c81a7e5a51866ebd968255ea783d2"
+   },
+   {
+    "evidence_id": "E-40f39f66bcc3fc05",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:1",
+    "probe_sha": "7b7314eae8d28b9050d1b41c9edc6188e669c8576a12521ad0fb127fc9fe0e0e"
+   },
+   {
+    "evidence_id": "E-7b9b82c05d26e792",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:2",
+    "probe_sha": "b8552c39b98a61d3c6ce7ef0e2e1c4efb9b515f88b263b0bec23dabf3b2df184"
+   },
+   {
+    "evidence_id": "E-762ffe0c9576e24b",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:3",
+    "probe_sha": "3768e123291831586caece4f2552c9213d96c5e8ec24c0fa18a2145c6aece8dc"
+   },
+   {
+    "evidence_id": "E-b2e2440f6ec6602d",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:4",
+    "probe_sha": "a2a5e65d2444c2579d4e16ef1de8cff9e386e0c1a29493464cd24776ebaf8762"
+   },
+   {
+    "evidence_id": "E-376babe3e4378899",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:5",
+    "probe_sha": "dd406bd74322fb227661d8311179c1eafa3ef051cf40d7193e9214dd75215c4d"
+   },
+   {
+    "evidence_id": "E-66e91338117afdfd",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:6",
+    "probe_sha": "f53f7bbff979c252a3fc68c7e35f7f5ffaafb3bac6109b621b806a239d3545f0"
+   },
+   {
+    "evidence_id": "E-c8d633f6918fd315",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:7",
+    "probe_sha": "2f657951c72539ea2b6778343a97aa5e940ec5b002df241a4770fc3710309107"
+   },
+   {
+    "evidence_id": "E-39c8c663908ee5e9",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:8",
+    "probe_sha": "b8841fa0b7bcf6d1d914a8913fc22b36cceabe2405877c102907ad09580c10b2"
+   },
+   {
+    "evidence_id": "E-6051e364ab9acd5f",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:9",
+    "probe_sha": "f77b8fc3a31484d9886eea9a0a65708f141db200902d06d9d3674e0974f8011e"
+   },
+   {
+    "evidence_id": "E-d3333af1a98f2405",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:10",
+    "probe_sha": "b086067f4301b295aabb50023502120904afc94d46cd2f83a4b768f454c28389"
+   },
+   {
+    "evidence_id": "E-abd6c8b872548519",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:11",
+    "probe_sha": "a12ecfdfecb220baa6e105995b81cdc95f1059d59dc7c46db213a20b8f1a2b18"
+   },
+   {
+    "evidence_id": "E-8fb5b2f893388210",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:12",
+    "probe_sha": "65eb35a1611079d137c8a9da3ccf23e8d97389117ca2c8a37d4fd644b0656164"
+   },
+   {
+    "evidence_id": "E-8f8eef1db0736ac6",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:13",
+    "probe_sha": "8648a849e5515e4efa4bb946194cebe444e604d9f24287e1e364aa87965fd937"
+   },
+   {
+    "evidence_id": "E-1ef4e87aab3a1bb2",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:14",
+    "probe_sha": "9ee82301650ea8320d8bfd0d527324943bf250e16a05af0d128ceedc0362b3f7"
+   },
+   {
+    "evidence_id": "E-decfb063fddfda3d",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:15",
+    "probe_sha": "3ec0080fcbcadc021c5efb8f9d46340c0b22be05bdd92a91b803bb5a33e030d6"
+   },
+   {
+    "evidence_id": "E-70e44d86618ba10d",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:16",
+    "probe_sha": "3272f1f08ba4a23ad71583898c9dd1331d80799c4ded6d0418e21747b4c4cee0"
+   },
+   {
+    "evidence_id": "E-935dd47dd52dfa64",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:17",
+    "probe_sha": "f024b71df9f31daaa5eff0fbdf1abe14d323f66b757f931225453c5dbde47c89"
+   },
+   {
+    "evidence_id": "E-41860d459bb596ba",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:18",
+    "probe_sha": "02cf11f7e5b2386d309eeda4f59df344f3124513623aac2ca12ae00d251babdf"
+   },
+   {
+    "evidence_id": "E-3d2793becbb29aa7",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:19",
+    "probe_sha": "9c368f33b6035e46cfd977aedc381e2ebd4e22105ab9837545c463484b7e89b9"
+   },
+   {
+    "evidence_id": "E-b3bbee1fca7aecbc",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:20",
+    "probe_sha": "408ddadf55e1ee116181b1e50e3be71edd3f5616a0641114cfce02e423c01ca6"
+   },
+   {
+    "evidence_id": "E-bd29e2b8647131c8",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:21",
+    "probe_sha": "1618a307704de408b1b9c8badcb1513343d1f17bcc6059c2033e069ab1e52875"
+   },
+   {
+    "evidence_id": "E-f320e4f4e23e291c",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:22",
+    "probe_sha": "fd1d8fd7f92702f67ae5aefd7c0990e6b80e13f1e5be54f36461c893b1d1e808"
+   },
+   {
+    "evidence_id": "E-42c6305a88c861f7",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:23",
+    "probe_sha": "64c9e4ea94deb6f1171206f62c997ee07e89330dc58c38184b5dbb9150356714"
+   },
+   {
+    "evidence_id": "E-ae82ef76d6f8b439",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:24",
+    "probe_sha": "8c99fd6b45b649df2abd4c74b6de9e0b5d6039261b509575fd9cdb644c5be436"
+   },
+   {
+    "evidence_id": "E-fcc8047fb858290e",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:25",
+    "probe_sha": "bce240aa54412d9367332bb68312dcb461a52273b5bf1477b55cba3f6ba63b8c"
+   },
+   {
+    "evidence_id": "E-41f6ff43f6893d3d",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:26",
+    "probe_sha": "ff77dedcecaf0f28ded6093ae2918d3d03e7dd3076420f668c750093fa3d68b3"
+   },
+   {
+    "evidence_id": "E-729efd5f931a2d7f",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:27",
+    "probe_sha": "dcf9b406fe0f7518a2060704c038e070101297f15f1f0cf55634f2b9385dc06d"
+   },
+   {
+    "evidence_id": "E-9c48d7086d7a0106",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:28",
+    "probe_sha": "93ca10f6c040861ef068ee0c53846f6b6cb1500d6f55d15d6a153dfe50866dd1"
+   },
+   {
+    "evidence_id": "E-7ae32a43d0dd0680",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:29",
+    "probe_sha": "f623e7ea5fe627d207b447ecb2dfd437ea3750adeac2418d4bd62758bd644342"
+   },
+   {
+    "evidence_id": "E-d07b832802b4de5a",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:30",
+    "probe_sha": "40e95d2a2149e764d29adac68b64ce2ad680fa0678d3419eb4c8bac4b7f4a779"
+   },
+   {
+    "evidence_id": "E-87a5ff9badb713dd",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:31",
+    "probe_sha": "6846eb4e28180b7355e1db3a3490816412a73048033639302c1b05fa151057af"
+   },
+   {
+    "evidence_id": "E-5f149f31285bd11b",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:32",
+    "probe_sha": "c8c4d8f296cedf4c7083b4bebe1dc92fd826da6413bea78beda248c6f5b90727"
+   },
+   {
+    "evidence_id": "E-16a4c9001cf11aaa",
+    "gate_id": "G4.2-LEVER-ORBITS",
+    "probe_id": "G4.2-LEVER-ORBITS:GUIDED:33",
+    "probe_sha": "dcb2a6f9a72a048036ed845a27c4ee86aa29a0625e47fc87241987737ca8b068"
+   }
+  ],
+  "frozen_levels_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "g3_lifecycle": {
+   "E0001": "G3-CLOSED",
+   "E0002": "G3-CLOSED",
+   "E0003": "G3-CLOSED",
+   "E0004": "G3-CLOSED",
+   "E0005": "G3-CLOSED",
+   "E0006": "G3-CLOSED",
+   "E0007": "G3-CLOSED",
+   "E0008": "G3-CLOSED",
+   "E0009": "G3-CLOSED",
+   "E0010": "G3-CLOSED",
+   "E0011": "G3-CLOSED",
+   "E0012": "G3-CLOSED",
+   "E0013": "G3-CLOSED",
+   "E0014": "G3-CLOSED",
+   "E0015": "G3-CLOSED",
+   "E0016": "G3-CLOSED",
+   "E0017": "G3-CLOSED",
+   "E0018": "G3-CLOSED",
+   "E0019": "G3-CLOSED",
+   "E0020": "G3-CLOSED",
+   "E0021": "G3-CLOSED",
+   "E0022": "G3-CLOSED",
+   "E0023": "G3-CLOSED",
+   "E0024": "G3-CLOSED",
+   "E0025": "G3-CLOSED",
+   "E0026": "G3-CLOSED",
+   "E0027": "G3-CLOSED",
+   "E0028": "G3-CLOSED",
+   "E0029": "G3-CLOSED",
+   "E0030": "G3-CLOSED",
+   "E0031": "G3-CLOSED",
+   "E0032": "G3-CLOSED",
+   "E0033": "G3-CLOSED",
+   "E0034": "G3-CLOSED",
+   "E0035": "G3-CLOSED",
+   "E0036": "G3-CLOSED",
+   "E0037": "G3-CLOSED",
+   "E0038": "G3-CLOSED",
+   "E0039": "G3-CLOSED",
+   "E0040": "G3-CLOSED",
+   "E0041": "G3-CLOSED",
+   "E0042": "G3-CLOSED",
+   "E0043": "G3-CLOSED",
+   "E0044": "G3-CLOSED",
+   "E0045": "G3-CLOSED",
+   "E0046": "G3-CLOSED",
+   "E0047": "G3-CLOSED",
+   "E0048": "G3-CLOSED",
+   "E0049": "G3-CLOSED",
+   "E0050": "G3-CLOSED",
+   "E0051": "G3-CLOSED",
+   "E0052": "G3-CLOSED",
+   "E0053": "G4-READY",
+   "E0054": "G4-READY",
+   "E0055": "G4-READY",
+   "E0056": "G4-READY",
+   "E0057": "G4-READY",
+   "E0058": "G3-CLOSED",
+   "E0059": "G3-CLOSED",
+   "E0060": "G4-READY",
+   "E0061": "G4-READY",
+   "E0062": "G4-READY",
+   "E0063": "G3-CLOSED",
+   "E0064": "G3-CLOSED"
+  },
+  "products": [
+   {
+    "payload_sha": "a051f270df256a387731d2e353b0884567bf760c22555434b9c27c21a3a4dd05",
+    "product_id": "G0-replay",
+    "product_type": "ActionSurface",
+    "revision": 2,
+    "target_id": "G0-ACTION-METADATA"
+   },
+   {
+    "payload_sha": "f012af4ece74b52a800f55c2f157134cb184d596d33b6fe2bcca3bff5be44300",
+    "product_id": "EL-016e2e620f95e141",
+    "product_type": "EgoLaw",
+    "revision": 2,
+    "target_id": "G1-EGO"
+   },
+   {
+    "payload_sha": "0520fd83f858d4c35dfd28c506ab9763340a68ad96bbd7a3858bee8d74e000e9",
+    "product_id": "COUNTER-8463d12ab461d12e",
+    "product_type": "CounterGateProduct",
+    "revision": 59,
+    "target_id": "G2-COUNTER"
+   },
+   {
+    "payload_sha": "1b3652f1b99f4f7545190aa61fdea7449b8935d5869955e90ca9a2931f3841f3",
+    "product_id": "G3-INVENTORY-6d8462853194f3e4",
+    "product_type": "LeverInventory",
+    "revision": 27,
+    "target_id": "G3-LEVERS"
+   },
+   {
+    "payload_sha": "fd308ecb8771e59f2792a0587347cf70f5d72f8a16fa6ce97de71ee5c277fbd7",
+    "product_id": "G4-ANATOMY-317ef54d9f789ea2",
+    "product_type": "LeverEffectAnatomySet",
+    "revision": 9,
+    "target_id": "G4-REACTIONS"
+   },
+   {
+    "payload_sha": "f01b9a2a29b939d61bf66595784d3933cb754a4108af6958cfe31cec4a49cbc3",
+    "product_id": "G4-ORBITS-63e7b9cf764a6753",
+    "product_type": "LeverOrbitSet",
+    "revision": 43,
+    "target_id": "G4.2-LEVER-ORBITS"
+   }
+  ],
+  "steps_replayed": 108,
+  "stopped": null,
+  "transition_index_sha": "dfa0371daff16f7978f3c28b1c6fa67030f68a29eea43639122ee8cb94480108"
+ }
+}

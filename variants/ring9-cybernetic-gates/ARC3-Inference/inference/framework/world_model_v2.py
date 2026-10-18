@@ -1,4 +1,4 @@
-"""The canonical world model, schema v6: one validated, canonically hashed file per observed game.
+"""The canonical world model, schema v8: one validated, canonically hashed file per observed game.
 
 Author: Claude (Alpha build seat), 2026-10-10. WO-L2a (INTERFACE_WO_L2A_WORLD_MODEL_V2 v2; Sol's reviews
 REVIEW_WO_L2_00_CENSUS_ARCHITECTURE and REVIEW_WO_L2A_INTERFACE, 2026-10-10). Schema v3, 2026-10-13: WO-DESC-A
@@ -14,6 +14,12 @@ record check, not the provenance journal. Schema v5, 2026-10-15: WO-PE-03A (INTE
 WO-G4-DOSSIER-A (INTERFACE_WO_G4_DOSSIER_A_v2) adds each level's ``lever_dossiers``, one chapter-statused mechanics
 dossier per certified lever (``lever_dossiers``, validated by ``lever_dossier_schema``), and refuses a payload that is
 not strict canonical JSON before its hash (R10). A v5 artifact is still read, by the frozen v5 rules (``validate_v5``).
+Schema v7, 2026-10-18: WO-G4-DOSSIER-B (B1) adds every dossier's record-derived ``observations``; v6 is frozen
+(``validate_v6``). Schema v8, 2026-10-18: WO-G4-DOSSIER-B (B2 revision 2) — the provenance chapter becomes
+``virelai-provenance-chapter-v2``, which may embed an audit-v2 journal (G4 selections); v7 is frozen (``validate_v7``:
+chapter v1, audit-v1 rows only). B2 revision 3 adds a v8-only check: every completed G4-A selection in the embedded
+audit rows closes its admission and reaches its lever's orbit chapter through selected-run receipts
+(``lever_dossier_selection``).
 Accepted limitation (R12): a hard process kill writes no H2, so per-lever work since the last written model is lost.
 
 Two tiers, kept apart by the validator:
@@ -45,7 +51,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-world-model-v7"  # WO-G4-DOSSIER-B (B1): every lever dossier holds its record-derived observations
+SCHEMA = "virelai-world-model-v8"  # WO-G4-DOSSIER-B (B2 r2): the provenance chapter (v2) may embed audit-v2 rows
+V7_SCHEMA = "virelai-world-model-v7"  # B1: every lever dossier holds its record-derived observations (frozen)
 V6_SCHEMA = "virelai-world-model-v6"
 V5_SCHEMA = "virelai-world-model-v5"
 V4_SCHEMA = "virelai-world-model-v4"
@@ -124,8 +131,14 @@ def canonical_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def validate(payload: Mapping[str, Any]) -> None:
-    """The v7 contract: the v6 rules, and every lever dossier's record-derived observations (WO-G4-DOSSIER-B, B1)."""
+    """The v8 contract: the v7 rules, with provenance chapter v2, which embeds an audit-v1 or audit-v2 journal (each
+    verified under its own vocabulary; WO-G4-DOSSIER-B, B2 revision 2)."""
     _validate_payload(payload, SCHEMA)
+
+
+def validate_v7(payload: Mapping[str, Any]) -> None:
+    """The accepted v7 contract, frozen (B1): chapter v1, audit-v1 rows only, observations in every dossier."""
+    _validate_payload(payload, V7_SCHEMA)
 
 
 def validate_v6(payload: Mapping[str, Any]) -> None:
@@ -155,7 +168,7 @@ def validate_v2(payload: Mapping[str, Any]) -> None:
 
 def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(payload.get("schema") == schema, f"schema must be {schema}")
-    if schema in {V6_SCHEMA, SCHEMA}:
+    if schema in {V6_SCHEMA, V7_SCHEMA, SCHEMA}:
         _strict(payload)
     manifest = payload.get("manifest") or {}
     _require(manifest.get("status") in MANIFEST_STATUSES, "manifest.status is not a known status")
@@ -168,21 +181,30 @@ def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(len(open_levels) <= 1, "at most one level is open")
     for level in levels:
         _validate_level(level)
-        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, SCHEMA}:
+        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, SCHEMA}:
             _validate_v3_level(level)
-    if schema in {V5_SCHEMA, V6_SCHEMA, SCHEMA}:
+    if schema in {V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, SCHEMA}:
         _validate_product_content(levels)
-    if schema in {V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, SCHEMA}:
+    if schema in {V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, SCHEMA}:
         from inference.framework.provenance_chapter import ProvenanceChapterError, validate_chapter
 
         try:
-            validate_chapter(payload)
+            validate_chapter(payload, frozen_v1=schema != SCHEMA)
         except ProvenanceChapterError as exc:
             _fail(f"provenance: {exc}")
-    if schema in {V6_SCHEMA, SCHEMA}:  # after the provenance chapter: the dossiers' provenance facts are checked against it
-        _validate_lever_dossiers(levels, manifest, payload.get("provenance"), v7=schema == SCHEMA)
+    if schema in {V6_SCHEMA, V7_SCHEMA, SCHEMA}:  # after the provenance chapter: dossier provenance facts checked against it
+        _validate_lever_dossiers(levels, manifest, payload.get("provenance"), v7=schema in {V7_SCHEMA, SCHEMA})
+    if schema == SCHEMA:  # v8 only (B2 revision 3): admitted question -> selected-run receipts -> completed chapter
+        _validate_selections(payload)
     if "content_sha256" in payload:
         _require(payload["content_sha256"] == content_sha256(payload), "content_sha256 does not match the content")
+
+
+def _validate_selections(payload: Mapping[str, Any]) -> None:
+    from inference.framework.lever_dossier_selection import problems
+
+    found = problems(payload)
+    _require(not found, "G4 selection: " + "; ".join(found[:3]))
 
 
 def _validate_product_content(levels: list) -> None:
@@ -371,7 +393,7 @@ def _validate_role(role: Mapping[str, Any], known_tracks: set[str], receipts: Ma
 
 
 def read_world_model(payload: Mapping[str, Any]) -> Any:
-    """Version-aware reader: v1 through its own validator, v2-v6 by their frozen rules, v7 by this module's;
+    """Version-aware reader: v1 through its own validator, v2-v7 by their frozen rules, v8 by this module's;
     anything else is refused."""
     schema = payload.get("schema")
     if schema == V1_SCHEMA:
@@ -394,6 +416,9 @@ def read_world_model(payload: Mapping[str, Any]) -> Any:
         return dict(payload)
     if schema == V6_SCHEMA:
         validate_v6(payload)
+        return dict(payload)
+    if schema == V7_SCHEMA:
+        validate_v7(payload)
         return dict(payload)
     if schema == SCHEMA:
         validate(payload)

@@ -7,7 +7,7 @@ is never confused with the weave's cell-ownership provenance.)
 Who proposed each gated operation, what they submitted, and whether a gate admitted, refused or executed it. One
 row per decision, in one normalized vocabulary across all gates (D2):
 
-* operation ``PROBE`` | ``ANSWER`` | ``G3_SELECTION`` | ``ANNOTATION``;
+* operation ``PROBE`` | ``ANSWER`` | ``G3_SELECTION`` | ``ANNOTATION``, and in schema v2 ``G4_SELECTION``;
 * event ``OPPORTUNITY`` | ``ADMISSION`` | ``EXECUTION``;
 * disposition ``OFFERED`` | ``ADMITTED`` | ``REFUSED`` | ``EXECUTED`` | ``NOT_ATTEMPTED`` | ``SUPERSEDED`` |
   ``UNCERTIFIED``, in the valid combinations of ``VALID``.
@@ -22,6 +22,13 @@ A probe's ``ADMISSION / ADMITTED`` row is its operation anchor. Every probe ``EX
 ``refs.admission_event_id``; the join must agree on operation, probe, executor, run, gate, level and life, and one
 admission is consumed by at most one execution. ``probe_id`` alone is never a join key: it recurs across levels,
 lives and replays.
+
+**Schema versions** (WO-G4-DOSSIER-B, B2 revision 2; Sol: "Do not silently amend either schema"). The writer writes
+``virelai-provenance-v2``: v1's vocabulary plus G4 selections (operation ``G4_SELECTION``, reason ``G4_EVENT``). v1 is
+frozen (``VALID_V1``, ``REASON_CODES_V1``). Every row of a journal, its seal included, carries the journal's one
+schema and is checked with that schema's vocabulary; a journal never mixes schemas. ``read_journal`` and
+``verify_embedded`` read both versions; ``read_journal_v1`` and ``verify_embedded_v1`` are the frozen v1 readers, which
+refuse a v2 row rather than reinterpret it. The writer continues an OPEN journal in that journal's own schema.
 
 ``read_journal`` is a trust boundary: it validates the whole row contract and returns the verified prefix, a status
 and a typed failure. The writer applies the same checks before it writes, so it never writes a row the reader would
@@ -38,10 +45,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-SCHEMA = "virelai-provenance-v1"
+V1_SCHEMA = "virelai-provenance-v1"
+SCHEMA = "virelai-provenance-v2"  # the writer's (B2 revision 2): v1 plus G4 selections
+SCHEMAS = (V1_SCHEMA, SCHEMA)
 GENESIS = "0" * 64
 EXECUTORS = ("DUCK", "CONTROLLER", "SYSTEM")
-VALID: dict[str, dict[str, frozenset[str]]] = {
+VALID_V1: dict[str, dict[str, frozenset[str]]] = {  # frozen: the v1 contract
     "PROBE": {"ADMISSION": frozenset({"ADMITTED", "REFUSED"}), "EXECUTION": frozenset({"EXECUTED", "NOT_ATTEMPTED"})},
     "ANSWER": {"ADMISSION": frozenset({"ADMITTED", "REFUSED"})},
     "G3_SELECTION": {"OPPORTUNITY": frozenset({"OFFERED", "NOT_ATTEMPTED"}),
@@ -49,9 +58,14 @@ VALID: dict[str, dict[str, frozenset[str]]] = {
                      "EXECUTION": frozenset({"EXECUTED"})},
     "ANNOTATION": {"ADMISSION": frozenset({"UNCERTIFIED", "REFUSED"})},
 }
+VALID: dict[str, dict[str, frozenset[str]]] = {  # v2: v1 unchanged, plus G4 selections (no opportunity: no handoff)
+    **VALID_V1, "G4_SELECTION": {"ADMISSION": VALID_V1["G3_SELECTION"]["ADMISSION"], "EXECUTION": frozenset({"EXECUTED"})},
+}
 REASONED = frozenset({"REFUSED", "NOT_ATTEMPTED", "SUPERSEDED"})
-REASON_CODES = frozenset({"GATE_CONTRACT", "ORIENTATION_DUE", "ANNOTATION_INVALID", "ACTION_CONTRACT",
-                          "TERMINAL_STATE", "NOT_EXECUTED", "EXECUTION_ERROR", "G3_EVENT"})
+REASON_CODES_V1 = frozenset({"GATE_CONTRACT", "ORIENTATION_DUE", "ANNOTATION_INVALID", "ACTION_CONTRACT",
+                             "TERMINAL_STATE", "NOT_EXECUTED", "EXECUTION_ERROR", "G3_EVENT"})
+REASON_CODES = REASON_CODES_V1 | {"G4_EVENT"}
+VOCABULARY = {V1_SCHEMA: (VALID_V1, REASON_CODES_V1), SCHEMA: (VALID, REASON_CODES)}
 REF_KEYS = ("question_id", "subject", "probe_id", "answer_id", "evidence_id", "executed_transition", "note_ids",
             "source_event", "admission_event_id")
 _REF_TEXT = ("question_id", "subject", "probe_id", "answer_id", "evidence_id", "admission_event_id")
@@ -180,26 +194,28 @@ def _check_refs(refs: Any) -> None:
                  "refs.source_event must be a translated G3 event")
 
 
-def _check_reason(content: Mapping[str, Any]) -> None:
+def _check_reason(content: Mapping[str, Any], codes: frozenset[str]) -> None:
     reason, disposition = content.get("reason"), content.get("disposition")
     if reason is not None:
-        _require(isinstance(reason, Mapping) and set(reason) == {"code", "text"} and reason["code"] in REASON_CODES
+        _require(isinstance(reason, Mapping) and set(reason) == {"code", "text"} and reason["code"] in codes
                  and isinstance(reason["text"], str) and bool(reason["text"]), "a reason is a typed code and its text")
     if disposition in REASONED or content.get("event") == "OPPORTUNITY":
         _require(reason is not None, f"{content.get('operation')}/{disposition} needs a typed reason")
 
 
-def check_content(content: Mapping[str, Any]) -> None:
-    """The audit fields of one event: types, a valid combination, a known executor, a typed reason where one is owed,
-    the references an execution owes, and the field-source map only an answer carries."""
+def check_content(content: Mapping[str, Any], *, schema: str = SCHEMA) -> None:
+    """The audit fields of one event under ``schema``'s vocabulary: types, a valid combination, a known executor, a
+    typed reason where one is owed, the references an execution owes, and the field-source map only an answer carries."""
+    _require(schema in VOCABULARY, f"unknown schema {schema!r}")
+    valid, codes = VOCABULARY[schema]
     operation, event, disposition = content.get("operation"), content.get("event"), content.get("disposition")
-    _require(disposition in VALID.get(operation, {}).get(event, ()),
+    _require(disposition in valid.get(operation, {}).get(event, ()),
              f"invalid combination {operation}/{event}/{disposition}")
     _require(content.get("executor") in EXECUTORS, f"unknown executor {content.get('executor')!r}")
     for key in ("level", "life", "at_transition"):
         _require(_optional(content.get(key), int), f"{key} must be an integer or null")
     _require(_optional(content.get("gate_id"), str), "gate_id must be text or null")
-    _check_reason(content)
+    _check_reason(content, codes)
     refs = content.get("refs")
     _check_refs(refs)
     probe_execution = operation == "PROBE" and event == "EXECUTION"
@@ -217,17 +233,24 @@ def check_content(content: Mapping[str, Any]) -> None:
         _require(sources is None and content.get("effective") is None, "only answers carry effective payloads")
 
 
-def _check_event_shape(row: Mapping[str, Any]) -> None:
+def _check_schema(row: Mapping[str, Any], accepted: Sequence[str], journal: str | None) -> None:
+    """The row's schema is one this reader accepts and, once a journal has one, that journal's (never mixed)."""
+    _require(row["schema"] in accepted, f"unknown schema {row['schema']!r} (this reader accepts {list(accepted)})")
+    _require(journal is None or row["schema"] == journal,
+             f"a {row['schema']} row in a {journal} journal: a journal never mixes schemas")
+
+
+def _check_event_shape(row: Mapping[str, Any], accepted: Sequence[str] = SCHEMAS, journal: str | None = None) -> None:
     _require(row.get("record") == "EVENT", f"record must be EVENT or SEAL, not {row.get('record')!r}")
     _require(set(row) == EVENT_KEYS, "event keys differ from the schema")
-    _require(row["schema"] == SCHEMA, f"unknown schema {row['schema']!r}")
+    _check_schema(row, accepted, journal)
     _require(_optional(row["seq"], int) and row["seq"] is not None and row["seq"] > 0,
              "seq must be a positive integer")
     _check_run(row["run"])
     _require(isinstance(row["event_id"], str) and bool(_EVENT_ID.fullmatch(row["event_id"])), "malformed event_id")
     for key in ("previous_event_hash", "event_hash"):
         _require(isinstance(row[key], str) and bool(_HASH.fullmatch(row[key])), f"malformed {key}")
-    check_content(row)
+    check_content(row, schema=row["schema"])
 
 
 def _check_run(run: Any) -> None:
@@ -236,9 +259,9 @@ def _check_run(run: Any) -> None:
              "run must carry exactly a nonempty run_stem and game_id")
 
 
-def _check_seal_shape(row: Mapping[str, Any]) -> None:
+def _check_seal_shape(row: Mapping[str, Any], accepted: Sequence[str] = SCHEMAS, journal: str | None = None) -> None:
     _require(set(row) == SEAL_KEYS, "seal keys differ from the schema")
-    _require(row["schema"] == SCHEMA, f"unknown seal schema {row['schema']!r}")
+    _check_schema(row, accepted, journal)
     _check_run(row["run"])
     _require(_optional(row["seq"], int) and row["seq"] is not None and row["seq"] > 0,
              "seq must be a positive integer")
@@ -253,9 +276,10 @@ def make_refs(**values: Any) -> dict[str, Any]:
     return {key: normalized(values.get(key)) for key in REF_KEYS}
 
 
-def _seal_row(seq: int, run: Mapping[str, Any], previous: str, count: int, head: str) -> dict[str, Any]:
+def _seal_row(seq: int, run: Mapping[str, Any], previous: str, count: int, head: str,
+              schema: str = SCHEMA) -> dict[str, Any]:
     """Journal control metadata (outside the D2 vocabulary): the run it closes, and the prefix it seals."""
-    row = {"schema": SCHEMA, "record": "SEAL", "seq": seq, "run": normalized(run), "previous_event_hash": previous,
+    row = {"schema": schema, "record": "SEAL", "seq": seq, "run": normalized(run), "previous_event_hash": previous,
            "event_count": count, "head_hash": head}
     row["event_hash"] = _hashed(row)
     return row
@@ -273,6 +297,8 @@ class _Chain:
     admissions: dict[str, tuple[Any, ...]] = field(default_factory=dict)
     consumed: set[str] = field(default_factory=set)
     joins: dict[str, str] = field(default_factory=dict)
+    accepted: tuple[str, ...] = SCHEMAS  # the schemas this reader admits (the frozen v1 reader: v1 only)
+    schema: str | None = None  # the journal's one schema, fixed by its first row
 
     @staticmethod
     def _key(row: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -281,7 +307,7 @@ class _Chain:
     def check_event(self, row: Mapping[str, Any], *, hashes: bool = True) -> None:
         """Raise ``JournalFault`` unless ``row`` is the valid next event of this chain."""
         try:
-            _check_event_shape(row)
+            _check_event_shape(row, self.accepted, self.schema)
         except ProvenanceError as exc:
             raise JournalFault("SCHEMA_INVALID", str(exc)) from None
         if hashes and row["event_hash"] != _hashed(row):
@@ -314,11 +340,12 @@ class _Chain:
             self.consumed.add(admission)
             self.joins[row["event_id"]] = admission
         self.run = self.run or dict(row["run"])
+        self.schema = self.schema or str(row["schema"])
         self.head, self.count = row["event_hash"], self.count + 1
 
     def check_seal(self, row: Mapping[str, Any]) -> None:
         try:
-            _check_seal_shape(row)
+            _check_seal_shape(row, self.accepted, self.schema)
         except ProvenanceError as exc:
             raise JournalFault("SCHEMA_INVALID", str(exc)) from None
         if row["event_hash"] != _hashed(row):
@@ -343,6 +370,8 @@ class ProvenanceJournal:
     failed: str = ""
     warned: bool = False
     g3_cursor: int = 0  # how far the game-long G3 selection-event list has been drained
+    g4_cursor: int = 0  # the same for G4's (WO-G4-DOSSIER-B, B2)
+    schema: str = SCHEMA  # the journal's schema: v2 for a new journal, its own for a continued one
     on_failure: Callable[[str], None] | None = field(default=None, repr=False)
     chain: _Chain = field(default_factory=_Chain, repr=False)
 
@@ -360,6 +389,7 @@ class ProvenanceJournal:
                 journal._fail(f"existing journal belongs to run {chain.run}, not {journal.run}; refusing to extend it")
             elif existing.rows:
                 journal.chain = chain
+                journal.schema = str(chain.schema)  # continued in its own schema, never relabelled
                 journal.seq = int(existing.rows[-1]["seq"])
                 journal.head = str(existing.rows[-1]["event_hash"])
         return journal
@@ -372,7 +402,7 @@ class ProvenanceJournal:
             seq = self.seq + 1
             body = {key: normalized(content.get(key)) for key in BODY_KEYS}
             run = normalized(self.run)
-            row = {"schema": SCHEMA, "record": "EVENT", "seq": seq, "run": run, **body,
+            row = {"schema": self.schema, "record": "EVENT", "seq": seq, "run": run, **body,
                    "event_id": event_id(run, seq, body), "previous_event_hash": self.head}
             row["event_hash"] = _hashed(row)
             self.chain.check_event(row, hashes=False)  # never write a row the reader would reject
@@ -388,7 +418,7 @@ class ProvenanceJournal:
         if self.failed or self.sealed:
             return False
         try:
-            row = _seal_row(self.seq + 1, self.run, self.head, self.seq, self.head)
+            row = _seal_row(self.seq + 1, self.run, self.head, self.seq, self.head, self.schema)
             self.chain.check_seal(row)  # the full seal validator, before anything is written
             self._write(row)
         except Exception as exc:  # noqa: BLE001
@@ -451,9 +481,10 @@ def _parse(raw: bytes, last: bool, ended: bool) -> dict[str, Any]:
     return row
 
 
-def _verify_lines(lines: list[bytes], ended_with_newline: bool) -> tuple[JournalRead, _Chain]:
+def _verify_lines(lines: list[bytes], ended_with_newline: bool,
+                  accepted: Sequence[str] = SCHEMAS) -> tuple[JournalRead, _Chain]:
     rows: list[dict[str, Any]] = []
-    chain = _Chain()
+    chain = _Chain(accepted=tuple(accepted))
     for number, raw in enumerate(lines, start=1):
         last = number == len(lines)
         try:
@@ -477,22 +508,22 @@ def _verify_lines(lines: list[bytes], ended_with_newline: bool) -> tuple[Journal
     return JournalRead(rows, "OPEN", None, None, dict(chain.joins), chain.run), chain
 
 
-def _parse_bytes(data: bytes) -> tuple[JournalRead, _Chain]:
+def _parse_bytes(data: bytes, accepted: Sequence[str] = SCHEMAS) -> tuple[JournalRead, _Chain]:
     if not data:
-        return JournalRead([], "OPEN"), _Chain()
+        return JournalRead([], "OPEN"), _Chain(accepted=tuple(accepted))
     lines = data.split(b"\n")
     ended = lines[-1] == b""
     if ended:
         lines = lines[:-1]
-    return _verify_lines(lines, ended)
+    return _verify_lines(lines, ended, accepted)
 
 
-def _read(path: Path) -> tuple[JournalRead, _Chain]:
-    return _parse_bytes(path.read_bytes() if path.exists() else b"")
+def _read(path: Path, accepted: Sequence[str] = SCHEMAS) -> tuple[JournalRead, _Chain]:
+    return _parse_bytes(path.read_bytes() if path.exists() else b"", accepted)
 
 
 def read_journal(path: str | Path) -> JournalRead:
-    """The verified prefix and its status: SEALED, OPEN (no seal) or CORRUPT (a typed failure)."""
+    """The verified prefix and its status: SEALED, OPEN (no seal) or CORRUPT (a typed failure). Reads v1 and v2."""
     return _read(Path(path))[0]
 
 
@@ -502,10 +533,25 @@ def read_journal_bytes(data: bytes) -> JournalRead:
     return _parse_bytes(bytes(data))[0]
 
 
-def verify_embedded(rows: Sequence[Mapping[str, Any]], seal: Mapping[str, Any] | None) -> JournalRead:
+def read_journal_v1(path: str | Path) -> JournalRead:
+    """The frozen v1 reader: a v2 row is CORRUPT (``SCHEMA_INVALID``), never reinterpreted as v1."""
+    return _read(Path(path), (V1_SCHEMA,))[0]
+
+
+def read_journal_bytes_v1(data: bytes) -> JournalRead:
+    return _parse_bytes(bytes(data), (V1_SCHEMA,))[0]
+
+
+def verify_embedded(rows: Sequence[Mapping[str, Any]], seal: Mapping[str, Any] | None,
+                    accepted: Sequence[str] = SCHEMAS) -> JournalRead:
     """WO-PE-02: re-verify rows (and a seal) embedded in another artifact exactly as the reader verifies a file."""
     lines = [_dumps(row) for row in rows] + ([_dumps(seal)] if seal is not None else [])
-    return _verify_lines(lines, True)[0]
+    return _verify_lines(lines, True, accepted)[0]
+
+
+def verify_embedded_v1(rows: Sequence[Mapping[str, Any]], seal: Mapping[str, Any] | None) -> JournalRead:
+    """The frozen v1 verification an artifact written before audit schema v2 (world model v4-v7) is held to."""
+    return verify_embedded(rows, seal, (V1_SCHEMA,))
 
 
 def validate_rows(rows: Sequence[Mapping[str, Any]]) -> None:
@@ -536,6 +582,17 @@ def translate_g3_event(event: Mapping[str, Any], gate_id: str) -> dict[str, Any]
                                         "gate_revision": event.get("gate_revision")}),
         "reason": {"code": "G3_EVENT", "text": str(event.get("reason") or kind)} if reasoned else None,
     }
+
+
+def translate_g4_event(event: Mapping[str, Any]) -> dict[str, Any]:
+    """One G4 selection event (``g4_selection``, B2) as an audit row: G3's translation under operation
+    ``G4_SELECTION`` and the event's own gate. G4 offers no handoff turn, so it never records an opportunity."""
+    kind = str(event.get("event") or "")
+    _require(kind in G3_TRANSLATION and G3_TRANSLATION[kind][0] != "OPPORTUNITY", f"unknown G4 selection event {kind!r}")
+    row = translate_g3_event({**event, "phase": event.get("gate_id")}, str(event.get("gate_id") or ""))
+    reason = row["reason"]
+    return {**row, "operation": "G4_SELECTION",
+            "reason": None if reason is None else {"code": "G4_EVENT", "text": reason["text"]}}
 
 
 def _present(payload: Any, dotted: str) -> tuple[bool, Any]:
@@ -574,5 +631,7 @@ __all__ = [
     "EXECUTORS", "FAILURES", "G3_TRANSLATION", "JOIN_FIELDS", "JournalFault", "JournalRead", "ProvenanceError",
     "ProvenanceJournal", "REASON_CODES", "REF_KEYS", "SCHEMA", "STATUSES", "VALID", "canonical", "check_content",
     "event_id", "field_sources", "make_refs", "normalized", "read_journal", "read_journal_bytes", "translate_g3_event",
+    "translate_g4_event", "read_journal_v1", "read_journal_bytes_v1", "verify_embedded_v1", "V1_SCHEMA", "SCHEMAS",
+    "VALID_V1", "REASON_CODES_V1", "VOCABULARY",
     "validate_rows", "verify_embedded",
 ]

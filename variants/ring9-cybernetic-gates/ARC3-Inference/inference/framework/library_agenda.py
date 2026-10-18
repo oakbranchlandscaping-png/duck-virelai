@@ -18,6 +18,10 @@ be derived from gate state stays open or typed; ``NOT_BUILT`` chapters are liste
 
 G4 per-lever questions open with the witness, but stay ``BLOCKED_BY_PREREQUISITE`` until the G3
 ``LeverInventory`` product is active (Sol, 2026-10-11): a witness admits the lever; the inventory admits G4.
+
+WO-G4-DOSSIER-B (B2, Sol's ruling 5): in G4.1 and G4-A the selected question is a lever's own chapter — the
+obligation's, a standing admitted choice, else the coverage head (``g4_selection``); a lever's limits question is
+typed ``OPEN_NOT_ACTIONABLE`` (no gate admits a limits experiment yet) and never blocks the chapters after it.
 """
 from __future__ import annotations
 
@@ -62,6 +66,7 @@ LIFECYCLE_DISPOSITION = {
     "FILED_TO_G5": "NOT_BUILT",
 }
 SELECTABLE = frozenset({"OPEN_ACTIONABLE", "OBLIGATION"})
+LIMITS = ("LIMITS", "What holds this lever's state, and what returns it? No gate admits a limits experiment yet.")
 OBLIGATION_KINDS = {"CONFIRMATION": "CONFIRM_WITNESS", "DOSSIER": "DOSSIER_ANSWER",
                     "REACHABILITY": "REACHABILITY_ANSWER", "MU_REVISIT": "MU_REVISIT",
                     "REOPENED_REACHABILITY": "REOPENED_REACHABILITY"}
@@ -169,6 +174,9 @@ def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str,
     relations = journal.active_product("G4-B-LEVER-RELATIONS")
     pressed = set((relations.payload.get("pressed_levers") or ()) if relations is not None else ())
     law = journal.active_product("G4-C-LEVER-LAW")
+    from inference.framework import g4_selection
+
+    actionable = {row["question_id"] for row in g4_selection.admission_candidates(machine) if row["selectable"]}
     questions = []
     for entity_id in levers:
         for gate, kind, text in G4_CHAPTERS:
@@ -181,7 +189,13 @@ def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str,
             else:
                 disposition = "ANSWERED" if entity_id in answered[gate] else "OPEN"
             questions.append(_question(level, gate, entity_id, kind, text, disposition,
-                                       prerequisites_missing=[] if inventory is not None else [G3]))
+                                       prerequisites_missing=[] if inventory is not None else [G3],
+                                       **({"admissible": True} if question_id(level, gate, entity_id, kind)
+                                          in actionable else {})))  # B2: the gate admits a choice of it now
+            if kind == "ORBIT":  # B2: limits follows orbit, typed, and never blocks relations
+                questions.append(_question(level, None, entity_id, LIMITS[0], LIMITS[1], "BLOCKED_BY_PREREQUISITE"
+                                           if inventory is None else "OPEN_NOT_ACTIONABLE",
+                                           prerequisites_missing=[] if inventory is not None else [G3]))
     return questions
 
 
@@ -207,6 +221,11 @@ def _selected(machine: Any, level: int, gates: list[dict[str, Any]], obligation:
             return str(selection["question_id"])
         if candidates:
             return lever_question_id(level, candidates[0]["entity_id"])
+    from inference.framework import g4_selection
+
+    chapter = g4_selection.selected_question(machine)  # B2: G4.1 and G4-A select a lever's own chapter
+    if chapter is not None:
+        return chapter
     current_question = next((q for q in gates if q["gate"] == current), None)
     if current_question is not None and current_question["disposition"] != "BLOCKED_BY_PREREQUISITE":
         return current_question["id"]
@@ -233,7 +252,7 @@ def gate_agenda(machine: Any) -> dict[str, Any]:
                           "OBLIGATION")]
     questions = gates + owed + g3 + g4 + library
     selected = _selected(machine, level, gates, obligation, candidates)
-    eligible = [q["id"] for q in g3 if q["disposition"] == "OPEN_ACTIONABLE"]
+    eligible = [q["id"] for q in g3 if q["disposition"] == "OPEN_ACTIONABLE"] + [q["id"] for q in g4 if q.get("admissible")]
     agenda = {
         "schema": SCHEMA, "level": level, "life": int(machine.lives.life), "gate": machine.gate_id,
         "questions": questions, "selected": selected, "eligible": eligible,

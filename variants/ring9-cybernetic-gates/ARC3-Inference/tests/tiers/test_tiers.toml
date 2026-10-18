@@ -100,12 +100,25 @@ tests = [
     "tests/test_world_model_v5_product_content.py::test_guard_frozen_v4_artifact_still_reads",
 ]
 
+[T0.g4-selection]
+tests = [
+    "tests/test_g4_selection.py",                # WO-G4-DOSSIER-B (B2): library-selected G4 study and its no-choice golden
+    "tests/test_provenance_v2.py",               # B2 revision 2: audit schema v2, the frozen v1 reader, world model v8
+    "tests/test_g4_selection_persisted.py",      # B2 revision 3: the v8 validator's selection chain and its attacks
+    "tests/test_g3_directed_click.py::test_2a_duck_chooses_a_row_away_from_the_head_and_the_outcome_is_attributed_to_it",
+    "tests/test_g3_directed_click.py::test_0_no_choice_replays_keep_every_envelope_evidence_id_and_product[carry_v7]",
+    "tests/test_provenance_capture.py::test_a_g3_choice_refused_before_selection_is_still_recorded",
+    "tests/test_r9_r16_life_record.py::test_d4_every_gate_machine_field_has_a_declared_persistence_tier",
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
 tests = [
     "tests/test_g3_directed_click.py",           # directed CLICK, the agenda, the card, and the no-choice golden
     "tests/test_g3_directed_nav.py",             # directed NAV
+    "tests/test_g4_selection.py",                # WO-G4-DOSSIER-B (B2): directed G4.1 and G4-A, the G4 no-choice golden
+    "tests/test_g4_selection_persisted.py",      # B2 revision 3: the saved model enforces the selection chain
     "tests/test_g3_hybrid_click_pass.py",        # HYBRID CLICK
     "tests/test_g3_ledger_frame_sync.py",        # reset continuity
     "tests/test_g3_hybrid_lifecycle_replay.py",  # lifecycle replay on the saved records
@@ -155,4 +168,7 @@ tests = [
     "tests/test_tool_agent_no_tool_circuit_breaker.py",
     "tests/test_g3_directed_click.py",           # G3 choices, the handoff, the selection-event log
     "tests/test_g3_directed_nav.py",
+    "tests/test_g4_selection.py::test_b2_08_duck_chooses_through_the_tool_and_every_event_reaches_disk_and_the_audit_journal",
+    "tests/test_provenance_v2.py",               # B2 revision 2: audit schema v2 and the world model v8 that embeds it
+    "tests/test_g4_selection_persisted.py",      # B2 revision 3: the v8 selection chain on the canonical artifact
 ]

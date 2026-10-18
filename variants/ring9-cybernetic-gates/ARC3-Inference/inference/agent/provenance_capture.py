@@ -91,6 +91,15 @@ def _sync(record: pv.ProvenanceJournal, machine: Any) -> None:
     while record.g3_cursor < len(events) and not record.failed:
         record.append(pv.translate_g3_event(events[record.g3_cursor], LEVER_GATE_ID))
         record.g3_cursor += 1
+    g4 = list(getattr(machine, "g4_selection_events", None) or ())  # WO-G4-DOSSIER-B (B2)
+    while record.g4_cursor < len(g4) and not record.failed:
+        record.append(pv.translate_g4_event(g4[record.g4_cursor]))
+        record.g4_cursor += 1
+
+
+def selection_event_count(machine: Any) -> int:
+    """How many G3 and G4 choice events the machine holds (a refusal either selector recorded is not re-recorded)."""
+    return sum(len(getattr(machine, name, None) or ()) for name in ("g3_selection_events", "g4_selection_events"))
 
 
 def _append(agent: Any, state_path: Path, machine: Any, content: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -343,7 +352,7 @@ def notes(agent: Any, state_path: Path, machine: Any, where: Mapping[str, Any], 
 def g3_choice_refused_early(agent: Any, state_path: Path, machine: Any, where: Mapping[str, Any],
                             question_id: str, events_before: int, refusal: BaseException) -> None:
     """A G3 choice the machine refused before ``g3_selection.select`` wrote any event (the gate is not G3)."""
-    if not _enabled(agent) or len(getattr(machine, "g3_selection_events", None) or ()) != events_before:
+    if not _enabled(agent) or selection_event_count(machine) != events_before:
         return
     _append(agent, state_path, machine, _row(
         where, "DUCK", "G3_SELECTION", "ADMISSION", "REFUSED", submitted={"question_id": question_id},
@@ -379,5 +388,5 @@ def close_session(agent: Any, state_path: Path) -> list[tuple[str, str]]:
 __all__ = [
     "AnswerTrace", "close_session", "context", "portable", "duck_action", "g3_choice_refused_early", "journal",
     "journal_path", "notes",
-    "probe_admitted", "probe_executed", "probe_not_attempted", "probe_refused", "sync",
+    "probe_admitted", "probe_executed", "probe_not_attempted", "probe_refused", "selection_event_count", "sync",
 ]

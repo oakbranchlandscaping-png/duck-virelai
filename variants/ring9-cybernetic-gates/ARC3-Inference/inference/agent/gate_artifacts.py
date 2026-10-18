@@ -52,15 +52,22 @@ def _g3_target_items(gate_machine: Any) -> tuple[list[dict[str, Any]], Any]:
 def flush_g3_selection_events(state_path: Path, gate_machine: Any) -> None:
     """WO-G3-DIRECTED (Sol's review, 2026-10-11): every G3 choice event (admitted, refused, handoff, coverage
     resumed, stale, finished) is appended once to ``{stem}_g3_selection_events.jsonl``, so a rehearsal can
-    measure choices and declined handoffs, including those that executed no action."""
-    events = getattr(gate_machine, "g3_selection_events", None)
-    if not events or gate_machine.g3_selection_flushed >= len(events):
+    measure choices and declined handoffs, including those that executed no action. WO-G4-DOSSIER-B (B2): G4's
+    choice events go to ``{stem}_g4_selection_events.jsonl`` at the same flush points."""
+    for kind in ("g3", "g4"):
+        _flush_selection_events(state_path, gate_machine, kind)
+
+
+def _flush_selection_events(state_path: Path, gate_machine: Any, kind: str) -> None:
+    events = getattr(gate_machine, f"{kind}_selection_events", None)
+    flushed = int(getattr(gate_machine, f"{kind}_selection_flushed", 0) or 0)
+    if not events or flushed >= len(events):
         return
-    path = state_path.with_name(state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", "_g3_selection_events.jsonl"))
+    path = state_path.with_name(state_path.name.replace(f"_{RUNTIME_STATE_FILENAME}", f"_{kind}_selection_events.jsonl"))
     with path.open("a", encoding="utf-8") as handle:
-        for row in events[gate_machine.g3_selection_flushed:]:
+        for row in events[flushed:]:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
-    gate_machine.g3_selection_flushed = len(events)
+    setattr(gate_machine, f"{kind}_selection_flushed", len(events))
 
 
 def record_probe_outcome(
