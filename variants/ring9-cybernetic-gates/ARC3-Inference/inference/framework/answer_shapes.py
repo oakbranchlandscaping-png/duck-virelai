@@ -24,6 +24,8 @@ import hashlib
 import json
 from typing import Any, Mapping, Sequence
 
+from inference.framework import strict_json
+
 ID, GENERATED, DERIVED, OUTCOME = "ANSWER_ID", "GENERATED", "DERIVED", "OUTCOME"
 NOT_COMPARED = (ID, GENERATED, DERIVED, OUTCOME)
 UNCHANGED = "UNCHANGED"  # g4_relations.UNCHANGED: a lever a prediction leaves unnamed
@@ -40,9 +42,10 @@ class AnswerProjectionError(ValueError):
 
 
 def canonical_json(value: Any) -> str:
+    """WO-G4-DOSSIER-A (R10): the shared strict canonicalizer; a non-string key is refused, never collapsed."""
     try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
-    except (TypeError, ValueError) as exc:
+        return strict_json.canonical_json(value)
+    except strict_json.StrictJsonError as exc:
         raise AnswerProjectionError("NON_JSON_VALUE", str(exc)) from exc
 
 

@@ -30,6 +30,7 @@ from test_world_model_v4_provenance import (  # noqa: F401  (module fixtures are
 
 FIXTURES = Path(__file__).parent / "fixtures"
 V5 = "virelai-world-model-v5"
+V6 = "virelai-world-model-v6"  # WO-G4-DOSSIER-A: the writer
 ENCODING = "virelai-canonical-json-v1"
 
 
@@ -81,7 +82,7 @@ def test_v5_every_active_product_of_a_real_run_is_captured_exactly_at_h2(control
     from inference.framework.world_model_v2 import SCHEMA, validate
 
     model = controller_session.model
-    assert SCHEMA == V5 and model["schema"] == V5
+    assert SCHEMA == V6 and model["schema"] == V6
     validate(model)
     (level,) = model["levels"]
     _assert_captured(level, _active(controller_session.agent._gate_machine))
@@ -128,7 +129,7 @@ def test_v5_a_two_level_run_keeps_level_one_from_its_boundary_and_captures_level
     interim, final = two_level_writes.writes
     assert (interim["manifest"]["persist_reason"], final["manifest"]["persist_reason"]) == ("LEVEL_ADVANCE",
                                                                                             "BUDGET_STOP")
-    assert final["schema"] == V5 and [level["level"] for level in final["levels"]] == [1, 2]
+    assert final["schema"] == V6 and [level["level"] for level in final["levels"]] == [1, 2]
     (at_boundary,) = two_level_writes.boundary
     level_1 = final["levels"][0]
     _assert_captured(level_1, at_boundary)  # level 1's products as they stood before the journal was rebuilt
@@ -258,7 +259,7 @@ def test_v5_two_compilations_are_byte_identical():
     machine, world = start_g4b()
     _described(machine, world)
     first, second = canonical_bytes(_compiled(machine)), canonical_bytes(_compiled(machine))
-    assert first == second and json.loads(first)["schema"] == V5
+    assert first == second and json.loads(first)["schema"] == V6
 
 
 # ---- 7-8 · compatibility guards (pass on 0779858 and after) ------------------------------------------------------

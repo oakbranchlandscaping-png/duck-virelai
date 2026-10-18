@@ -74,7 +74,7 @@ def _product_content(product_id: str) -> tuple[dict, str]:
 
 def _model() -> dict:
     """The smallest valid model: one level, one track at the entry board, one witnessed lever."""
-    return {
+    return _with_dossiers({
         "game_id": "g", "run_stem": "g_p0",
         "manifest": {"status": "ACTIVE", "persist_reason": "BUDGET_STOP"},
         "levels": [{
@@ -108,7 +108,17 @@ def _model() -> dict:
             "accounting": {"status": "ACCOUNTED", "missing": []},
             "description": _description(),
         }],
-    }
+    })
+
+
+def _with_dossiers(model: dict) -> dict:
+    """Schema v6 (WO-G4-DOSSIER-A): the lever's dossier, compiled from a gate view with nothing retained."""
+    from inference.framework import lever_dossiers
+
+    for level in model["levels"]:
+        level["lever_dossiers"] = lever_dossiers.build(level, lever_dossiers.EMPTY_VIEW)
+    model["levels"] = lever_dossiers.finalize(model["levels"], model["manifest"]["persist_reason"])
+    return model
 
 
 def _level(model):
@@ -169,6 +179,7 @@ def test_a_role_reference_must_resolve_to_a_receipt():
                 role="EGO", gate_id="G1-EGO", product_id=product_id, binding_source="POINTER_EGO_HAS_NO_GRID_FOOTPRINT",
                 identity={"status": "NOT_APPLICABLE", "track_id": None, "basis": None})
             _level(model)["description"] = _description(lever=False)  # a pointer ego binds no track
+            _level(model)["lever_dossiers"] = {}  # schema v6: no LEVER role remains, so no dossier
         return edit
     seal(_apply(_model(), ego("L-1")))  # a resolvable product passes
     _refused(ego("L-FABRICATED"), "resolves to no product receipt")

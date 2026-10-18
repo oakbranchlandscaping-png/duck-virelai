@@ -26,7 +26,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
-from inference.framework import provenance_hooks
+from inference.framework import lever_dossiers, provenance_hooks
 from inference.framework.descriptive_events import cell_runs, describe_level, restrict_description, role_ref, witness_sha256
 from inference.framework.virelai_continuity import (
     ComponentObservation,
@@ -585,7 +585,7 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
     gaps.extend(_track_gaps(projection, certified, dispositions))
     description = _describe(level, board, entry, rows, life, projection, certified, receipts, gaps)
     missing = _board_accounting(projection["discontinuities"], breaks, level, gaps, description)
-    return {
+    return lever_dossiers.attach(machine, {  # WO-G4-DOSSIER-A: the level's lever dossiers (schema v6)
         "level": level,
         "state": state,
         "entry": {**entry, "board_sha256": hashlib.sha256(repr([list(r) for r in board]).encode()).hexdigest(),
@@ -600,7 +600,7 @@ def compile_level(machine: Any | None, execution: ExecutionRecord | None = None,
         "description": description,
         "product_answers": {} if machine is None else provenance_hooks.product_answers(machine),
         "product_content": {} if machine is None else provenance_hooks.product_content(machine),  # WO-PE-03A
-    }
+    })
 
 
 def _track_gaps(projection: Mapping[str, Any], certified: Mapping[str, Any],
@@ -790,6 +790,7 @@ def compile_world_model(machine: Any | None, execution: ExecutionRecord, *, game
     levels = sorted(levels, key=lambda item: int(item["level"]))
     if reconcile_journal:
         levels = reconcile(levels, machine, execution)
+    levels = lever_dossiers.finalize(levels, persist_reason)  # WO-G4-DOSSIER-A: H2 integrity and the census label
     return {
         "game_id": game_id,
         "run_stem": run_stem,

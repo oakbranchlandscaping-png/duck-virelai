@@ -623,10 +623,17 @@ def test_event_page_filters_are_applied_and_continuations_keep_them(k008):
 def test_the_dossier_page_is_a_stable_not_built_row_per_certified_lever(carry):
     from inference.framework.library_view import library_page
 
+    from inference.framework.world_description import describe_level_view
+
     level = carry["levels"][0]
     page = library_page(carry, "dossiers")
     levers = sorted(role["entity_id"] for role in level["certified"]["roles"] if role["role"] == "LEVER")
-    assert [row["id"] for row in page["items"]] == levers and {row["status"] for row in page["items"]} == {"NOT_BUILT"}
+    # WO-G4-DOSSIER-A: a stored v6 dossier replaces the stub; the row and its handle stay one per certified lever
+    assert [row["id"] for row in page["items"]] == levers and all(row["status"].startswith("identity ")
+                                                                   for row in page["items"])
+    assert [row["handle"] for row in page["items"]] == [f"virelai('library', kind='dossiers', id={e!r})" for e in levers]
+    older = {key: value for key, value in level.items() if key != "lever_dossiers"}  # a v3-v5 level keeps the stub
+    assert {row["status"] for row in describe_level_view(older)["dossiers"]} == {"NOT_BUILT"}
 
 
 def test_duck_s_query_forwards_every_new_filter(monkeypatch):
@@ -926,7 +933,7 @@ def test_a_report_failure_keeps_the_model_and_records_a_warning(tmp_path, monkey
 
     monkeypatch.setattr(world_report, "render_world_report", lambda model: (_ for _ in ()).throw(RuntimeError("boom")))
     folder, _game, _calls = _cancelled_before_first_turn(tmp_path)
-    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v5"
+    assert json.loads((folder / "world_model.json").read_text())["schema"] == "virelai-world-model-v6"
     assert not (folder / "world_report.md").exists()
     warnings = [json.loads(line) for line in (folder / "observer_warnings.jsonl").read_text().splitlines()]
     assert any(item.get("event") == "WORLD_REPORT_WRITE_FAILED" for item in warnings)

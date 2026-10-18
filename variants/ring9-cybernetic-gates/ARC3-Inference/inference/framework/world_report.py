@@ -106,6 +106,25 @@ def _scene_lines(view: Mapping[str, Any], level: Mapping[str, Any], at: str) -> 
     return lines + [""]
 
 
+def _dossier_lines(view: Mapping[str, Any], level: Mapping[str, Any], at: str) -> list[str]:
+    """WO-G4-DOSSIER-A: each stored dossier, chapter by chapter, rendered from the same rows as its retrieval page."""
+    if "lever_dossiers" not in level:
+        return []
+    lines = ["### Lever dossiers", ""]
+    for row in view["dossiers"]:
+        lines.append(_claim(f"- dossier {row['id']}: {row['status']}; witnesses {len(row['witnesses'])}",
+                            [f"{at}.lever_dossiers", row["id"], *row["witnesses"]]))
+        for chapter in world_description.dossier_chapters(level, row["id"]):
+            refs = [row["id"], *([chapter["product_id"]] if chapter["product_id"] else []), *chapter["evidence_refs"][:3]]
+            lines.append(_claim(f"  - dossier {row['id']} {chapter['chapter']}: {chapter['status']} ({chapter['basis']}); "
+                                f"source {chapter['source'] or 'none'}; {chapter['summary']}; evidence "
+                                f"{len(chapter['evidence_refs'])}", refs))
+            if chapter["chapter"] == "anatomy":  # revision 2: each channel's affected subject and observed events
+                lines.extend(_claim(f"  - dossier {row['id']} anatomy channel {item['text']}", [row["id"], *item["refs"]])
+                             for item in world_description.dossier_channels(chapter["facts"]))
+    return lines + [""]
+
+
 def _law_lines(view: Mapping[str, Any]) -> list[str]:
     lines = ["### Certified products and laws", ""]
     for row in view["laws"]:
@@ -117,8 +136,9 @@ def _law_lines(view: Mapping[str, Any]) -> list[str]:
         lines.append(_claim(f"- {row['gate_id']} {row['product_type']} r{row['revision']}{mode}: {stated}; "
                             f"evidence refs {len(row['evidence_refs'])}", [ref for ref in refs if ref]))
     for row in view["dossiers"]:
-        lines.append(_claim(f"- dossier {row['id']}: {row['status']}; witnesses {len(row['witnesses'])}",
-                            [row["id"], *row["witnesses"]]))
+        if row["status"] == "NOT_BUILT":  # a v3-v5 level: the stub, until a stored dossier replaces it
+            lines.append(_claim(f"- dossier {row['id']}: {row['status']}; witnesses {len(row['witnesses'])}",
+                                [row["id"], *row["witnesses"]]))
     return lines + [""]
 
 
@@ -187,7 +207,8 @@ def render_world_report(model: Mapping[str, Any]) -> str:
     for index, (level, level_view) in enumerate(zip(model["levels"], view["levels"])):
         at = f"levels[{index}]"
         lines += [f"## Level {level_view['level']}", ""]
-        for section in (_scene_lines(level_view, level, at), _law_lines(level_view), _pattern_lines(level_view),
+        for section in (_scene_lines(level_view, level, at), _law_lines(level_view), _dossier_lines(level_view, level, at),
+                        _pattern_lines(level_view),
                         _question_lines(level_view, at), _gap_lines(level, at), _census_lines(level_view, level, at)):
             lines += section
     for level_view in view["levels"]:

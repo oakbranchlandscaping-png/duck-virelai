@@ -35,6 +35,12 @@ from inference.framework.descriptive_events import cell_runs, run_cells
 from inference.framework.effect_typing import classify_effect_channel
 from inference.framework.world_model_v2 import WorldModelV2Error
 
+DOSSIER_CHAPTERS = ("identity", "anatomy", "orbit", "limits", "relations", "law_tests", "open_items")
+# WO-G4-DOSSIER-A (R9): the digest's one findings line of chapter counts, and the selected lever's chapters when it is named
+DOSSIER_CODES = {"COMPLETE": "C", "PRODUCT_PENDING": "P", "IN_PROGRESS": "O", "CLOSED_UNRESOLVED": "X",
+                 "INTERRUPTED": "I", "NOT_BUILT": "U"}
+DOSSIER_LEGEND = "C complete, P pending, O open, X closed, I interrupted, U unbuilt"
+
 VIEW_SCHEMA = "virelai-world-view-v1"
 FOLD_BASES = ("OWNER_EXCHANGE", "G2_MASK_REWRITE")
 QUESTION_KIND = "UNEXPLAINED_TRANSFORMATION"
@@ -328,13 +334,128 @@ def _laws(level: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _dossiers(level: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """One stable row per certified lever until WO-G4-DOSSIER-A fills it; the handle will not change."""
+    """One stable row per certified lever: its stored v6 dossier's chapter statuses (a v3-v5 level keeps the
+    ``NOT_BUILT`` stub, which WO-G4-DOSSIER-A replaces wherever a dossier is stored); the handle does not change."""
+    stored = level.get("lever_dossiers")
     rows = []
-    for role in level["certified"]["roles"]:
-        if role["role"] == "LEVER":
-            rows.append({"id": role["entity_id"], "status": "NOT_BUILT", "witnesses": list(role.get("witness_refs") or ()),
-                         "handle": f"virelai('library', kind='dossiers', id={role['entity_id']!r})"})
-    return sorted(rows, key=lambda row: row["id"])
+    if stored is None:
+        for role in level["certified"]["roles"]:
+            if role["role"] == "LEVER":
+                rows.append({"id": role["entity_id"], "status": "NOT_BUILT", "witnesses": list(role.get("witness_refs") or ()),
+                             "handle": f"virelai('library', kind='dossiers', id={role['entity_id']!r})"})
+        return sorted(rows, key=lambda row: row["id"])
+    for entity_id, dossier in sorted(stored.items()):
+        chapters = dossier["chapters"]
+        identity = chapters["identity"].get("facts") or {}
+        rows.append({"id": entity_id,
+                     "status": "; ".join(f"{name} {chapters[name]['status']}" for name in DOSSIER_CHAPTERS),
+                     "witnesses": [row["witness_id"] for row in identity.get("witnesses") or ()],
+                     "track_id": dossier["track_join"].get("track_id"), "census": dossier["census_context"],
+                     "handle": f"virelai('library', kind='dossiers', id={entity_id!r})"})
+    return rows
+
+
+def _n(value: Any) -> str:
+    return "n/a" if value is None else str(value)
+
+
+def _chapter_summary(name: str, chapter: Mapping[str, Any]) -> str:
+    """A deterministic rendering of stored chapter facts (never new facts)."""
+    facts = chapter.get("facts")
+    if chapter["integrity"]["status"] == "FAILED_CLOSED":
+        return f"failed closed ({', '.join(chapter['integrity']['reasons'])}; was {chapter['prior_status']})"
+    if facts is None:
+        return "no facts"
+    if name == "identity":
+        activation, actor = facts.get("activation") or {}, facts.get("actor") or {}
+        return (f"witnesses {len(facts['witnesses'])}; inventory {_n(facts.get('inventory_status'))}; "
+                f"activation {_n(activation.get('source'))}; chosen by {_n(actor.get('chooser'))}; "
+                f"executed by {_n(actor.get('executor'))} ({_n(actor.get('status'))})")
+    if name == "anatomy":
+        residue, channels = facts["residue"], dossier_channels(facts)
+        shown = "; ".join(channel["text"] for channel in channels[:2])
+        more = f"; {len(channels) - 2} more channels" if len(channels) > 2 else ""
+        return (f"channels {len(facts['channels'])}; residue {_n(residue['total'])} cells "
+                f"({_n(residue['local'])} local, {_n(residue['remote'])} remote)" + (f"; {shown}" if shown else "") + more)
+    if name == "orbit":
+        run = facts.get("run") or {}
+        return (f"run {_n(run.get('run_id'))} {_n(run.get('run_status'))}; stop {_n(run.get('stop_disposition'))}; "
+                f"period {_n(facts.get('period'))}; class {_n(facts.get('lever_class'))}; other runs {len(chapter['history'])}")
+    if name == "limits":
+        endpoint = facts["endpoint"]
+        return (f"endpoint {_n(endpoint['stop_disposition'])} ({_n(endpoint['confirmation'])}); "
+                f"persistence {facts['persistence']}; reversal {facts['reversal']}")
+    if name in ("relations", "law_tests"):
+        tests = facts["tests"]
+        tally = {status: sum(1 for t in tests if t["status"] == status) for status in ("SUPPORTED", "CONTRADICTED")}
+        tail = (f"relations {len(facts['relations'])}; withdrawn {len(chapter['history'])}" + _submitted(facts)
+                if name == "relations" else f"law {_n(facts.get('law_status'))}")
+        return (f"tests {len(tests)} ({tally['SUPPORTED']} supported, {tally['CONTRADICTED']} contradicted); " + tail)
+    return (f"incomplete {len(facts['incomplete_chapters'])}; contradictions {len(facts['contradictions'])}; "
+            f"probes owed {len(facts['probe_owed'])}; next {facts['next_test']['kind']}")
+
+
+def _submitted(facts: Mapping[str, Any]) -> str:
+    """Revision 2 (blocker 2): who submitted the relation set and which gate certified it."""
+    item = facts.get("submission")
+    if not item:
+        return ""
+    return (f"; submitted by {_n(item['submission_source'])} ({item['status']}); certifier {item['certifier']} "
+            f"({item['certification_origin']})")
+
+
+def dossier_channels(facts: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """Revision 2 (blockers 3, 4): each anatomy channel's affected subject and exact observed events, as text and the
+    stored ids it cites (never an inferred mechanism)."""
+    out = []
+    for channel in (facts or {}).get("channels") or ():
+        subject, events = channel.get("subject") or {}, channel.get("events") or ()
+        who = (f"track {subject['track_id']}" if subject.get("status") == "EXACT_TRACK"
+               else f"unresolved region ({_n(subject.get('reason'))})")
+        seen = ", ".join(f"{ref['event_id']} {ref['verb']} t{ref['transition_id']}" for ref in events[:3])
+        seen += f", {len(events) - 3} more" if len(events) > 3 else ""
+        observed = f"observed events {seen}" if events else f"no observed event ({_n(channel.get('event_status'))})"
+        refs = [ref["event_id"] for ref in events[:3]] + ([subject["track_id"]] if subject.get("status") == "EXACT_TRACK" else [])
+        out.append({"text": f"{channel['channel_id']} ({channel['locality']}): {who}; {observed}", "refs": refs})
+    return out
+
+
+def dossier_chapters(level: Mapping[str, Any], entity_id: str) -> list[dict[str, Any]]:
+    """The page rows of one stored dossier, chapter by chapter (the report renders the same rows)."""
+    chapters = level["lever_dossiers"][entity_id]["chapters"]
+    rows = []
+    for name in DOSSIER_CHAPTERS:
+        chapter = chapters[name]
+        rows.append({"chapter": name, "status": chapter["status"], "basis": chapter["basis"],
+                     "prior_status": chapter["prior_status"], "source": chapter["source"],
+                     "product_id": (chapter["product_ref"] or {}).get("product_id"),
+                     "answer_id": (chapter["answer_ref"] or {}).get("answer_id"),
+                     "evidence_refs": list(chapter["evidence_refs"]), "summary": _chapter_summary(name, chapter),
+                     "facts": chapter["facts"], "open": list(chapter["open"])})
+    return rows
+
+
+def dossier_digest_lines(level: Mapping[str, Any], subject: Any) -> list[str]:
+    """R9: compact chapter counts, and the selected lever's chapters only when the selected question names it."""
+    dossiers = level.get("lever_dossiers") or {}
+    if not dossiers:
+        return []
+    counts = []
+    for name in DOSSIER_CHAPTERS:
+        tally: dict[str, int] = {}
+        for dossier in dossiers.values():
+            code = DOSSIER_CODES[dossier["chapters"][name]["status"]]
+            tally[code] = tally.get(code, 0) + 1
+        counts.append(f"{name.replace('_items', '').replace('_tests', '')} "
+                      + " ".join(f"{code}{tally[code]}" for code in "CPOXIU" if code in tally))
+    lines = [f"DOSSIERS x{len(dossiers)} ({DOSSIER_LEGEND}): " + "; ".join(counts)]
+    if subject in dossiers:
+        chapters = dossiers[subject]["chapters"]
+        lines.append(f"SELECTED LEVER {subject}: " + "; ".join(
+            f"{name} {DOSSIER_CODES[chapters[name]['status']]}"
+            + ("" if chapters[name]["status"] in ("COMPLETE", "NOT_BUILT") else f" {chapters[name]['basis']}")
+            for name in DOSSIER_CHAPTERS))
+    return lines
 
 
 def _scene(level: Mapping[str, Any], tracks: Mapping[str, Mapping]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -458,5 +579,6 @@ def validate_view(view: Mapping[str, Any], model: Mapping[str, Any]) -> None:
         validate_level_view(level_view, level)
 
 
-__all__ = ["CAUSAL_WORDS", "FOLD_BASES", "VIEW_SCHEMA", "appearance", "describe_level_view", "describe_world",
-           "fold_transition", "validate_level_view", "validate_view"]
+__all__ = ["CAUSAL_WORDS", "DOSSIER_CHAPTERS", "FOLD_BASES", "VIEW_SCHEMA", "appearance", "describe_level_view",
+           "describe_world", "dossier_channels", "dossier_chapters", "dossier_digest_lines", "fold_transition", "validate_level_view",
+           "validate_view"]

@@ -25,6 +25,8 @@ import hashlib
 import json
 from typing import Any, Mapping
 
+from inference.framework import strict_json
+
 ALGORITHM, ENCODING = "sha256", "virelai-canonical-json-v1"
 CAPTURED, UNREPRESENTABLE = "CAPTURED", "UNREPRESENTABLE"
 GAP_REASON = "PRODUCT_CONTENT_UNREPRESENTABLE"
@@ -35,30 +37,11 @@ class ProductContentError(ValueError):
     """A value cannot be represented as strict canonical JSON, or a stored chapter breaks the v5 contract."""
 
 
-def _strict(value: Any, path: str) -> None:
-    """Revision 2: every mapping key is a string and every value a JSON primitive, list or mapping, recursively.
-    ``json.dumps`` would turn a ``1`` or ``None`` key into ``"1"`` or ``"null"``, so two different payloads could share
-    one stored form; that is refused, never normalised. Tuples are lists, as JSON already makes them."""
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise ProductContentError(f"not strict canonical JSON: non-string mapping key {key!r} at {path}")
-            _strict(item, f"{path}.{key}")
-    elif isinstance(value, (list, tuple)):
-        for index, item in enumerate(value):
-            _strict(item, f"{path}[{index}]")
-    elif isinstance(value, float):
-        if value != value or value in (float("inf"), float("-inf")):
-            raise ProductContentError(f"not strict canonical JSON: non-finite number at {path}")
-    elif not (value is None or isinstance(value, (str, int, bool))):
-        raise ProductContentError(f"not strict canonical JSON: {type(value).__name__} at {path}")
-
-
 def canonical_json(value: Any) -> str:
-    _strict(value, "$")
+    """WO-G4-DOSSIER-A (R10): the one shared strict canonicalizer (``strict_json``); a refusal names its JSON path."""
     try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
-    except (TypeError, ValueError) as exc:
+        return strict_json.canonical_json(value)
+    except strict_json.StrictJsonError as exc:
         raise ProductContentError(f"not strict canonical JSON: {exc}") from exc
 
 

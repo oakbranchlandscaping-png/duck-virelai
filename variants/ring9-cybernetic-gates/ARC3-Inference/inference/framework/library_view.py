@@ -60,6 +60,7 @@ WORLD_BUDGET = 1_500  # characters of the world block, inside the one DIGEST_BUD
 # (patterns shown, questions shown, characters per line); the last keeps the scene, the census and the handle
 WORLD_TIERS = ((5, 3, 120), (4, 2, 110), (3, 2, 100), (2, 1, 90), (1, 1, 80), (0, 0, 0))
 WORLD_HANDLE = "virelai('library', kind='transformations')"
+G4_GATES = ("G4-REACTIONS", "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW")
 HANDLES = (
     "virelai('library', kind='levels')",
     "virelai('library', kind='objects', offset=0, limit=10)",
@@ -98,8 +99,10 @@ def _cache_key(machine: Any) -> tuple[Any, ...]:
         len(getattr(adapter, "_terrain_roles", None) or ()), len(getattr(adapter, "_bounded_ambiguities", None) or ()),
         len(getattr(adapter, "_lever_discoveries", None) or ()),
     )
+    adapters = getattr(machine, "_adapters", None) or {}  # R11: an accepted per-lever answer adds no transition
+    g4 = tuple(getattr(adapters.get(gate), "revision", None) for gate in G4_GATES)
     return (len(machine.transition_index), len(getattr(machine, "level_censuses", ())), len(machine.levels),
-            machine.gate_id, machine.lives.level, machine.lives.life, products, g3)
+            machine.gate_id, machine.lives.level, machine.lives.life, products, g3, g4)
 
 
 def live_model(machine: Any, *, game_id: str = "live", run_stem: str = "live") -> dict[str, Any]:
@@ -181,7 +184,7 @@ def _clip(value: Any, keep: int = LIST_KEEP) -> Any:
     return _clip_text(value)
 
 
-def _findings(level: Mapping[str, Any], id_limit: int) -> list[str]:
+def _findings(level: Mapping[str, Any], id_limit: int, subject: Any = None) -> list[str]:
     lines: list[str] = []
     roles = level["certified"]["roles"]
     for role in roles:
@@ -204,6 +207,9 @@ def _findings(level: Mapping[str, Any], id_limit: int) -> list[str]:
     if terrain:
         labels = sorted({str(item.get("label")) for item in terrain})
         lines.append(f"TERRAIN x{len(terrain)} ({_ids(labels, id_limit)}): observed interaction, not a role")
+    from inference.framework.world_description import dossier_digest_lines
+
+    lines.extend(dossier_digest_lines(level, subject))  # WO-G4-DOSSIER-A R9
     return [_clip_text(line, 200) for line in lines] or ["nothing certified yet on this level"]
 
 
@@ -266,7 +272,7 @@ def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int],
         "revision": model["content_sha256"][:12],
         "goal": goal,
         "gates": "; ".join(f"{gate['gate_id']} {gate['disposition']}" for gate in level["certified"]["gates"]),
-        "certified": _findings(level, id_limit),
+        "certified": _findings(level, id_limit, (target or {}).get("subject")),
         "objects": _objects(level),
         "open_gaps": {"total": len(level["gaps"]), "kinds": shown},
         "accounting": {"status": level["accounting"]["status"], "missing": level["accounting"]["missing"][:4],
@@ -557,6 +563,11 @@ def _world_page(model: Mapping[str, Any], page: dict[str, Any], chosen: Mapping[
                 + [{"residual": "OPEN_IDENTITY", **item} for item in view["open_identity"]]
                 + [{"residual": "GAP", **gap} for gap in gaps])
         return _paged(page, rows, offset, limit, call)
+    if kind == "dossiers" and wanted is not None and str(wanted) in (chosen.get("lever_dossiers") or {}):
+        from inference.framework.world_description import dossier_chapters
+
+        page["dossier"] = str(wanted)
+        return _paged(page, dossier_chapters(chosen, str(wanted)), offset, limit, {**call, "id": str(wanted)})
     rows = view[kind]
     if wanted is not None:
         rows = [row for row in rows if str(wanted) in {str(row.get("id")), str(row.get("gate_id")), str(row.get("product_id"))}]

@@ -16,7 +16,7 @@ import pickle
 
 import pytest
 
-from inference.framework import library_view
+from inference.framework import lever_dossiers, library_view
 from inference.framework.descriptive_events import scene_at
 from inference.framework.library_view import (
     DIGEST_BUDGET, GOAL_QUESTIONS, HANDLES, HEADER, PAGE_BUDGET, library_digest, library_page, live_model,
@@ -191,9 +191,12 @@ def _large(model) -> dict:
         copy.update(level=number, state="FROZEN", observation={"tracks": [], "terrain": []},
                     gaps=copy["gaps"][:3])
         copy["certified"]["roles"] = []
+        copy["lever_dossiers"] = {}  # schema v6: no LEVER role, so no dossier
         frozen.append(_light(copy))
     level["level"] = 41
-    base["levels"] = frozen + [level]
+    for dossier in level["lever_dossiers"].values():  # schema v6: the renumbered level's dossiers name it
+        dossier["subject"]["level"] = 41
+    base["levels"] = lever_dossiers.finalize(frozen + [level], base["manifest"]["persist_reason"])
     return seal(base)
 
 
