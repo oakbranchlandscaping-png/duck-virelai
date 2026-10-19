@@ -66,7 +66,7 @@ LIFECYCLE_DISPOSITION = {
     "FILED_TO_G5": "NOT_BUILT",
 }
 SELECTABLE = frozenset({"OPEN_ACTIONABLE", "OBLIGATION"})
-LIMITS = ("LIMITS", "What holds this lever's state, and what returns it? No gate admits a limits experiment yet.")
+LIMITS = ("LIMITS", "What holds this lever's state, and what returns it? G4-B admits one bounded experiment while one is owed.")
 OBLIGATION_KINDS = {"CONFIRMATION": "CONFIRM_WITNESS", "DOSSIER": "DOSSIER_ANSWER",
                     "REACHABILITY": "REACHABILITY_ANSWER", "MU_REVISIT": "MU_REVISIT",
                     "REOPENED_REACHABILITY": "REOPENED_REACHABILITY"}
@@ -177,6 +177,9 @@ def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str,
     from inference.framework import g4_selection
 
     actionable = {row["question_id"] for row in g4_selection.admission_candidates(machine) if row["selectable"]}
+    from inference.framework import lever_experiments
+
+    experiments = lever_experiments.agenda_view(machine)  # B3: G4-B's limits experiments, under way or admissible
     questions = []
     for entity_id in levers:
         for gate, kind, text in G4_CHAPTERS:
@@ -193,10 +196,19 @@ def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str,
                                        **({"admissible": True} if question_id(level, gate, entity_id, kind)
                                           in actionable else {})))  # B2: the gate admits a choice of it now
             if kind == "ORBIT":  # B2: limits follows orbit, typed, and never blocks relations
-                questions.append(_question(level, None, entity_id, LIMITS[0], LIMITS[1], "BLOCKED_BY_PREREQUISITE"
-                                           if inventory is None else "OPEN_NOT_ACTIONABLE",
-                                           prerequisites_missing=[] if inventory is not None else [G3]))
+                questions.append(_limits_question(level, entity_id, inventory is not None, experiments))
     return questions
+
+
+def _limits_question(level: int, entity_id: str, inventory: bool, experiments: Mapping[str, Any]) -> dict[str, Any]:
+    """B2: typed and never blocking; B3: actionable in G4-B while its bounded experiment is under way or admissible."""
+    qid = question_id(level, "LIBRARY", entity_id, LIMITS[0])
+    disposition = "OPEN_ACTIONABLE" if qid == experiments["active"] or qid in experiments["eligible"] else (
+        "OPEN_NOT_ACTIONABLE" if inventory else "BLOCKED_BY_PREREQUISITE")
+    return _question(level, None, entity_id, LIMITS[0], LIMITS[1], disposition,
+                     prerequisites_missing=[] if inventory else [G3],
+                     **({"admissible": True} if qid in experiments["eligible"] else {}),
+                     **({"under_way": True} if qid == experiments["active"] else {}))
 
 
 def _relations_disposition(product: Any, pressed: bool) -> str:
@@ -251,7 +263,8 @@ def gate_agenda(machine: Any) -> dict[str, Any]:
                           f"Finish the gate's {obligation['kind'].lower().replace('_', ' ')} for this object.",
                           "OBLIGATION")]
     questions = gates + owed + g3 + g4 + library
-    selected = _selected(machine, level, gates, obligation, candidates)
+    limits = [q["id"] for q in g4 if q.get("under_way")] + [q["id"] for q in g4 if q["kind"] == LIMITS[0] and q.get("admissible")]
+    selected = limits[0] if limits else _selected(machine, level, gates, obligation, candidates)  # B3: limits first
     eligible = [q["id"] for q in g3 if q["disposition"] == "OPEN_ACTIONABLE"] + [q["id"] for q in g4 if q.get("admissible")]
     agenda = {
         "schema": SCHEMA, "level": level, "life": int(machine.lives.life), "gate": machine.gate_id,

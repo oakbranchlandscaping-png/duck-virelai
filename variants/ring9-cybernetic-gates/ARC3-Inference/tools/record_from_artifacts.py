@@ -106,6 +106,16 @@ def build_record(
     }
 
 
+def _experiment(envelope: dict) -> dict:
+    """WO-G4-DOSSIER-B3: a G4-B limits experiment's step names its experiment, so a replay takes it before any
+    answer due and admits Duck's choice again (``lever_experiments.replay_choice``)."""
+    if envelope.get("purpose") != "LIMITS_EXPERIMENT":
+        return {}
+    target = envelope.get("target") or {}
+    return {"experiment": {"probe_id": envelope.get("probe_id"), "question_id": target.get("question_id"),
+                           "selected_by": target.get("selected_by")}}
+
+
 def _steps(
     outcomes: list[dict], grid: list[list[int]], envelopes: list[dict] | None = None,
 ) -> list[dict]:
@@ -134,6 +144,7 @@ def _steps(
             "action": o["action"],
             "changed": changed,
             **({"decision": decision} if decision else {}),
+            **_experiment(envelope),
             **({"boundary": o["boundary_event"]} if _boundary_kept(o.get("boundary_event") or {}) else {}),
         })
         grid = before

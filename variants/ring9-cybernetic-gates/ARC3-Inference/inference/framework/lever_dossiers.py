@@ -511,8 +511,20 @@ def attach(machine: Any, level: dict[str, Any]) -> dict[str, Any]:
     if view is not None:
         view = {**view, "scope": S.observe(machine, int(level["level"]), view["g41"]["anatomies"],
                                            level["receipts"]["evidence"])}
+        view["scope"] = _experiment_failures(machine, view["scope"], level["receipts"]["evidence"])
     level["lever_dossiers"] = build(level, view)
     return level
+
+
+def _experiment_failures(machine: Any, scope: dict[str, Any] | None, evidence: Mapping[str, Any]) -> Any:
+    """B3: a G4-B experiment of this level and life whose execution evidence is not one-to-one fails its subject's
+    observations closed (``lever_dossier_state.derive``); every other dossier and chapter is untouched."""
+    from inference.framework import lever_experiments
+
+    if scope is None:
+        return None
+    failures = lever_experiments.evidence_failures(machine, scope["level"], scope["life"], evidence)
+    return {**scope, "experiment_failures": failures} if failures else scope
 
 
 def _mismatched(level: Mapping[str, Any]) -> set[int]:

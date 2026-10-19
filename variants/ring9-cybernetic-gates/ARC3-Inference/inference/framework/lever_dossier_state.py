@@ -142,6 +142,8 @@ def derive(scope: Mapping[str, Any] | None, entity_id: str) -> dict[str, Any]:
     if scope is None or scope.get("initial") is None or entity_id not in scope.get("regions", {}):
         reason = "NO_RECORD" if scope is None or scope.get("initial") is None else "NO_REGION"
         return not_built(reason, scope)
+    if entity_id in (scope.get("experiment_failures") or {}):  # B3: its experiment's execution evidence broke
+        return failed("RECORD_MISMATCH", scope["experiment_failures"][entity_id], _scope_of(scope, None, None))
     inside = [row["transition_id"] for row in _life_rows(scope) if row["boundary"] == "RESET"]
     if inside:  # a reset after the life's entry: the life's states cannot be read as one sequence
         return failed(RESET_INSIDE_LIFE, inside, _scope_of(scope, None, None))

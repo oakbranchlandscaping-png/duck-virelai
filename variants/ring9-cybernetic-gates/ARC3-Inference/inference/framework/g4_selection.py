@@ -184,6 +184,10 @@ def select(machine: Any, question_id: str, *, actor: str) -> dict[str, Any]:
     """Admit a choice among the gate's candidates; a refusal is recorded once and raised (no repair loop)."""
     from inference.framework.virelai_gates import GateContractError
 
+    if str(question_id).endswith(":LIMITS"):  # B3: a lever's limits question is G4-B's bounded experiment
+        from inference.framework import lever_experiments
+
+        return lever_experiments.select(machine, question_id, actor=actor)
     request = {"question_id": question_id, "actor": actor, "gate_id": machine.gate_id}
     reason, row = _refusal(machine, question_id)
     if reason is not None or row is None:

@@ -230,7 +230,7 @@ def test_the_reader_is_version_aware():
     assert asdict(read_world_model(v1))["schema"] == "virelai-world-model-v1"
     assert read_world_model(seal(_model()))["schema"] == SCHEMA
     with pytest.raises(WorldModelV2Error, match="unknown world model schema"):
-        read_world_model({"schema": "virelai-world-model-v9"})
+        read_world_model({"schema": "virelai-world-model-v10"})  # B3 r2: v9 is the writer now
 
 
 def test_the_writer_is_atomic_and_reports_failure(tmp_path):

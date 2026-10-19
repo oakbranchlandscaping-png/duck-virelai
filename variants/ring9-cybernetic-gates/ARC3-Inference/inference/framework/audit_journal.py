@@ -586,11 +586,17 @@ def translate_g3_event(event: Mapping[str, Any], gate_id: str) -> dict[str, Any]
 
 def translate_g4_event(event: Mapping[str, Any]) -> dict[str, Any]:
     """One G4 selection event (``g4_selection``, B2) as an audit row: G3's translation under operation
-    ``G4_SELECTION`` and the event's own gate. G4 offers no handoff turn, so it never records an opportunity."""
+    ``G4_SELECTION`` and the event's own gate. G4 offers no handoff turn, so it never records an opportunity.
+
+    WO-G4-DOSSIER-B3 revision 2: a G4-B experiment's ``FINISHED`` row keeps its reason, which names the finished type
+    (``TYPE: detail``) the v9 validator checks against the evidence. The row shape and the v2 vocabulary are unchanged:
+    every row already carries ``reason``, ``G4_EVENT`` is a v2 code, and a reason is allowed on any disposition."""
     kind = str(event.get("event") or "")
     _require(kind in G3_TRANSLATION and G3_TRANSLATION[kind][0] != "OPPORTUNITY", f"unknown G4 selection event {kind!r}")
     row = translate_g3_event({**event, "phase": event.get("gate_id")}, str(event.get("gate_id") or ""))
     reason = row["reason"]
+    if kind == "FINISHED" and event.get("gate_id") == "G4-B-LEVER-RELATIONS":  # B3 r2: a finished experiment's type
+        reason = {"text": str(event.get("reason") or kind)}
     return {**row, "operation": "G4_SELECTION",
             "reason": None if reason is None else {"code": "G4_EVENT", "text": reason["text"]}}
 

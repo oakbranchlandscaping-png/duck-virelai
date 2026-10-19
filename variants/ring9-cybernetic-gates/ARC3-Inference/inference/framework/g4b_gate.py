@@ -15,6 +15,7 @@ import hashlib
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
+from inference.framework import lever_experiments
 from inference.framework.cybernetic_targeting import GateAssessment, GoalContract, MemoryProduct
 from inference.framework.g4_guided import is_terminal, level_changed
 from inference.framework.g4_relations import (
@@ -167,6 +168,8 @@ class LeverRelationsTarget:
             disposition, unmet = "SATISFIED", ()
         elif self._pending is not None:
             disposition, unmet = "PROBE_REQUIRED", (f"the controller takes {self._pending.prediction_id}",)
+        elif lever_experiments.running(self) is not None:  # B3: a limits experiment under way
+            disposition, unmet = "PROBE_REQUIRED", (lever_experiments.running(self),)
         elif missing:
             disposition, unmet = "ANSWER_REQUIRED", (f"freeze a prediction that presses: {', '.join(missing)}",)
         else:
@@ -179,7 +182,7 @@ class LeverRelationsTarget:
 
     def next_probe(self) -> ProbeEnvelope | None:
         if self._pending is None or self._closed():
-            return None
+            return lever_experiments.next_probe(self)  # B3: an admitted limits experiment's next step, else None
         nav = str(self._pending.action.get("kind") or "").upper() == "NAV"
         return ProbeEnvelope(
             probe_id=f"{RELATION_GATE_ID}:{self._pending.prediction_id}",
@@ -206,6 +209,8 @@ class LeverRelationsTarget:
         )
 
     def record_outcome(self, probe: ProbeEnvelope, outcome: Mapping[str, Any]) -> dict[str, Any]:
+        if lever_experiments.owns(probe):  # B3: a limits experiment's step, recorded beside the predictions
+            return lever_experiments.record_outcome(self, probe, outcome)
         pending = self._pending
         if probe.gate_id != RELATION_GATE_ID or pending is None:
             raise GateContractError("Outcome does not belong to a frozen G4-B prediction.")
@@ -314,6 +319,7 @@ class LeverRelationsTarget:
 
     def _freeze(self, raw: Mapping[str, Any]) -> Prediction:
         self._seed()
+        lever_experiments.refuse_freeze(self)  # B3: the experiment under way is finished first
         if self._pending is not None:
             raise G4RelationError(f"{self._pending.prediction_id} is frozen and not yet taken; the controller takes it next")
         raw_action = raw.get("action")
@@ -340,6 +346,7 @@ class LeverRelationsTarget:
         return self._pending
 
     def _emit_product(self) -> None:
+        lever_experiments.close_with_gate(self)  # B3: a closing gate ends the experiment under way
         acted, missing = coverage(self._predictions, self._levers())
         identity = {"answer": None if self._answer is None else self._answer.answer_id,
                     "level_closed": None if self._level_closed is None else self._level_closed["evidence_ref"]}
@@ -469,6 +476,7 @@ class LeverRelationsTarget:
                 f"G4-C's test {self._reopened[-1]} of your last description was CONTRADICTED (see "
                 "progress.recent). Test what it shows, then submit a revised description."
             )
+        lever_experiments.decorate(self, view)  # B3: the experiment under way, or the admissible ones
         return view
 
     def relations_view(self) -> dict[str, Any]:

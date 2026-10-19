@@ -345,6 +345,8 @@ def _certified_answer_step(
 
 def _relations_step(machine: Any, capability: Mapping[str, Any] | None, refused: frozenset | set = frozenset()) -> OwnedStep:
     """G4-B from the record (R9-R24 D19); Duck's frozen predictions are taken by the controller."""
+    from inference.framework import lever_experiments  # B3: G4-B offers an owed limits experiment before the record
+
     gate = machine.gate_id
     if gate == RELATIONS and capability is None:
         adapter = machine._adapters[RELATIONS]
@@ -356,7 +358,8 @@ def _relations_step(machine: Any, capability: Mapping[str, Any] | None, refused:
     if capability is not None:
         target = capability.get("target") or {}
         return OwnedStep(
-            CONTROLLER, gate, f"{gate}: take {target.get('prediction_id')}, the prediction Duck froze",
+            CONTROLLER, gate, lever_experiments.controller_reason(capability)
+            or f"{gate}: take {target.get('prediction_id')}, the prediction Duck froze",
             ACTION, action=dict(capability["actions"][0]), probe_token=str(capability["probe_token"]),
         )
     view = machine.gate_view()

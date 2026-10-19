@@ -39,8 +39,10 @@ ORBITS = "G4.2-LEVER-ORBITS"
 OPERATION = "G4_SELECTION"
 CLOSING = ("STALE", "FINISHED")
 SELECTED = f"{ORBITS}:GUIDED:SEL:"
-CHAPTER_GATES = {"anatomy": "G4-REACTIONS", "orbit": ORBITS}
-CHAPTER_KINDS = {"anatomy": "EFFECTS", "orbit": "ORBIT"}
+EXPERIMENTS = "G4-B-LEVER-RELATIONS"  # B3: G4-B admits a lever's bounded limits experiment
+CHAPTER_GATES = {"anatomy": "G4-REACTIONS", "orbit": ORBITS, "limits": "LIBRARY"}  # the limits row's question id
+CHAPTER_KINDS = {"anatomy": "EFFECTS", "orbit": "ORBIT", "limits": "LIMITS"}
+ADMITTING = {ORBITS: ("orbit", "G4-A", "ORBIT"), EXPERIMENTS: ("limits", "G4-B", "LIMITS")}
 
 
 def dossier_question(level: int, entity_id: str, chapter: str) -> str | None:
@@ -70,16 +72,21 @@ def _event(row: Mapping[str, Any]) -> str:
 MATCHED = ("level", "life", "gate_id", "executor")  # a close must describe the choice it closes (revision 4)
 
 
-def _admission_problem(levels: Mapping[Any, Mapping[str, Any]], row: Mapping[str, Any]) -> str | None:
-    """Revision 4, rule 1: every ADMITTED row is a well-formed G4-A choice, open or not."""
+def _admission_problem(levels: Mapping[Any, Mapping[str, Any]], row: Mapping[str, Any],
+                       experiments: bool = True) -> str | None:
+    """Revision 4, rule 1: every ADMITTED row is a well-formed G4-A choice, open or not (v9, B3 r2: or a G4-B
+    experiment; the frozen v8 contract admits G4-A rows only)."""
     refs, number, where = row["refs"], row.get("level"), f"ADMITTED selection {row['event_id']}"
-    if row.get("gate_id") != ORBITS:
+    if not experiments and row.get("gate_id") != ORBITS:
         return f"{where} is not G4-A's"
+    if row.get("gate_id") not in ADMITTING:
+        return f"{where} is not G4-A's or G4-B's"
+    chapter, gate, kind = ADMITTING[row["gate_id"]]
     if number not in levels:
         return f"{where} names level {number}, not a level this model holds"
-    if refs["question_id"] != dossier_question(number, str(refs["subject"]), "orbit"):
-        return (f"{where} names {refs['question_id']}, not the question derived from level, G4-A, {refs['subject']} "
-                "and ORBIT")
+    if refs["question_id"] != dossier_question(number, str(refs["subject"]), chapter):
+        return (f"{where} names {refs['question_id']}, not the question derived from level, {gate}, {refs['subject']} "
+                f"and {kind}")
     if refs["subject"] not in (levels[number].get("lever_dossiers") or {}):
         return f"{where} names {refs['subject']}, which has no dossier on level {number}"
     return None
@@ -95,11 +102,12 @@ def _mismatch(admitted: Mapping[str, Any], row: Mapping[str, Any]) -> str | None
     return None
 
 
-def _log(levels: Mapping[Any, Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]
-         ) -> tuple[list[tuple[Mapping[str, Any], Mapping[str, Any], int]], list[str]]:
+def _log(levels: Mapping[Any, Mapping[str, Any]], rows: Sequence[Mapping[str, Any]], experiments: bool = True
+         ) -> tuple[list[tuple[Mapping[str, Any], Mapping[str, Any] | None, int]], list[str]]:
     """Revision 4: the selection log as a state machine. ADMITTED opens the one choice of its level and gate (a
     second may not open while it is open); STALE or FINISHED closes it and must match it on level, life, gate,
-    executor, subject and question; REFUSED opens and closes nothing. Returns each FINISHED with its admission."""
+    executor, subject and question; REFUSED opens and closes nothing. Returns every admission with its close (None
+    while it is open: a valid admission may stay open at any stop) and its ordinal."""
     from inference.framework.audit_journal import G3_TRANSLATION
 
     open_choices: dict[tuple[Any, Any], tuple[Mapping[str, Any], int]] = {}
@@ -111,7 +119,7 @@ def _log(levels: Mapping[Any, Mapping[str, Any]], rows: Sequence[Mapping[str, An
             problems.append(f"{where} does not fit its audit event {row.get('event')}/{row.get('disposition')}")
         elif event == "ADMITTED":
             admissions += 1
-            problem = _admission_problem(levels, row)
+            problem = _admission_problem(levels, row, experiments)
             if problem is not None:
                 problems.append(problem)
             if key in open_choices:
@@ -124,9 +132,9 @@ def _log(levels: Mapping[Any, Mapping[str, Any]], rows: Sequence[Mapping[str, An
             if admitted is None or field is not None:
                 problems.append(f"{where} closes no matching earlier ADMITTED selection"
                                 + ("" if field is None else f": its {field} differs"))
-            elif event == "FINISHED":
+            else:
                 pairs.append((admitted[0], row, admitted[1]))
-    return pairs, problems
+    return pairs + [(admitted, None, ordinal) for admitted, ordinal in open_choices.values()], problems
 
 
 def _orbit_receipts(level: Mapping[str, Any]) -> list[str]:
@@ -162,17 +170,23 @@ def _completed(levels: Mapping[Any, Mapping[str, Any]], admitted: Mapping[str, A
     return None
 
 
-def problems(payload: Mapping[str, Any]) -> list[str]:
+def problems(payload: Mapping[str, Any], *, experiments: bool = True) -> list[str]:
     """Every way the saved model breaks the chain admitted question → selected run receipts → completed chapter."""
     levels = {level["level"]: level for level in payload.get("levels") or ()}
     chapter = payload.get("provenance") or {}
     rows = list(chapter.get("rows") or ()) if chapter.get("phase") == "H2" else []
     found = [problem for level in levels.values() for problem in _orbit_receipts(level)]
-    pairs, log = _log(levels, rows)
+    pairs, log = _log(levels, rows, experiments)
     found += log
-    found += [problem for admitted, finished, admission in pairs
-              if (problem := _completed(levels, admitted, finished, admission)) is not None]
-    return found
+    found += [problem for admitted, closed, admission in pairs
+              if admitted.get("gate_id") == ORBITS and closed is not None and _event(closed) == "FINISHED"
+              and (problem := _completed(levels, admitted, closed, admission)) is not None]
+    if not experiments:  # the frozen v8 contract (B2): the G4-A chain only
+        return found
+    from inference.framework.lever_experiment_check import problems as experiment_problems
+
+    journal = chapter.get("phase") == "H2" and chapter.get("integrity") in ("SEALED", "OPEN")
+    return found + experiment_problems(levels, [pair for pair in pairs if pair[0].get("gate_id") == EXPERIMENTS], journal)
 
 
 __all__ = ["dossier_question", "probe_lever", "problems", "selected_run"]

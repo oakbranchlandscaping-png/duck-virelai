@@ -83,6 +83,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "machine": GAME, "revision": LEVEL, "_answer": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,
         "_predictions": LEVEL, "_record": LEVEL, "_regions": LEVEL, "_reopened": LEVEL, "_pending": TRANSIENT,
         "_from_record": LEVEL, "_unresolved": LEVEL,
+        "_lever_experiment": TRANSIENT, "_lever_experiments": LEVEL,  # B3: under way; closed on this level
     },
     "LeverLawTarget": {
         "machine": GAME, "revision": LEVEL, "_certified": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,

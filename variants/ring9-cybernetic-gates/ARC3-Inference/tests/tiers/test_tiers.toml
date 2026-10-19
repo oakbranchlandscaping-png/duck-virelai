@@ -105,6 +105,8 @@ tests = [
     "tests/test_g4_selection.py",                # WO-G4-DOSSIER-B (B2): library-selected G4 study and its no-choice golden
     "tests/test_provenance_v2.py",               # B2 revision 2: audit schema v2, the frozen v1 reader, world model v8
     "tests/test_g4_selection_persisted.py",      # B2 revision 3: the v8 validator's selection chain and its attacks
+    "tests/test_lever_experiments.py",           # WO-G4-DOSSIER-B3: bounded limits experiments in G4-B
+    "tests/test_lever_experiments_r2.py",        # B3 r2: typed closes against the evidence, world model v9, frozen v8
     "tests/test_g3_directed_click.py::test_2a_duck_chooses_a_row_away_from_the_head_and_the_outcome_is_attributed_to_it",
     "tests/test_g3_directed_click.py::test_0_no_choice_replays_keep_every_envelope_evidence_id_and_product[carry_v7]",
     "tests/test_provenance_capture.py::test_a_g3_choice_refused_before_selection_is_still_recorded",
@@ -119,6 +121,9 @@ tests = [
     "tests/test_g3_directed_nav.py",             # directed NAV
     "tests/test_g4_selection.py",                # WO-G4-DOSSIER-B (B2): directed G4.1 and G4-A, the G4 no-choice golden
     "tests/test_g4_selection_persisted.py",      # B2 revision 3: the saved model enforces the selection chain
+    "tests/test_lever_experiments.py",           # WO-G4-DOSSIER-B3: G4-B's limits experiments, chosen or by coverage
+    "tests/test_lever_experiments_r2.py",        # B3 r2: typed closes against the evidence, world model v9, frozen v8
+    "tests/test_g4b_relations.py",               # B3: G4-B's controller path and its replay from the artifacts
     "tests/test_g3_hybrid_click_pass.py",        # HYBRID CLICK
     "tests/test_g3_ledger_frame_sync.py",        # reset continuity
     "tests/test_g3_hybrid_lifecycle_replay.py",  # lifecycle replay on the saved records
@@ -171,4 +176,6 @@ tests = [
     "tests/test_g4_selection.py::test_b2_08_duck_chooses_through_the_tool_and_every_event_reaches_disk_and_the_audit_journal",
     "tests/test_provenance_v2.py",               # B2 revision 2: audit schema v2 and the world model v8 that embeds it
     "tests/test_g4_selection_persisted.py",      # B2 revision 3: the v8 selection chain on the canonical artifact
+    "tests/test_lever_experiments.py",           # WO-G4-DOSSIER-B3: the experiment chain, live and persisted
+    "tests/test_lever_experiments_r2.py",        # B3 r2: typed closes against the evidence, world model v9, frozen v8
 ]

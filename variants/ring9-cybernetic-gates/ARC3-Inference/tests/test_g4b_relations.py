@@ -90,8 +90,12 @@ def test_g4b_opens_after_g4a_on_the_real_ft09_levers_and_asks_for_a_prediction(g
     assert set(states.values()) == {"S0"}
     assert {item["class"] for item in levers} == {"TOGGLE"}
     assert len(card.render()) <= CARD_BUDGET and not card.over_budget
-    owner = next_owned_step(machine)  # R9-R24 D19: the record answers G4-B; Duck's prediction path stays open
-    assert (owner.owner, owner.kind) == ("CONTROLLER", "ANSWER") and "record certifies" in owner.reason
+    # R9-R24 D19: the record answers G4-B and Duck's prediction path stays open. WO-G4-DOSSIER-B3 (interface §8.2):
+    # this life (2) owes E0053-E0055's reversal, so G4-B first offers the head experiment and the controller takes it;
+    # the record answers once nothing is owed (test_lever_experiments b3_04 and b3_21).
+    owner = next_owned_step(machine)
+    assert (owner.owner, owner.kind, owner.action) == ("CONTROLLER", "ACTION", _click("E0053"))
+    assert "limits experiment" in owner.reason and "Q:L1:LIBRARY:E0053:LIMITS" in owner.reason
 
 
 def test_a_frozen_prediction_is_taken_exactly_by_the_controller_and_graded_on_the_masked_board(g4b):

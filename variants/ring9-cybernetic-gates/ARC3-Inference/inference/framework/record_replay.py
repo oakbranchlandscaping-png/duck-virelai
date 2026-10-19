@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from inference.framework import lever_experiments
 from inference.framework.card_builder import build_card
 from inference.framework.gate_card import render_binding_gate_context
 from inference.framework.virelai_gates import CyberneticGateMachine
@@ -240,13 +241,15 @@ def replay(
         if step.get("kind") == "RESET":  # the harness reset, between probes (R9-R12)
             _replay_reset(result, step)
             continue
-        if not _submit_due_answers(result, pending, answer_source, last):
+        hold = lever_experiments.replay_hold(machine, step)  # B3: an experiment step comes before G4-B's answers
+        if not _submit_due_answers(result, pending, answer_source, last, hold):
             result.stopped = f"no recorded answer for {machine.gate_id} before transition {step['transition_id']}"
             _sample(result, last, "final")
             return result
         _submit_ready_answers(result, pending)
         capability = machine.next_probe_capability()
-        while capability is None and _answer_due(machine) and _submit_due_answers(result, pending, answer_source, last):
+        while (capability is None and machine.gate_id != hold and _answer_due(machine)
+               and _submit_due_answers(result, pending, answer_source, last, hold)):
             capability = machine.next_probe_capability()  # probing closed a roster; its answers came due
         _sample(result, last, "before-step")
         if capability is None:
@@ -276,11 +279,11 @@ def _replay_reset(result: ReplayResult, step: Mapping[str, Any]) -> None:
 
 
 def _submit_due_answers(
-    result: ReplayResult, pending: dict[str, list], answer_source: str, last: int
+    result: ReplayResult, pending: dict[str, list], answer_source: str, last: int, hold: str | None = None,
 ) -> bool:
-    """Submit every answer the machine demands now; False if the record has none to give."""
+    """Submit every answer the machine demands now, short of gate ``hold``; False if the record has none to give."""
     machine = result.machine
-    while _answer_due(machine):
+    while _answer_due(machine) and machine.gate_id != hold:
         queue = pending.get(machine.gate_id) or []
         if not queue:
             return False
