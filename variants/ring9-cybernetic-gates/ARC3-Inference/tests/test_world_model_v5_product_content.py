@@ -30,7 +30,7 @@ from test_world_model_v4_provenance import (  # noqa: F401  (module fixtures are
 
 FIXTURES = Path(__file__).parent / "fixtures"
 V5 = "virelai-world-model-v5"
-WRITER = "virelai-world-model-v9"  # the writer since WO-G4-DOSSIER-B3 (revision 2)
+WRITER = "virelai-world-model-v10"  # the writer since WO-WIN-01
 ENCODING = "virelai-canonical-json-v1"
 
 

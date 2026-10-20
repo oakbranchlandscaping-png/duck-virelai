@@ -113,6 +113,16 @@ tests = [
     "tests/test_r9_r16_life_record.py::test_d4_every_gate_machine_field_has_a_declared_persistence_tier",
 ]
 
+[T0.win-episode]
+tests = [
+    "tests/test_win_episode.py",                 # WO-WIN-01: the observed-win episode, world model v10, frozen v9
+    "tests/test_win_episode_r2.py",              # WIN-01 r2: the clear is a boundary; no v10-to-v9 downgrade
+    "tests/test_world_model_v2.py",              # the writer, the version-aware reader and seal()
+    "tests/test_world_description.py::test_every_factual_report_line_ends_in_resolvable_refs",  # the report's refs
+    "tests/test_world_model_v4_provenance.py::test_guard_ducks_digest_and_pages_are_unchanged_apart_from_the_revision_label",
+    "tests/test_lever_experiments_r2.py::test_t2_09_the_writer_is_v9_and_the_frozen_v8_model_from_ef8289d_still_reads",
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
@@ -152,6 +162,8 @@ tests = [
     "tests/test_semantic_library_shadow.py",     # the effect typing the view reads
     "tests/test_world_model_v6_dossiers.py",     # WO-G4-DOSSIER-A: the dossier schema, projections and attacks
     "tests/test_world_model_v6_dossier_records.py",  # WO-G4-DOSSIER-A on the records: page, digest line, report
+    "tests/test_win_episode.py",                 # WO-WIN-01: the win episode in the census, report, pages and digest
+    "tests/test_win_episode_r2.py",              # WIN-01 r2: the clear is a boundary; no v10-to-v9 downgrade
 ]
 
 [T1.paper-evidence]
@@ -178,4 +190,6 @@ tests = [
     "tests/test_g4_selection_persisted.py",      # B2 revision 3: the v8 selection chain on the canonical artifact
     "tests/test_lever_experiments.py",           # WO-G4-DOSSIER-B3: the experiment chain, live and persisted
     "tests/test_lever_experiments_r2.py",        # B3 r2: typed closes against the evidence, world model v9, frozen v8
+    "tests/test_win_episode.py",                 # WO-WIN-01: world model v10, its frozen v9 reader, the report and digest
+    "tests/test_win_episode_r2.py",              # WIN-01 r2: the clear is a boundary; no v10-to-v9 downgrade
 ]

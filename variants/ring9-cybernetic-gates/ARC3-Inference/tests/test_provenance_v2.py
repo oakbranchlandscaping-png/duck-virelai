@@ -111,13 +111,13 @@ def test_pv2_05_the_writer_continues_an_open_v1_journal_in_v1_and_refuses_g4_row
 def test_pv2_06_the_world_model_is_v8_and_the_frozen_v7_model_still_reads():
     wm = _wm()
     v7 = json.loads(V7_MODEL.read_text())
-    assert (wm.SCHEMA, wm.V8_SCHEMA, wm.V7_SCHEMA) == (  # B3 r2: the writer is v9; v8 and v7 are frozen
-        "virelai-world-model-v9", "virelai-world-model-v8", "virelai-world-model-v7")
+    assert (wm.SCHEMA, wm.V8_SCHEMA, wm.V7_SCHEMA) == (  # WIN-01: the writer is v10; v8 and v7 are frozen
+        "virelai-world-model-v10", "virelai-world-model-v8", "virelai-world-model-v7")
     assert v7["provenance"]["schema"] == "virelai-provenance-chapter-v1" and len(v7["provenance"]["rows"]) == 4
     wm.validate_v7(v7)
     assert wm.read_world_model(v7)["schema"] == "virelai-world-model-v7"
     assert wm._canonical(v7) == V7_MODEL.read_bytes()  # read back unchanged: the v7 bytes 0119a74 wrote
-    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v9"):
+    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v10"):
         wm.validate(v7)  # the v8 contract is never applied to a v7 artifact
 
 

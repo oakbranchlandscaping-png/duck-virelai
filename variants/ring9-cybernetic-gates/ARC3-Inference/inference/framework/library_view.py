@@ -28,6 +28,7 @@ import json
 import weakref
 from typing import Any, Mapping, Sequence
 
+from inference.framework import win_episode_view
 from inference.framework.world_model_v2 import LIVE_VIEW, seal, validate
 
 DIGEST_SCHEMA = "virelai-library-digest-v1"
@@ -54,8 +55,8 @@ GAP_ORDER = ("RECORD_MISMATCH", "IDENTITY_UNRESOLVED", "INCONCLUSIVE", "BUDGET",
 GOAL_GAP_TERMS = {"G1-EGO": "ego", "G2-COUNTER": "counter", "G3-LEVERS": "lever", "G4-REACTIONS": "lever",
                   "G4.2-LEVER-ORBITS": "lever", "G4-B-LEVER-RELATIONS": "lever", "G4-C-LEVER-LAW": "lever"}
 PAGE_KINDS = ("levels", "objects", "object", "gaps", "role", "evidence",
-              "scene", "events", "transformations", "dossiers", "laws", "residuals")
-WORLD_KINDS = PAGE_KINDS[6:]
+              "scene", "events", "transformations", "dossiers", "laws", "residuals", "win_episode")  # WIN-01: appended
+WORLD_KINDS = PAGE_KINDS[6:12]
 WORLD_BUDGET = 1_500  # characters of the world block, inside the one DIGEST_BUDGET section
 # (patterns shown, questions shown, characters per line); the last keeps the scene, the census and the handle
 WORLD_TIERS = ((5, 3, 120), (4, 2, 110), (3, 2, 100), (2, 1, 90), (1, 1, 80), (0, 0, 0))
@@ -393,11 +394,11 @@ def library_digest(model: Mapping[str, Any], budget: int = DIGEST_BUDGET, *,
     for tiers, need in ((_gap_first_tiers(), floor), (DIGEST_TIERS, (0, 0))):
         fitted = _fit(model, level, tiers, need, budget, target)
         if fitted is not None:
-            return fitted
+            return win_episode_view.with_win(model, fitted, budget, _render)  # WIN-01: only what still fits
     digest = _minimal_digest(model, target)
     if len(_render(digest)) > budget:
         raise ValueError(f"a digest budget of {budget} characters cannot hold the goal and the counts")
-    return digest
+    return win_episode_view.with_win(model, digest, budget, _render)
 
 
 def _gap_first_tiers() -> tuple[tuple[int, int, int, int, int], ...]:
@@ -607,6 +608,8 @@ def library_page(model: Mapping[str, Any], kind: str, *, id: Any = None, reason:
         return _object_page(model, page, str(id), part, offset, limit)
     chosen = _level(model, level)
     page["level"] = chosen["level"]
+    if kind == "win_episode":  # WO-WIN-01: the level's observed-win episode, its transitions paged
+        return win_episode_view.page(page, chosen, offset, limit, _paged)
     if kind in WORLD_KINDS:
         options = {"id": id, "transition": transition, "from_transition": from_transition, "to_transition": to_transition,
                    "object": object, "verb": verb, "include_folded": include_folded}

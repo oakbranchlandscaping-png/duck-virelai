@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from inference.framework import world_description, world_model_v2
+from inference.framework import win_episode_view, world_description, world_model_v2
 
 REPORT_NAME = "world_report.md"
 
@@ -213,7 +213,7 @@ def render_world_report(model: Mapping[str, Any]) -> str:
         at = f"levels[{index}]"
         lines += [f"## Level {level_view['level']}", ""]
         for section in (_scene_lines(level_view, level, at), _law_lines(level_view), _dossier_lines(level_view, level, at),
-                        _pattern_lines(level_view),
+                        win_episode_view.report_lines(level, at), _pattern_lines(level_view),  # WIN-01: the episode
                         _question_lines(level_view, at), _gap_lines(level, at), _census_lines(level_view, level, at)):
             lines += section
     for level_view in view["levels"]:

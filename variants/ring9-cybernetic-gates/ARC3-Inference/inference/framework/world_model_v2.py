@@ -26,6 +26,8 @@ limits question, its step receipts form one experiment within its cap, and its t
 receipts and the subject's observations show (``lever_experiment_check``). The row shapes are unchanged, but an
 ``ef8289d`` v8 reader refuses such a model, so it is v9; v8 is frozen (``validate_v8``: G4-A rows only, never the
 experiment check). The embedded audit journal stays v2.
+Schema v10, 2026-10-19: WO-WIN-01 — each level's ``win_episode``, recompiled and refused if it differs
+(``win_episode_check``); v9 is frozen, and no model below v10 may hold an episode. The audit journal stays v2.
 Accepted limitation (R12): a hard process kill writes no H2, so per-lever work since the last written model is lost.
 
 Two tiers, kept apart by the validator:
@@ -57,7 +59,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-world-model-v9"  # WO-G4-DOSSIER-B3 r2: G4-B limits experiments join the persisted selections
+SCHEMA = "virelai-world-model-v10"  # WO-WIN-01: every level carries its observed-win episode
+V9_SCHEMA = "virelai-world-model-v9"  # B3 r2: G4-B limits experiments join the persisted selections (frozen)
 V8_SCHEMA = "virelai-world-model-v8"  # B2 r2: provenance chapter v2 (audit v1 or v2), G4-A selections only (frozen)
 V7_SCHEMA = "virelai-world-model-v7"  # B1: every lever dossier holds its record-derived observations (frozen)
 V6_SCHEMA = "virelai-world-model-v6"
@@ -123,8 +126,10 @@ def seal(payload: Mapping[str, Any]) -> dict[str, Any]:
     reconciled with that chapter (``lever_dossier_provenance``: final at H2, pending otherwise)."""
     from inference.framework.lever_dossier_provenance import reconcile
     from inference.framework.provenance_chapter import attach
+    from inference.framework.win_episode import reconcile as reconcile_episodes
 
     sealed = reconcile(attach({k: v for k, v in dict(payload).items() if k != "content_sha256"}))
+    sealed["levels"] = reconcile_episodes(sealed["levels"])  # v10 (WO-WIN-01): after the dossiers settle
     sealed["schema"] = SCHEMA
     _strict(sealed)  # R10: no hash over a payload json.dumps would silently rewrite
     sealed["content_sha256"] = content_sha256(sealed)
@@ -138,8 +143,13 @@ def canonical_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def validate(payload: Mapping[str, Any]) -> None:
-    """The v9 contract: the v8 rules, with the persisted G4-A selection chain and the G4-B experiment chain (B3 r2)."""
+    """The v10 contract: the v9 rules, and every level's win episode against its level (WO-WIN-01)."""
     _validate_payload(payload, SCHEMA)
+
+
+def validate_v9(payload: Mapping[str, Any]) -> None:
+    """The accepted v9 contract, frozen (B3 r2): the v8 rules with the G4-A and G4-B selection chains; no episode."""
+    _validate_payload(payload, V9_SCHEMA)
 
 
 def validate_v8(payload: Mapping[str, Any]) -> None:
@@ -180,7 +190,7 @@ def validate_v2(payload: Mapping[str, Any]) -> None:
 
 def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(payload.get("schema") == schema, f"schema must be {schema}")
-    if schema in {V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, SCHEMA}:
+    if schema in {V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
         _strict(payload)
     manifest = payload.get("manifest") or {}
     _require(manifest.get("status") in MANIFEST_STATUSES, "manifest.status is not a known status")
@@ -193,21 +203,27 @@ def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(len(open_levels) <= 1, "at most one level is open")
     for level in levels:
         _validate_level(level)
-        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, SCHEMA}:
+        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
             _validate_v3_level(level)
-    if schema in {V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, SCHEMA}:
+    if schema in {V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
         _validate_product_content(levels)
-    if schema in {V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, SCHEMA}:
+    if schema in {V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
         from inference.framework.provenance_chapter import ProvenanceChapterError, validate_chapter
 
         try:
-            validate_chapter(payload, frozen_v1=schema not in {V8_SCHEMA, SCHEMA})
+            validate_chapter(payload, frozen_v1=schema not in {V8_SCHEMA, V9_SCHEMA, SCHEMA})
         except ProvenanceChapterError as exc:
             _fail(f"provenance: {exc}")
-    if schema in {V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, SCHEMA}:  # after the chapter: dossier provenance facts against it
-        _validate_lever_dossiers(levels, manifest, payload.get("provenance"), v7=schema in {V7_SCHEMA, V8_SCHEMA, SCHEMA})
-    if schema in {V8_SCHEMA, SCHEMA}:  # B2 r3 (v8): the G4-A chain; B3 r2 (v9 only): the G4-B experiment chain too
-        _validate_selections(payload, experiments=schema == SCHEMA)
+    if schema in {V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:  # after the chapter: dossier provenance facts
+        _validate_lever_dossiers(levels, manifest, payload.get("provenance"), v7=schema != V6_SCHEMA)
+    if schema in {V8_SCHEMA, V9_SCHEMA, SCHEMA}:  # B2 r3 (v8): the G4-A chain; B3 r2 (v9 on): the G4-B experiments too
+        _validate_selections(payload, experiments=schema != V8_SCHEMA)
+    if schema == SCHEMA:  # WO-WIN-01 (v10 only): each level's win episode
+        from inference.framework.win_episode_check import problems as episode_problems
+
+        _require(not (found := episode_problems(levels)), "win episode: " + "; ".join(found[:3]))
+    _require(schema == SCHEMA or not any(isinstance(level, Mapping) and "win_episode" in level for level in levels),
+             f"a {schema} model holds no win_episode: a relabelled v10 artifact is refused (WIN-01 r2)")
     if "content_sha256" in payload:
         _require(payload["content_sha256"] == content_sha256(payload), "content_sha256 does not match the content")
 
@@ -405,7 +421,7 @@ def _validate_role(role: Mapping[str, Any], known_tracks: set[str], receipts: Ma
 
 
 def read_world_model(payload: Mapping[str, Any]) -> Any:
-    """Version-aware reader: v1 through its own validator, v2-v8 by their frozen rules, v9 by this module's;
+    """Version-aware reader: v1 through its own validator, v2-v9 by their frozen rules, v10 by this module's;
     anything else is refused."""
     schema = payload.get("schema")
     if schema == V1_SCHEMA:
@@ -434,6 +450,9 @@ def read_world_model(payload: Mapping[str, Any]) -> Any:
         return dict(payload)
     if schema == V8_SCHEMA:
         validate_v8(payload)
+        return dict(payload)
+    if schema == V9_SCHEMA:
+        validate_v9(payload)
         return dict(payload)
     if schema == SCHEMA:
         validate(payload)
@@ -474,8 +493,8 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
 
 __all__ = [
     "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "V2_SCHEMA", "V3_SCHEMA", "V4_SCHEMA", "V5_SCHEMA",
-    "V6_SCHEMA", "V7_SCHEMA", "V8_SCHEMA",
+    "V6_SCHEMA", "V7_SCHEMA", "V8_SCHEMA", "V9_SCHEMA",
     "WorldModelV2Error", "WriteResult", "canonical_bytes", "content_sha256", "read_world_model", "seal", "validate",
     "validate_v2", "validate_v3", "validate_v4", "validate_v5", "validate_v6", "validate_v7", "validate_v8",
-    "write_canonical",
+    "validate_v9", "write_canonical",
 ]

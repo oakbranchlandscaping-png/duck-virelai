@@ -56,14 +56,16 @@ def journal_bytes(contents) -> bytes:
 
 
 def sealed_unvalidated(unsealed: dict, data: bytes) -> dict:
-    """What ``world_model_v2.seal`` builds — chapter, indexes, dossier reconciliation, schema and hash — without its
-    final validation: a forger's best artifact, for ``read_world_model`` to judge."""
+    """What ``world_model_v2.seal`` builds — chapter, indexes, dossier reconciliation, win episodes (v10), schema and
+    hash — without its final validation: a forger's best artifact, for ``read_world_model`` to judge."""
     from inference.framework import provenance_chapter as pc
     from inference.framework.lever_dossier_provenance import reconcile
+    from inference.framework.win_episode import reconcile as reconcile_episodes
 
     wm = _wm()
     chapter = pc.h2(unsealed, data=data, sidecar=SIDECAR, capture="ENABLED", answer_records=None)
     model = reconcile(pc.attach({**unsealed, "provenance": chapter}))
+    model["levels"] = reconcile_episodes(model["levels"])
     model["schema"] = wm.SCHEMA
     model["content_sha256"] = wm.content_sha256(model)
     return model

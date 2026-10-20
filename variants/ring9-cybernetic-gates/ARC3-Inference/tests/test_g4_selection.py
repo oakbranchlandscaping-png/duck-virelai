@@ -373,7 +373,7 @@ def test_b2_11_the_derived_question_of_the_dossier_chapter_is_the_selection_and_
     assert derived == question_id(1, ORBITS, "E0057", "ORBIT") == admitted["question_id"]
     assert chapter["status"] == "COMPLETE" and {r["evidence_id"] for r in receipts} == set(chapter["evidence_refs"])
     assert all(r["question_id"] == derived for r in receipts)
-    assert sel.problems(model) == [] and _wm_read(model)["schema"] == "virelai-world-model-v9"
+    assert sel.problems(model) == [] and _wm_read(model)["schema"] == "virelai-world-model-v10"
 
 
 def test_b2_12_a_new_choice_replacing_a_standing_one_ends_it_on_the_record():

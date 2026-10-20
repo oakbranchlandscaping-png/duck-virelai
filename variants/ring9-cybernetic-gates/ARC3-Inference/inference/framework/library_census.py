@@ -26,7 +26,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
-from inference.framework import lever_dossiers, provenance_hooks
+from inference.framework import lever_dossiers, provenance_hooks, win_episode
 from inference.framework.descriptive_events import cell_runs, describe_level, restrict_description, role_ref, witness_sha256
 from inference.framework.virelai_continuity import (
     ComponentObservation,
@@ -675,7 +675,7 @@ def freeze_census_or_failure(machine: Any, outcome: Mapping[str, Any]) -> dict[s
     boundary = outcome.get("boundary_event")
     level_before = boundary.get("level_before") if isinstance(boundary, Mapping) else None
     try:
-        return freeze_level_census(machine, level_before=int(level_before))
+        return win_episode.attach(machine, freeze_level_census(machine, level_before=int(level_before)), outcome)
     except Exception as exc:  # noqa: BLE001 - recorded, never raised into the gate machine
         return {"level": level_before, "census_failed": f"{type(exc).__name__}: {exc}"}
 

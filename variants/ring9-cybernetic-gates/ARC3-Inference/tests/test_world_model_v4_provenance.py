@@ -153,7 +153,7 @@ def test_v4_a_sealed_reconciled_run_is_complete_with_every_row_embedded_and_inde
     data = _journal(tmp_path / "j.jsonl")
     sealed = _sealed(_model(), _h2(_model(), data))
     chapter = sealed["provenance"]
-    assert SCHEMA == "virelai-world-model-v9" and sealed["schema"] == SCHEMA
+    assert SCHEMA == "virelai-world-model-v10" and sealed["schema"] == SCHEMA
     assert (chapter["phase"], chapter["integrity"], chapter["completeness"], chapter["completeness_scope"]) == (
         "H2", "SEALED", "COMPLETE", "RUN")
     assert chapter["reasons"] == [] and chapter["reconciliation"]["findings"] == []
@@ -207,7 +207,7 @@ def test_v4_a_live_view_model_is_v4_not_evaluated_and_never_opens_the_journal(mo
 
     _forbid_journal_reads(monkeypatch)
     model = seal(_model(persist_reason="LIVE_VIEW"))
-    assert model["schema"] == "virelai-world-model-v9"
+    assert model["schema"] == "virelai-world-model-v10"
     chapter = model["provenance"]
     assert (chapter["phase"], chapter["integrity"], chapter["completeness"]) == ("LIVE_VIEW", "NOT_EVALUATED",
                                                                                 "NOT_EVALUATED")
@@ -460,7 +460,7 @@ def test_v4_a_zero_action_run_writes_a_sealed_complete_v4_model(tmp_path):
     session, _agent, folder = _session(tmp_path, stop=True)
     session.play()
     model = _model_of(folder)
-    assert model["schema"] == "virelai-world-model-v9"
+    assert model["schema"] == "virelai-world-model-v10"
     chapter = model["provenance"]
     assert (chapter["integrity"], chapter["completeness"], chapter["rows"]) == ("SEALED", "COMPLETE", [])
     assert chapter["stamp"]["run"]["run_stem"] == model["run_stem"]
@@ -586,7 +586,9 @@ def test_guard_frozen_v1_v2_and_v3_artifacts_still_read():
 
 
 DUCK_VIEWS_AFE93C8 = {  # carry-v7 replay, model revision label masked (written from afe93c8 before any edit)
-    "digest": "bb268bff3fbd383130b8690ff36111549ed8815a3546915640f05158be15295b",
+    # WO-WIN-01 (reviewed semantic cause): the digest gains one key, ``win``, the level-1 win line; with that key
+    # removed it is the afe93c8 digest byte for byte, bb268bff... (``test_win_episode::test_w26b``).
+    "digest": "9f6181f2c96b86c29a645dc631f601951e3bf7a83a9265a3a84e88001421f99f",  # WIN-01 r2: no-winning-render line
     "dossiers": "fdd21d89d0b78aed10ade2d99e3d4190df71fad1f1c7fa13502db46f32fa2f22",
     "events": "d618a025e1be14cb05633850cf2dc47670acd1979bc2c89063b4adb63babfab0",
     "evidence:COUNTER-7faa2e676a38a10d": "67b8b73fbb9ece3634ce52329a3634a181601837aef4be69f849aac05c0d0eeb",
