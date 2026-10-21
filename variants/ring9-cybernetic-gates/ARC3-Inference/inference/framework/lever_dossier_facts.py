@@ -40,7 +40,11 @@ MAY_COMPLETE = {
 CLOSES = {
     "relations": {("GATE_DERIVED", "RELATIONS_UNRESOLVED"), ("GATE_DERIVED", "RELATIONS_CLOSED_BY_LEVEL_BOUNDARY")},
     "law_tests": {("GATE_DERIVED", "LAW_UNRESOLVED"), ("GATE_DERIVED", "LAW_CLOSED_BY_LEVEL_BOUNDARY")},
+    # WO-RUNTIME-01 r2: a partial (or wholly unresolved) G4.1 / G4.2 product closes the levers its rows name
+    "anatomy": {("ANSWER_CERTIFIED", "PAYLOAD_ANSWERS"), ("GATE_DERIVED", "ANATOMY_UNRESOLVED")},
+    "orbit": {("ANSWER_CERTIFIED", "PAYLOAD_ANSWERS"), ("GATE_DERIVED", "ORBITS_UNRESOLVED")},
 }
+CHAPTER_ROWS = "unresolved_lever_chapters"  # chapter_closure.ROWS
 CLOSING_BASIS = {"UNRESOLVED": "PRODUCT_UNRESOLVED", "CLOSED_BY_LEVEL_BOUNDARY": "PRODUCT_CLOSED_BY_LEVEL_BOUNDARY"}
 PROSE = {
     "G4-REACTIONS": ("mechanism_explanation", "competing_models", "falsifier", "limitations"),
@@ -300,6 +304,8 @@ def covers(chapter: str, payload: Mapping[str, Any], entity_id: str) -> bool:
 
 
 def closes(chapter: str, payload: Mapping[str, Any], entity_id: str) -> bool:
+    if chapter in ("anatomy", "orbit"):  # r2: per lever, by the product's explicit unresolved rows
+        return any(row.get("entity_id") == entity_id for row in payload.get(CHAPTER_ROWS) or ())
     return chapter in CLOSES and entity_id in (payload.get("lever_entities") or ()) and payload.get("status") in CLOSING_BASIS
 
 

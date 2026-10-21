@@ -21,6 +21,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from inference.agent import recovery_consume
+
 CONTROLLER = "CONTROLLER"  # the executor label; the gate logic lives in controller_executor
 MAX_ANSWERS_PER_TURN = 16
 MAX_STALLED_CONTROLLER_TURNS = 3  # SUB-2 D-2: consecutive controller turns with no executed action
@@ -38,12 +40,17 @@ class ControllerSession:
     rerun: dict[str, Any] | None = None  # an extra run Duck asked for (D3)
     stalled: int = 0  # SUB-2 D-2: consecutive controller turns that executed no action
     g3_choice_handoff: bool = True  # WO-G3-DIRECTED: one bounded G3 choice per phase per level for Duck
+    owned_because: str = ""  # WO-RUNTIME-01: why the last step was handed to Duck (the turn's ownership)
+    recovery: dict[str, Any] | None = None  # WO-RUNTIME-01: a failed Duck turn's token, consumed next turn
+    pending: dict[str, Any] | None = None  # WO-RUNTIME-01: a consumed recovery not yet resolved
+    no_move: list[Any] = field(default_factory=list)  # WO-RUNTIME-01 (Q2): consecutive no-legal-move checks
 
     def take_handoff(self) -> str:
         text, self.handoff = self.handoff, ""
         return text
 
     def hand_to_duck(self, reason: str) -> None:
+        self.owned_because = reason
         if self.actions or self.answers:
             self.handoff = (
                 f"CONTROLLER HANDOFF: the controller has taken {self.actions} actions and "
@@ -57,7 +64,9 @@ def run_controller_turn(
 ) -> Any | None:
     """Take the controller's step, or return None to let Duck take it; then write any G3 choice events."""
     try:
-        return _run_controller_turn(agent, state_path, action_num, analysis_step, analyzer_log)
+        result = _run_controller_turn(agent, state_path, action_num, analysis_step, analyzer_log)
+        recovery_consume.resolve(agent, state_path, result)  # WO-RUNTIME-01: how a pending recovery ended
+        return result
     finally:
         machine = getattr(agent, "_gate_machine", None)
         if machine is not None:
@@ -75,15 +84,14 @@ def _run_controller_turn(
     from inference.framework.controller_executor import ANSWER, DUCK, ladder_end, next_owned_step, return_to_mu_if_stuck
 
     machine = agent._ensure_gate_machine(state_path)
+    recovered = recovery_consume.consume(agent, state_path, machine, analyzer_log, action_num, analysis_step)
+    if recovered is not None:  # WO-RUNTIME-01: the failed Duck turn's recovery, before any prompt
+        return recovered
     retried = return_to_mu_if_stuck(machine)  # R9-R23 D14: the mu bucket before any stop
-    if retried is not None:
-        _log(analyzer_log, retried)
-    rested = rest_if_no_legal_move(machine)  # R9-R24 D22: play on instead of idling
-    if rested is not None:
-        _log(analyzer_log, rested)
-    stalled = rest_if_stalled(machine, session)  # SUB-2 D-2: never replay a refused step forever
-    if stalled is not None:
-        _log(analyzer_log, stalled)
+    for note in (retried, recovery_consume.no_legal_move(agent, state_path, machine),  # Q2: D22 inside ruling B
+                 recovery_consume.stalled(agent, state_path, machine)):  # Q2: D-2 inside ruling B
+        if note is not None:
+            _log(analyzer_log, note)
     end = ladder_end(machine)
     if end is not None:
         return _planned_stop(agent, end, analyzer_log)
@@ -93,13 +101,13 @@ def _run_controller_turn(
         if session.wake is not None:
             wake, session.wake = session.wake, None
             if step.owner == DUCK:
-                if not duck_turn_allowed(machine, analyzer_log):
+                if not duck_turn_allowed(machine, analyzer_log, agent, state_path):
                     continue  # the budget closed the gate; recompute ownership
                 session.hand_to_duck(f"{wake}; {step.reason}")
                 return None
             _log(analyzer_log, f"retaining controller ownership after wake: {wake}; next: {step.reason}")
         if step.owner == DUCK:
-            if not duck_turn_allowed(machine, analyzer_log):
+            if not duck_turn_allowed(machine, analyzer_log, agent, state_path):
                 continue  # the gate closed UNRESOLVED; the next step is someone else's
             session.hand_to_duck(step.reason)
             return None
@@ -115,48 +123,18 @@ def _run_controller_turn(
     return None
 
 
-def rest_if_no_legal_move(machine: Any) -> str | None:
-    """R9-R24 D22 (ruling G-5): a gate with no legal move rests the level in normal play, not a stop."""
-    from inference.framework.play_gate import rest_in_play
-
-    status = machine.legal_move_status()
-    if status.get("legal", True):
-        return None
-    reason = f"{status.get('gate_id')} has no legal move ({status.get('reason')}); the level rests in normal play"
-    rest_in_play(machine, reason)
-    return reason
-
-
-def rest_if_stalled(machine: Any, session: ControllerSession) -> str | None:
-    """SUB-2 D-2 (axiom A2): a controller that executed nothing for several turns rests the level in play.
-
-    The dry run of 2026-10-07 found the controller replaying a bound probe whose token the environment
-    had already consumed (it refused the action), 12,000-18,500 times per game until the slice ended.
-    """
-    from inference.framework.play_gate import rest_in_play
-
-    if session.stalled < MAX_STALLED_CONTROLLER_TURNS:
-        return None
-    reason = (
-        f"{machine.gate_id}: the controller executed no action in {session.stalled} consecutive turns "
-        f"({session.wake or 'no detail'}); the level rests in normal play"
-    )
-    session.stalled = 0
-    session.wake = None
-    rest_in_play(machine, reason)
-    return reason
-
-
-def duck_turn_allowed(machine: Any, analyzer_log: Path) -> bool:
-    """R9-R24 D20/D21: a Duck turn on G4-B or G4-C is charged to the level's budget, or the gate closes."""
+def duck_turn_allowed(machine: Any, analyzer_log: Path, agent: Any = None, state_path: Path | None = None) -> bool:
+    """R9-R24 D20/D21: a Duck turn on G4-B or G4-C is charged to the level's budget, or the gate closes (journalled
+    as a GATE CLOSE, WO-RUNTIME-01 Q5)."""
     from inference.framework.controller_executor import PREDICTION_GATES
     from inference.framework.play_gate import charge_or_close
 
     if machine.gate_id not in PREDICTION_GATES:
         return True
-    closed = charge_or_close(machine)
+    gate, closed = machine.gate_id, charge_or_close(machine)
     if closed is not None:
         _log(analyzer_log, closed)
+        recovery_consume.budget_closed(agent, state_path, machine, gate)
     return closed is None
 
 
@@ -213,11 +191,8 @@ def _controller_action(
     )
     before = wake_signals(machine, session.last_raw)
     rerun_intent = str((step.decision or {}).get("intent") or "")
-    rerun_press = (
-        bool(session.rerun)
-        and step.gate_id == "G4.2-LEVER-ORBITS"
-        and (not rerun_intent.startswith("NAV:") or rerun_intent.startswith("NAV:CONTACT_ATTEMPT:"))
-    )
+    rerun_press = bool(session.rerun) and step.gate_id == "G4.2-LEVER-ORBITS" and (
+        not rerun_intent.startswith("NAV:") or rerun_intent.startswith("NAV:CONTACT_ATTEMPT:"))
     try:
         decision = {"probe_token": step.probe_token, **(step.decision or {})}
         probe, before_frame, actions_before = agent._gate_probe_begin(
@@ -226,7 +201,8 @@ def _controller_action(
     except Exception as exc:  # a refused probe is a stop condition, never a crash
         session.wake = f"the gate refused the controller's action: {exc}"
         session.stalled += 1
-        ledger.finish(gate_after=machine.gate_id, step_executed=False, outcome="controller_refused")
+        ledger.finish(gate_after=machine.gate_id, step_executed=False, outcome="controller_refused",
+                      **recovery_consume.ledger_fields(agent))
         return AnalyzerTurnResult(step_executed=False)
     raw = agent._step_env_callback({"actions": [step.action], "decision": asdict(probe), "actor": CONTROLLER})
     raw = raw if isinstance(raw, dict) else {}
@@ -256,7 +232,8 @@ def _controller_action(
         f"executed={executed}; gate now {machine.gate_id}"
         + (f"; stopping: {session.wake}" if session.wake else "")
     ))
-    ledger.finish(gate_after=machine.gate_id, step_executed=executed, outcome="controller_step")
+    ledger.finish(gate_after=machine.gate_id, step_executed=executed, outcome="controller_step",
+                  **recovery_consume.ledger_fields(agent, probe.probe_id))
     return AnalyzerTurnResult(step_executed=executed)
 
 

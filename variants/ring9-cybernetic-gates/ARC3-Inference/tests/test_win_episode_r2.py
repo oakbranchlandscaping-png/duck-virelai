@@ -141,8 +141,15 @@ def test_r2_05_the_raw_terminal_events_stay_resolvable_for_audit_and_cannot_be_e
 # ---- 2 · the schema downgrade is closed ------------------------------------------------------------------------
 
 def test_r2_06_a_v10_artifact_relabelled_v9_and_rehashed_is_refused_by_every_entry():
+    """WO-RUNTIME-01 (reviewed cause): the writer is v11, so the v10 artifact attacked here is the frozen one the
+    base wrote (``world_model_v10_frozen.json.gz``); the writer's own v11 is refused at every older entry too."""
     wm = _wm()
-    _machine, model = _carry()
+    model = json.loads(gzip.decompress((FIXTURES / "world_model_v10_frozen.json.gz").read_bytes()))
+    assert model["schema"] == wm.V10_SCHEMA and all("win_episode" in level for level in model["levels"])
+    _machine, current = _carry()
+    for schema in (wm.V10_SCHEMA, wm.V9_SCHEMA, wm.V8_SCHEMA):
+        with pytest.raises(wm.WorldModelV2Error, match="provenance"):
+            wm.read_world_model(_relabel(current, schema))  # v11 carries chapter v3, which no older reader accepts
     for schema in (wm.V9_SCHEMA, wm.V8_SCHEMA):
         relabeled = _relabel(model, schema)
         message = f"a {schema} model holds no win_episode"

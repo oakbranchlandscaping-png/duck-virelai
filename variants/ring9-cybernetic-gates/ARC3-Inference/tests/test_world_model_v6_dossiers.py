@@ -27,7 +27,7 @@ import dossier_fixtures as fx
 import dossier_provenance_fixtures as pf
 
 FIXTURES = Path(__file__).parent / "fixtures"
-WRITER = "virelai-world-model-v10"  # the writer since WO-WIN-01
+WRITER = "virelai-world-model-v11"  # the writer since WO-RUNTIME-01
 RELATIONS = "G4-B-LEVER-RELATIONS"
 _SHARED: dict = {}
 

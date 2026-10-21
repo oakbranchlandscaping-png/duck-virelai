@@ -41,13 +41,15 @@ BASES = {
                                   "AGGREGATE_INVALIDATED"}),
     "COMPLETE": frozenset({"WITNESS_CERTIFIED", "PRODUCT_CERTIFIED", "NO_OPEN_ITEMS"}),
     "CLOSED_UNRESOLVED": frozenset({"INTERRUPTION_RELEASED", "UNSTUDIED_AT_LEVEL_CLOSE", "PRODUCT_UNRESOLVED",
-                                    "PRODUCT_CLOSED_BY_LEVEL_BOUNDARY", "LEVEL_ENDED"}) | INTEGRITY,
+                                    "PRODUCT_CLOSED_BY_LEVEL_BOUNDARY", "LEVEL_ENDED",
+                                    "CHAPTER_CLOSED_UNRESOLVED"}) | INTEGRITY,  # r2: one lever chapter closed
     "INTERRUPTED": D.FINAL_REASONS,
 }
 SOURCES = frozenset({"GATE_WITNESS", "PRODUCT_CONTENT", "GATE_RETAINED", "DERIVED", None})
 CHAPTER_KEYS = frozenset({"status", "basis", "prior_status", "prior_basis", "source", "product_ref", "answer_ref",
                           "evidence_refs", "facts", "history", "integrity", "open", "digest"})
-OPEN_KINDS = frozenset({"PRODUCT_NOT_CERTIFYING", "PROBE_OWED", "UNAVAILABLE", P.INCOMPLETE})
+OPEN_KINDS = frozenset({"PRODUCT_NOT_CERTIFYING", "PROBE_OWED", "UNAVAILABLE", P.INCOMPLETE,
+                        "CHAPTER_CLOSED"})  # WO-RUNTIME-01 r3: a closed G4.1 / G4.2 chapter's closure record
 
 
 class DossierError(ValueError):
@@ -404,6 +406,7 @@ def _gated(entity_id: str, name: str, chapter: Mapping[str, Any], chapters: Mapp
                  f"{where}: COMPLETE holds exactly when a certifying {F.PRODUCT_TYPES[name]} covers the lever")
         if closing:
             _require(chapter["status"] == "CLOSED_UNRESOLVED", f"{where}: a gate-derived closure closes, never completes")
+        _closed_chapter(where, name, chapter, entry["payload"] if closing else None, entity_id)
     else:
         _require(chapter["status"] != "COMPLETE" or chapter["facts"]["persistence"] != "PROBE_OWED",
                  f"{where}: limits is never COMPLETE while persistence or reversal is PROBE_OWED")
@@ -418,6 +421,18 @@ def _gated(entity_id: str, name: str, chapter: Mapping[str, Any], chapters: Mapp
     else:
         _require(chapter["product_ref"] is None, f"{where}: product_ref only for product content")
         _retained(where, name, chapter, level, entity_id, chapters)
+
+
+def _closed_chapter(where: str, name: str, chapter: Mapping[str, Any], payload: Any, entity_id: str) -> None:
+    """Revision 3: a closed G4 chapter carries exactly its product row's closure record, and only a closed one does."""
+    from inference.framework.chapter_semantics import ROWS, open_item
+
+    items = [item for item in chapter["open"] if item.get("kind") == "CHAPTER_CLOSED"]
+    closed = chapter["basis"] == "CHAPTER_CLOSED_UNRESOLVED"
+    _require(name in ("anatomy", "orbit") or not (items or closed), f"{where}: only G4.1 and G4.2 chapters close per lever")
+    _require(closed == bool(items) and len(items) <= 1, f"{where}: a closed chapter carries exactly one closure record")
+    row = next((item for item in (payload or {}).get(ROWS) or () if item.get("entity_id") == entity_id), None)
+    _require(row is None or items == [open_item(row)], f"{where}: the closure record is the stored product's row")
 
 
 def _projection(name: str, payload: Mapping[str, Any], entity_id: str, level: Mapping[str, Any],

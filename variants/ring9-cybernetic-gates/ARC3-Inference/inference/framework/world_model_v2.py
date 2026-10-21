@@ -1,4 +1,4 @@
-"""The canonical world model, schema v9: one validated, canonically hashed file per observed game.
+"""The canonical world model, schema v11: one validated, canonically hashed file per observed game.
 
 Author: Claude (Alpha build seat), 2026-10-10. WO-L2a (INTERFACE_WO_L2A_WORLD_MODEL_V2 v2; Sol's reviews
 REVIEW_WO_L2_00_CENSUS_ARCHITECTURE and REVIEW_WO_L2A_INTERFACE, 2026-10-10). Schema v3, 2026-10-13: WO-DESC-A
@@ -28,6 +28,9 @@ receipts and the subject's observations show (``lever_experiment_check``). The r
 experiment check). The embedded audit journal stays v2.
 Schema v10, 2026-10-19: WO-WIN-01 — each level's ``win_episode``, recompiled and refused if it differs
 (``win_episode_check``); v9 is frozen, and no model below v10 may hold an episode. The audit journal stays v2.
+Schema v11, 2026-10-20: WO-RUNTIME-01 — provenance chapter v3 (audit v3: the recovery rows) and gates closed
+CLOSED_UNRESOLVED in the census (``world_model_v11``); v10 is frozen (``validate_v10``: chapter v2), and no model
+below v11 may hold a CLOSED_UNRESOLVED gate.
 Accepted limitation (R12): a hard process kill writes no H2, so per-lever work since the last written model is lost.
 
 Two tiers, kept apart by the validator:
@@ -59,7 +62,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-world-model-v10"  # WO-WIN-01: every level carries its observed-win episode
+SCHEMA = "virelai-world-model-v11"  # WO-RUNTIME-01: chapter v3 (audit v3), CLOSED_UNRESOLVED gates
+V10_SCHEMA = "virelai-world-model-v10"  # WO-WIN-01: every level carries its observed-win episode (frozen)
 V9_SCHEMA = "virelai-world-model-v9"  # B3 r2: G4-B limits experiments join the persisted selections (frozen)
 V8_SCHEMA = "virelai-world-model-v8"  # B2 r2: provenance chapter v2 (audit v1 or v2), G4-A selections only (frozen)
 V7_SCHEMA = "virelai-world-model-v7"  # B1: every lever dossier holds its record-derived observations (frozen)
@@ -69,6 +73,8 @@ V4_SCHEMA = "virelai-world-model-v4"
 V3_SCHEMA = "virelai-world-model-v3"
 V2_SCHEMA = "virelai-world-model-v2"
 V1_SCHEMA = "virelai-world-model-v1"
+ORDER = (V1_SCHEMA, V2_SCHEMA, V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA,
+         V10_SCHEMA, SCHEMA)
 CANONICAL_NAME = "world_model.json"
 
 MANIFEST_STATUSES = frozenset({"ACTIVE", "OBSERVED_NEVER_ACTED"})
@@ -143,8 +149,13 @@ def canonical_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def validate(payload: Mapping[str, Any]) -> None:
-    """The v10 contract: the v9 rules, and every level's win episode against its level (WO-WIN-01)."""
+    """The v11 contract: the v10 rules under chapter v3, and the CLOSED_UNRESOLVED gate rules (WO-RUNTIME-01)."""
     _validate_payload(payload, SCHEMA)
+
+
+def validate_v10(payload: Mapping[str, Any]) -> None:
+    """The accepted v10 contract, frozen (WO-WIN-01): chapter v2, every level's win episode against its level."""
+    _validate_payload(payload, V10_SCHEMA)
 
 
 def validate_v9(payload: Mapping[str, Any]) -> None:
@@ -188,9 +199,13 @@ def validate_v2(payload: Mapping[str, Any]) -> None:
     _validate_payload(payload, V2_SCHEMA)
 
 
+def _since(schema: str, floor: str) -> bool:
+    return ORDER.index(schema) >= ORDER.index(floor)
+
+
 def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(payload.get("schema") == schema, f"schema must be {schema}")
-    if schema in {V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
+    if _since(schema, V6_SCHEMA):
         _strict(payload)
     manifest = payload.get("manifest") or {}
     _require(manifest.get("status") in MANIFEST_STATUSES, "manifest.status is not a known status")
@@ -203,27 +218,32 @@ def _validate_payload(payload: Mapping[str, Any], schema: str) -> None:
     _require(len(open_levels) <= 1, "at most one level is open")
     for level in levels:
         _validate_level(level)
-        if schema in {V3_SCHEMA, V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
+        if _since(schema, V3_SCHEMA):
             _validate_v3_level(level)
-    if schema in {V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
+    if _since(schema, V5_SCHEMA):
         _validate_product_content(levels)
-    if schema in {V4_SCHEMA, V5_SCHEMA, V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:
-        from inference.framework.provenance_chapter import ProvenanceChapterError, validate_chapter
+    if _since(schema, V4_SCHEMA):
+        from inference.framework.provenance_chapter import CHAPTER_V2, ProvenanceChapterError, validate_chapter
 
-        try:
-            validate_chapter(payload, frozen_v1=schema not in {V8_SCHEMA, V9_SCHEMA, SCHEMA})
+        try:  # chapter v1 for v4-v7, v2 for v8-v10 (frozen), v3 for v11
+            validate_chapter(payload, frozen_v1=not _since(schema, V8_SCHEMA),
+                             schema=None if schema == SCHEMA else CHAPTER_V2)
         except ProvenanceChapterError as exc:
             _fail(f"provenance: {exc}")
-    if schema in {V6_SCHEMA, V7_SCHEMA, V8_SCHEMA, V9_SCHEMA, SCHEMA}:  # after the chapter: dossier provenance facts
+    if _since(schema, V6_SCHEMA):  # after the chapter: dossier provenance facts
         _validate_lever_dossiers(levels, manifest, payload.get("provenance"), v7=schema != V6_SCHEMA)
-    if schema in {V8_SCHEMA, V9_SCHEMA, SCHEMA}:  # B2 r3 (v8): the G4-A chain; B3 r2 (v9 on): the G4-B experiments too
+    if _since(schema, V8_SCHEMA):  # B2 r3 (v8): the G4-A chain; B3 r2 (v9 on): the G4-B experiments too
         _validate_selections(payload, experiments=schema != V8_SCHEMA)
-    if schema == SCHEMA:  # WO-WIN-01 (v10 only): each level's win episode
+    if _since(schema, V10_SCHEMA):  # WO-WIN-01 (v10 on): each level's win episode
         from inference.framework.win_episode_check import problems as episode_problems
 
         _require(not (found := episode_problems(levels)), "win episode: " + "; ".join(found[:3]))
-    _require(schema == SCHEMA or not any(isinstance(level, Mapping) and "win_episode" in level for level in levels),
+    _require(_since(schema, V10_SCHEMA) or not any(isinstance(level, Mapping) and "win_episode" in level
+                                                   for level in levels),
              f"a {schema} model holds no win_episode: a relabelled v10 artifact is refused (WIN-01 r2)")
+    from inference.framework.world_model_v11 import problems as v11_problems  # WO-RUNTIME-01
+
+    _require(not (found := v11_problems(levels, current=schema == SCHEMA)), "gates: " + "; ".join(found[:3]))
     if "content_sha256" in payload:
         _require(payload["content_sha256"] == content_sha256(payload), "content_sha256 does not match the content")
 
@@ -421,7 +441,7 @@ def _validate_role(role: Mapping[str, Any], known_tracks: set[str], receipts: Ma
 
 
 def read_world_model(payload: Mapping[str, Any]) -> Any:
-    """Version-aware reader: v1 through its own validator, v2-v9 by their frozen rules, v10 by this module's;
+    """Version-aware reader: v1 through its own validator, v2-v10 by their frozen rules, v11 by this module's;
     anything else is refused."""
     schema = payload.get("schema")
     if schema == V1_SCHEMA:
@@ -430,32 +450,11 @@ def read_world_model(payload: Mapping[str, Any]) -> Any:
         model = world_model_from_dict(dict(payload))
         validate_world_model(model)
         return model
-    if schema == V2_SCHEMA:
-        validate_v2(payload)
-        return dict(payload)
-    if schema == V3_SCHEMA:
-        validate_v3(payload)
-        return dict(payload)
-    if schema == V4_SCHEMA:
-        validate_v4(payload)
-        return dict(payload)
-    if schema == V5_SCHEMA:
-        validate_v5(payload)
-        return dict(payload)
-    if schema == V6_SCHEMA:
-        validate_v6(payload)
-        return dict(payload)
-    if schema == V7_SCHEMA:
-        validate_v7(payload)
-        return dict(payload)
-    if schema == V8_SCHEMA:
-        validate_v8(payload)
-        return dict(payload)
-    if schema == V9_SCHEMA:
-        validate_v9(payload)
-        return dict(payload)
-    if schema == SCHEMA:
-        validate(payload)
+    readers = {V2_SCHEMA: validate_v2, V3_SCHEMA: validate_v3, V4_SCHEMA: validate_v4, V5_SCHEMA: validate_v5,
+               V6_SCHEMA: validate_v6, V7_SCHEMA: validate_v7, V8_SCHEMA: validate_v8, V9_SCHEMA: validate_v9,
+               V10_SCHEMA: validate_v10, SCHEMA: validate}
+    if schema in readers:
+        readers[schema](payload)
         return dict(payload)
     raise WorldModelV2Error(f"unknown world model schema {schema!r}")
 
@@ -493,8 +492,8 @@ def write_canonical(payload: Mapping[str, Any], directory: str | Path) -> WriteR
 
 __all__ = [
     "CANONICAL_NAME", "GAP_REASONS", "LIVE_VIEW", "SCHEMA", "V2_SCHEMA", "V3_SCHEMA", "V4_SCHEMA", "V5_SCHEMA",
-    "V6_SCHEMA", "V7_SCHEMA", "V8_SCHEMA", "V9_SCHEMA",
+    "V6_SCHEMA", "V7_SCHEMA", "V8_SCHEMA", "V9_SCHEMA", "V10_SCHEMA",
     "WorldModelV2Error", "WriteResult", "canonical_bytes", "content_sha256", "read_world_model", "seal", "validate",
     "validate_v2", "validate_v3", "validate_v4", "validate_v5", "validate_v6", "validate_v7", "validate_v8",
-    "validate_v9", "write_canonical",
+    "validate_v9", "validate_v10", "write_canonical",
 ]

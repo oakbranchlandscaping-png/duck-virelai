@@ -1,0 +1,223 @@
+{
+ "base": "73f13d1",
+ "label": "ledger-faithful scripted reproduction, not an exact frame replay",
+ "schema": "runtime01-rest-rows-v1",
+ "worlds": [
+  {
+   "gate_before_rest": "G2-COUNTER",
+   "mechanism_inferred": "D22",
+   "rows": [
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 20,
+     "outcome": "controller_step",
+     "sha256": "6ca7bc0b4fd929ca8be67dcfbd2e7c2c8633ca4af4b551fa145ce52823f18a5c",
+     "step_executed": true
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 21,
+     "outcome": "controller_step",
+     "sha256": "e5deda447871718cd96b64a1b7c296f3138f280c2d83d36f22c042dd07f6536c",
+     "step_executed": true
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 22,
+     "outcome": "controller_step",
+     "sha256": "3e3886f14576d39e02e5314bc04fc14475d23b45016373eb8d7d536b344c1988",
+     "step_executed": true
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 23,
+     "outcome": "controller_step",
+     "sha256": "1b9e0bbe379cf39b3b919202570c352b38e1c77af159b1f403cabfaad2af810e",
+     "step_executed": true
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "PLAY-NORMAL",
+     "gate_before": "PLAY-NORMAL",
+     "line": 24,
+     "outcome": "turn_time_budget",
+     "sha256": "ea12b2435e27dc3ab257e4d98c8d20381c1cc6dd7db71415f480bbafc8e88e0b",
+     "step_executed": false
+    }
+   ],
+   "source": "re86-8af5384d_p0_turn_ledger.jsonl",
+   "source_sha256": "ed5b23c74ef29f3735522d11f81edbd188a77f7ea2f376e0f258f57d7dd9ce3b",
+   "world": "re86-8af5384d"
+  },
+  {
+   "gate_before_rest": "G2-COUNTER",
+   "mechanism_inferred": "D22",
+   "rows": [
+    {
+     "executor": "DUCK",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 58,
+     "outcome": "turn_time_budget",
+     "sha256": "7ec45b97d2edc42313564d169f23ddd836b376dcddff99ce3cb1ba77fe78f71a",
+     "step_executed": false
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 59,
+     "outcome": "turn_time_budget",
+     "sha256": "5e1f2926a5629886f0868e448c2c708b0443660f50430c59058e8a3a281d26fd",
+     "step_executed": false
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 60,
+     "outcome": "gate_transition",
+     "sha256": "01485c70dac883b40a92fc29c1f80c804c64c9dc2bf23acad918aabb27366901",
+     "step_executed": false
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 61,
+     "outcome": "controller_step",
+     "sha256": "183f0945e61374c1e9b0bd80b9abd9cb27be7e5c0a9651cd85b16adbc981213f",
+     "step_executed": true
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "PLAY-NORMAL",
+     "gate_before": "PLAY-NORMAL",
+     "line": 62,
+     "outcome": "turn_time_budget",
+     "sha256": "7bf89dad11544d21d9cd5ed71680a05592762061cd5ad05240898b27b7d5ae81",
+     "step_executed": false
+    }
+   ],
+   "source": "sc25-635fd71a_p0_turn_ledger.jsonl",
+   "source_sha256": "378cbd6c312bde6b964f99b15cb41bb671d22d73565fad24a2bfbc359336d4d7",
+   "world": "sc25-635fd71a"
+  },
+  {
+   "gate_before_rest": "G2-COUNTER",
+   "mechanism_inferred": "D22",
+   "rows": [
+    {
+     "executor": "DUCK",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 30,
+     "outcome": "step",
+     "sha256": "7bb48e1515f6bf8a5dd313708db837e65543f8d802f5205d49a2bcee92bbfb4d",
+     "step_executed": true
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 31,
+     "outcome": "turn_time_budget",
+     "sha256": "d5c143c45b5868db3a92a7eb1000a62420288ede82fced8da781553bdb8a3bd2",
+     "step_executed": false
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 32,
+     "outcome": "step",
+     "sha256": "283d9cf85333ec5ef5170fdb575b395a25b44c35b567c4e0efc2593b3dbc2cf1",
+     "step_executed": true
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G2-COUNTER",
+     "gate_before": "G2-COUNTER",
+     "line": 33,
+     "outcome": "controller_step",
+     "sha256": "0d308477c3abea04ec9d48dd600e9bb6dab97052354f4d1de4306931308a6f82",
+     "step_executed": true
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "PLAY-NORMAL",
+     "gate_before": "PLAY-NORMAL",
+     "line": 34,
+     "outcome": "turn_time_budget",
+     "sha256": "af8d55e0246473d1e2d15163f13f69a46d026b76ca7468e4c09bb41045cf4d95",
+     "step_executed": false
+    }
+   ],
+   "source": "wa30-ee6fef47_p0_turn_ledger.jsonl",
+   "source_sha256": "bd0dd70f402da6df09792b3103fa691d357d9dc6d72d6e808a832a05cec0f061",
+   "world": "wa30-ee6fef47"
+  },
+  {
+   "gate_before_rest": "G3-LEVERS",
+   "mechanism_inferred": "D-2",
+   "rows": [
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G3-LEVERS",
+     "gate_before": "G3-LEVERS",
+     "line": 142,
+     "outcome": "controller_step",
+     "sha256": "153328398c4979c574fbfbaa06acaa4cace8c934d9ee2122eec91297489e6051",
+     "step_executed": true
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G3-LEVERS",
+     "gate_before": "G3-LEVERS",
+     "line": 143,
+     "outcome": "controller_refused",
+     "sha256": "2a01d5ae1265a2002b0ff06ab58392cb016f6c82ca609066c07a875199b4e5de",
+     "step_executed": false
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G3-LEVERS",
+     "gate_before": "G3-LEVERS",
+     "line": 144,
+     "outcome": "controller_refused",
+     "sha256": "0cff4308d12feeb6678477c37fcf93f394c8d915921f2ce7e2dfc9812153f667",
+     "step_executed": false
+    },
+    {
+     "executor": "CONTROLLER",
+     "gate_after": "G3-LEVERS",
+     "gate_before": "G3-LEVERS",
+     "line": 145,
+     "outcome": "controller_refused",
+     "sha256": "a31cb7ed503cb6ed9dab5afe1944d7997bb87d31d15858341c402cf4430f1aa9",
+     "step_executed": false
+    },
+    {
+     "executor": "DUCK",
+     "gate_after": "PLAY-NORMAL",
+     "gate_before": "PLAY-NORMAL",
+     "line": 146,
+     "outcome": "turn_time_budget",
+     "sha256": "57f2b3eb0152cc3499a6b831990f672633fac712ea5d6ee4f009af9b21f76659",
+     "step_executed": false
+    }
+   ],
+   "source": "ar25-0c556536_p0_turn_ledger.jsonl",
+   "source_sha256": "dd11826abb7d46e8d4568bdf181e194d64354011620d0b72fca90704e57635f3",
+   "world": "ar25-0c556536"
+  }
+ ]
+}

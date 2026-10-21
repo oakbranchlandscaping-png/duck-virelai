@@ -45,9 +45,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from inference.framework import audit_v3_rules as v3_rules
+
 V1_SCHEMA = "virelai-provenance-v1"
-SCHEMA = "virelai-provenance-v2"  # the writer's (B2 revision 2): v1 plus G4 selections
-SCHEMAS = (V1_SCHEMA, SCHEMA)
+V2_SCHEMA = "virelai-provenance-v2"  # B2 revision 2: v1 plus G4 selections (frozen since WO-RUNTIME-01)
+SCHEMA = "virelai-provenance-v3"  # the writer's (WO-RUNTIME-01): v2 plus the TURN and GATE recovery rows
+SCHEMAS = (V1_SCHEMA, V2_SCHEMA, SCHEMA)
+V2_SCHEMAS = (V1_SCHEMA, V2_SCHEMA)  # the frozen v2 reader: a v3 row is CORRUPT, never reinterpreted
 GENESIS = "0" * 64
 EXECUTORS = ("DUCK", "CONTROLLER", "SYSTEM")
 VALID_V1: dict[str, dict[str, frozenset[str]]] = {  # frozen: the v1 contract
@@ -58,14 +62,17 @@ VALID_V1: dict[str, dict[str, frozenset[str]]] = {  # frozen: the v1 contract
                      "EXECUTION": frozenset({"EXECUTED"})},
     "ANNOTATION": {"ADMISSION": frozenset({"UNCERTIFIED", "REFUSED"})},
 }
-VALID: dict[str, dict[str, frozenset[str]]] = {  # v2: v1 unchanged, plus G4 selections (no opportunity: no handoff)
+VALID_V2: dict[str, dict[str, frozenset[str]]] = {  # v2: v1 unchanged, plus G4 selections (no opportunity: no handoff)
     **VALID_V1, "G4_SELECTION": {"ADMISSION": VALID_V1["G3_SELECTION"]["ADMISSION"], "EXECUTION": frozenset({"EXECUTED"})},
 }
-REASONED = frozenset({"REFUSED", "NOT_ATTEMPTED", "SUPERSEDED"})
+VALID: dict[str, dict[str, frozenset[str]]] = {**VALID_V2, **v3_rules.VALID}  # v3: v2 unchanged, plus TURN and GATE
+REASONED = frozenset({"REFUSED", "NOT_ATTEMPTED", "SUPERSEDED"}) | v3_rules.REASONED
 REASON_CODES_V1 = frozenset({"GATE_CONTRACT", "ORIENTATION_DUE", "ANNOTATION_INVALID", "ACTION_CONTRACT",
                              "TERMINAL_STATE", "NOT_EXECUTED", "EXECUTION_ERROR", "G3_EVENT"})
-REASON_CODES = REASON_CODES_V1 | {"G4_EVENT"}
-VOCABULARY = {V1_SCHEMA: (VALID_V1, REASON_CODES_V1), SCHEMA: (VALID, REASON_CODES)}
+REASON_CODES_V2 = REASON_CODES_V1 | {"G4_EVENT"}
+REASON_CODES = REASON_CODES_V2 | v3_rules.REASON_CODES
+VOCABULARY = {V1_SCHEMA: (VALID_V1, REASON_CODES_V1), V2_SCHEMA: (VALID_V2, REASON_CODES_V2),
+              SCHEMA: (VALID, REASON_CODES)}
 REF_KEYS = ("question_id", "subject", "probe_id", "answer_id", "evidence_id", "executed_transition", "note_ids",
             "source_event", "admission_event_id")
 _REF_TEXT = ("question_id", "subject", "probe_id", "answer_id", "evidence_id", "admission_event_id")
@@ -299,6 +306,7 @@ class _Chain:
     joins: dict[str, str] = field(default_factory=dict)
     accepted: tuple[str, ...] = SCHEMAS  # the schemas this reader admits (the frozen v1 reader: v1 only)
     schema: str | None = None  # the journal's one schema, fixed by its first row
+    v3: v3_rules.V3State = field(default_factory=v3_rules.V3State)  # WO-RUNTIME-01: the recovery rules
 
     @staticmethod
     def _key(row: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -320,6 +328,8 @@ class _Chain:
             raise JournalFault("RUN_MISMATCH", f"run {row['run']} in a journal of run {self.run}")
         if row["operation"] == "PROBE" and row["event"] == "EXECUTION":
             self._check_join(row)
+        if row["schema"] == SCHEMA:
+            self.v3.check(row, lambda message: _v3_fault(message))
 
     def _check_join(self, row: Mapping[str, Any]) -> None:
         admission = row["refs"]["admission_event_id"]
@@ -339,6 +349,8 @@ class _Chain:
             admission = row["refs"]["admission_event_id"]
             self.consumed.add(admission)
             self.joins[row["event_id"]] = admission
+        if row["schema"] == SCHEMA:
+            self.v3.accept(row)
         self.run = self.run or dict(row["run"])
         self.schema = self.schema or str(row["schema"])
         self.head, self.count = row["event_hash"], self.count + 1
@@ -354,6 +366,8 @@ class _Chain:
             raise JournalFault("RUN_MISMATCH", f"seal of run {row['run']} on a journal of run {self.run}")
         if (row["previous_event_hash"], row["head_hash"], row["event_count"]) != (self.head, self.head, self.count):
             raise JournalFault("SEAL_MISMATCH", "the seal does not match the rows it seals")
+        if row["schema"] == SCHEMA:
+            self.v3.check_seal(lambda message: _v3_fault(message))
 
 
 # ---- the writer -------------------------------------------------------------------------------------------------
@@ -533,6 +547,19 @@ def read_journal_bytes(data: bytes) -> JournalRead:
     return _parse_bytes(bytes(data))[0]
 
 
+def _v3_fault(message: str) -> None:
+    raise JournalFault("SCHEMA_INVALID", f"audit v3: {message}")
+
+
+def read_journal_v2(path: str | Path) -> JournalRead:
+    """The frozen v2 reader (WO-RUNTIME-01): v1 and v2 only; a v3 row is CORRUPT (``SCHEMA_INVALID``)."""
+    return _read(Path(path), V2_SCHEMAS)[0]
+
+
+def read_journal_v2_bytes(data: bytes) -> JournalRead:
+    return _parse_bytes(bytes(data), V2_SCHEMAS)[0]
+
+
 def read_journal_v1(path: str | Path) -> JournalRead:
     """The frozen v1 reader: a v2 row is CORRUPT (``SCHEMA_INVALID``), never reinterpreted as v1."""
     return _read(Path(path), (V1_SCHEMA,))[0]
@@ -638,6 +665,7 @@ __all__ = [
     "ProvenanceJournal", "REASON_CODES", "REF_KEYS", "SCHEMA", "STATUSES", "VALID", "canonical", "check_content",
     "event_id", "field_sources", "make_refs", "normalized", "read_journal", "read_journal_bytes", "translate_g3_event",
     "translate_g4_event", "read_journal_v1", "read_journal_bytes_v1", "verify_embedded_v1", "V1_SCHEMA", "SCHEMAS",
-    "VALID_V1", "REASON_CODES_V1", "VOCABULARY",
+    "VALID_V1", "REASON_CODES_V1", "VOCABULARY", "V2_SCHEMA", "V2_SCHEMAS", "VALID_V2", "REASON_CODES_V2",
+    "read_journal_v2", "read_journal_v2_bytes",
     "validate_rows", "verify_embedded",
 ]

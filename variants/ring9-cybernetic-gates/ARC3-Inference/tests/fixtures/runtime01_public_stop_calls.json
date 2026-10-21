@@ -1,0 +1,112 @@
+{
+ "base": "73f13d1",
+ "label": "exact stopping call, scripted state",
+ "schema": "runtime01-public-stop-calls-v1",
+ "stops": [
+  {
+   "analysis_step": 58,
+   "class": "MALFORMED_ACTION",
+   "code": "\n# Based on analysis: clicking green objects in the top row toggles a G border\n# Pattern: click 1st -> ON, click 2nd -> moves to 2nd, click 3rd -> OFF\n# Bottom green objects just turn OFF\n# Counter is at 57/64, need 7 more actions to fill it\n# Let me try clicking the third green object corner to see if it activates\n# Current state: no G border active (last action T55 deactivated)\n# Try activating the first green object again\n\naction(['ACTION6(row=18, col=17)'], decision={'probe_token': 'P1_k7pfVt2J58FJYD0NNj4kFxmd', 'intent': 'Activate first green object to test toggle mechanism'})",
+   "code_sha256": "fb2b8119be58116955fe27b5d537af6773bf9543fe0f66f3490a074bab510c5e",
+   "observed_result": "[TOOL RESULT: python]\nTraceback (most recent call last):\n  File \"<python_tool>\", line 10, in <module>\nRuntimeError: Gated mode accepts opaque ACTION<number> names only; received 'ACTION6(row=18, col=17)'.\n\n[ANALYZER STATUS]",
+   "source_log": "lf52-271a04aa_p0.log",
+   "source_log_sha256": "796984eac54a96488972790801bf4c5b2917733eba03c88bf6e40f4f412f7233",
+   "sources": {
+    "lf52-271a04aa_p0.log": "796984eac54a96488972790801bf4c5b2917733eba03c88bf6e40f4f412f7233",
+    "lf52-271a04aa_p0_provenance.jsonl": "ca76a852eb307fc5fa8dc62af4aeb1907cbc4fecd3f1d6e84ca5d756a39cffe2",
+    "lf52-271a04aa_p0_turn_ledger.jsonl": "5aead3fb96408c1e5deade8f39249fc6394fc73ef5679043934b030a2408f866"
+   },
+   "world": "lf52-271a04aa"
+  },
+  {
+   "analysis_step": 33,
+   "class": "REPEATED_READ_ONLY_INSPECTION",
+   "code": "\n# Find the sky blue object positions to click on them\nseg = current_frame.segmentation\nfor n in seg['nodes']:\n    if n['color'] == 'S':\n        print(f\"Sky blue obj id={n['id']}: boundary={n['boundary']}\")\n\n# Also check black objects near bottom\nfor n in seg['nodes']:\n    if n['color'] == 'B' and n['pixels'] < 100:\n        print(f\"Small black obj id={n['id']}: pixels={n['pixels']} boundary={n['boundary']}\")",
+   "code_sha256": "1863f676a0b728fe6b9b47ebeeee185a479cfb569c4e5b4a9b2f7a9cff130bda",
+   "observed_result": "[TOOL RESULT: python]\nSky blue obj id=6: boundary=[[39, 14], [39, 18], [43, 18], [43, 14]]\nSky blue obj id=7: boundary=[[44, 39], [44, 43], [48, 43], [48, 39]]\nSmall black obj id=0: pixels=50 boundary=[[0, 0], [0, 49]]\nSmall black obj id=9: pixels=50 boundary=[[63, 14], [63, 63]]\n\n[ANALYZER STATUS]",
+   "source_log": "m0r0-492f87ba_p0.log",
+   "source_log_sha256": "d942ff35fd2fb2ffb15602ac757af18097a605850b938a06c9dc16d9474ec5e1",
+   "sources": {
+    "m0r0-492f87ba_p0.log": "d942ff35fd2fb2ffb15602ac757af18097a605850b938a06c9dc16d9474ec5e1",
+    "m0r0-492f87ba_p0_provenance.jsonl": "f199faf48e167214ea81d1fb2bc253bf3c7814dd2c15e3e4611aa53d2f42587e",
+    "m0r0-492f87ba_p0_turn_ledger.jsonl": "94fb6e2ff2fa2fb5d7d4816c616e693cc9b2342bb614a4f334e1a39d78648770"
+   },
+   "world": "m0r0-492f87ba"
+  },
+  {
+   "analysis_step": 22,
+   "class": "MALFORMED_ACTION",
+   "code": "# Execute the binding probe - click E0004 at (24,60) to advance to S4 state\naction(['ACTION6'], decision={'probe_token': 'P1_k_wwnjfdA79B_8ejNo0DlCJ6', 'row': 24, 'col': 60, 'intent': 'Advance lever orbit from S3 to S4 to test if maximal state triggers level completion'})",
+   "code_sha256": "0b548d5a4771e46c1a9893d6a632a55812ef13e6a514e6844dce8c093e28aaeb",
+   "observed_result": "[TOOL RESULT: python]\nTraceback (most recent call last):\n  File \"<python_tool>\", line 2, in <module>\nRuntimeError: A guided action decision accepts only probe_token and an optional intent.\n\n[ANALYZER STATUS]",
+   "source_log": "vc33-5430563c_p0.log",
+   "source_log_sha256": "e81b45496182924b3eaa3051a2ce57a3a48201bb4f1f248f7c93b379b6008c04",
+   "sources": {
+    "vc33-5430563c_p0.log": "e81b45496182924b3eaa3051a2ce57a3a48201bb4f1f248f7c93b379b6008c04",
+    "vc33-5430563c_p0_provenance.jsonl": "065fdf79cd36de2122bafe0e61950afffd11d0ea5260fc03a22d492d2723c0e7",
+    "vc33-5430563c_p0_turn_ledger.jsonl": "bf72c156de80c266451ee0e08994543cbda5d2edc03aa7005ddb70f60b2bd934"
+   },
+   "world": "vc33-5430563c"
+  },
+  {
+   "analysis_step": 38,
+   "class": "REPEATED_READ_ONLY_INSPECTION",
+   "code": "# Examine the right side of the board to understand the target layout\nascii_lines = current_frame.ascii.split('\\n')\n# Print rows 25-35, cols 35-55 to see the right green object and frame\nfor i in range(25, 38):\n    row = ascii_lines[i]\n    segment = row[35:55]\n    if any(c != 'g' and c != 'w' for c in segment):\n        print(f\"Row {i} (cols 35-54): {segment}\")\n    elif 'w' in segment:\n        print(f\"Row {i} (cols 35-54): {segment}\")",
+   "code_sha256": "a6a3973674421636b45dca05bdcbda72dbf09065a3ac4b76d2e07be33cdf8c07",
+   "observed_result": "[TOOL RESULT: python]\nRow 25 (cols 35-54): ppppwwwwwwwwwwwwwwwg\nRow 26 (cols 35-54): ppppwwwwwcccccwwwwwg\nRow 27 (cols 35-54): ppppwwwwwcwwwcwwwwwg\nRow 28 (cols 35-54): ppppwwwwwcwwwcwwwwwg\nRow 29 (cols 35-54): ppppwwwwwcwwwcwwwwwg\nRow 30 (cols 35-54): ppppwwwNNNccccwwwwwg\nRow 31 (cols 35-54): ppppwwwNcNwwwwwwwwwg\nRow 32 (cols 35-54): ppppwwwNNNwwwwwwwwwg\nRow 33 (cols 35-54): ppppwwwwwwwwwwwwwwwg\nRow 34 (cols 35-54): ppppwwwwwwwwwwwwwwwg\nRow 35 (cols 35-54): ppppwwwwwwwwwwwwwwwg\nRow 36 (cols 35-54): ppppwwwwwwwwwwwwwwwg\nRow 37 (cols 35-54): ppppwwwwwwwwwwwwwwwg\n\n[ANALYZER STATUS]",
+   "source_log": "ka59-38d34dbb_p0.log",
+   "source_log_sha256": "00f4c580af9bc8983cbe0b15f9e905802c7a50928af022736b25711e0bd7e371",
+   "sources": {
+    "ka59-38d34dbb_p0.log": "00f4c580af9bc8983cbe0b15f9e905802c7a50928af022736b25711e0bd7e371",
+    "ka59-38d34dbb_p0_provenance.jsonl": "77623ba3b2d4bb8d554fc8cb564cf43ab09a79781fa78236e9060a5fd1e286aa",
+    "ka59-38d34dbb_p0_turn_ledger.jsonl": "2176c265611bf3e69a5eeb3e99db9d11049cb21dbb51f332f3f65a520eb1dfed"
+   },
+   "world": "ka59-38d34dbb"
+  },
+  {
+   "analysis_step": 98,
+   "class": "MALFORMED_ACTION",
+   "code": "\n# Execute the binding probe - click on the red block on the right side\naction(['ACTION6'], decision={'probe_token': 'P1_bnYe59c-5UsTHEanZF-SPIkQ', 'intent': 'Click red block on right panel to test interaction'})",
+   "code_sha256": "63465b4d750016ea99b6bed5aff4f227a935f661ab71443521d4a50f7b2f7408",
+   "observed_result": "[TOOL RESULT: python]\nTraceback (most recent call last):\n  File \"<python_tool>\", line 3, in <module>\nRuntimeError: ACTION6 requires integer row and col.\n\n[ANALYZER STATUS]",
+   "source_log": "dc22-fdcac232_p0.log",
+   "source_log_sha256": "d90077cbb7b46d5872332b3b70ff8f32e2a39e83e9d4453cab86a986fec5d00e",
+   "sources": {
+    "dc22-fdcac232_p0.log": "d90077cbb7b46d5872332b3b70ff8f32e2a39e83e9d4453cab86a986fec5d00e",
+    "dc22-fdcac232_p0_provenance.jsonl": "e5db8135035a412274262608fce048d2bd27409d5d31eea9c978b72816b24abb",
+    "dc22-fdcac232_p0_turn_ledger.jsonl": "0babf70a659f246dcbc91986d7b78bb306e50f06b43534eab9aa5813e9a56e0d"
+   },
+   "world": "dc22-fdcac232"
+  },
+  {
+   "analysis_step": 31,
+   "class": "REPEATED_LIBRARY_QUERY",
+   "code": "\n# Build complete movement map quickly\nall_segs = []\noffset = 0\nwhile True:\n    resp = virelai('library', kind='object', id='O-L1-P1-E-b34b4d17cb7f', part='segments', offset=offset, limit=20)\n    items = resp['data']['items']\n    all_segs.extend(items)\n    if not resp.get('next'):\n        break\n    offset += 20\n\nactions = [t.action for t in transitions]\n\n# Build position at each transition\npos_at_t = {}\nfor seg in all_segs:\n    anchor = seg['anchor']\n    if seg['first']['source'] == 'INITIAL_FRAME':\n        start = -1  # before t0\n    else:\n        start = seg['first']['transition_id']\n    end = seg['last']['transition_id']\n    for t in range(start+1, end+1):\n        pos_at_t[t] = anchor\n\n# Now show action -> delta mapping\nprint(\"Action -> position changes:\")\nfor t in range(len(actions)):\n    act = actions[t]\n    if t > 0 and t in pos_at_t and (t-1) in pos_at_t:\n        prev = pos_at_t[t-1]\n        curr = pos_at_t[t]\n        dr = curr[0] - prev[0]\n        dc = curr[1] - prev[1]\n        if dr != 0 or dc != 0:\n            print(f\"  t{t}: {act} from {prev} to {curr} (dr={dr}, dc={dc})\")\n    elif t == 0 and t in pos_at_t:\n        print(f\"  t{t}: {act} initial pos {pos_at_t[t]}\")\n\n# Current position\nprint(f\"\\nCurrent ego position: {pos_at_t.get(len(actions)-1, 'unknown')}\")",
+   "code_sha256": "007fac4f394722cedbe733fc3b6b18b864b94bc67449b30af9c96e38dd8d32eb",
+   "observed_result": "[TOOL RESULT: python]\n{\n  \"schema\": \"virelai-query-v1\",\n  \"operation\": \"library\",\n  \"error\": null,\n  \"data\": {\n    \"schema\": \"virelai-library-page-v1\",\n    \"kind\": \"object\",\n    \"revision\": \"dae0a73e3767\",\n    \"level\": 1,\n    \"object\": {\n      \"track_id\": \"O-L1-P1-E-b34b4d17cb7f\",\n      \"life\": 1,\n      \"present_now\": true,\n      \"end\": null,\n      \"roles\": [\n        \"EGO\"\n      ],\n      \"g3_entity\": null,\n      \"segments\": 19,\n      \"class_events\": 0,\n      \"end_detail\": null,\n      \"band1\": {\n        \"status\": \"UNSETTLED\",\n        \"reason\": \"NOT_BUILT\"\n      },\n      \"possible_correspondence",
+   "source_log": "g50t-5849a774_p0.log",
+   "source_log_sha256": "0b4914f61d5669b82e05abe7cb96a7d8997adfd8e5bcabfeace677ccbb78f20e",
+   "sources": {
+    "g50t-5849a774_p0.log": "0b4914f61d5669b82e05abe7cb96a7d8997adfd8e5bcabfeace677ccbb78f20e",
+    "g50t-5849a774_p0_provenance.jsonl": "5cad2d4abd30fccd1d59a6739f9fb03629416032a42f5d89e0c00976dab35d5a",
+    "g50t-5849a774_p0_turn_ledger.jsonl": "737d630f42e21e6899e2e13e9f3401d1b2f92527fbc0e29163b489c31577db58"
+   },
+   "world": "g50t-5849a774"
+  },
+  {
+   "analysis_step": 40,
+   "class": "ACTION_REFUSED_BY_HARNESS",
+   "code": "# Execute the guided action: click yellow square to move white outline there\naction([{'action': 'ACTION6', 'row': 57, 'col': 42}], decision={'probe_token': 'P1_id93mcdd7QgAKd0n8Cm784nK', 'intent': 'Move white outline to yellow square to test if clicking moves it to the clicked position'})",
+   "code_sha256": "4d639b863720c2d424ecc17da2c3b6cb6a3774a9e237ddc6811ac7c4d58a7ceb",
+   "observed_result": "[TOOL RESULT: python]\nTraceback (most recent call last):\n  File \"<python_tool>\", line 2, in <module>\nRuntimeError: Blocked by the harness, not the game: this action changed nothing on this same board at t33. Choose a different action, or change the board first.\n\n[ANALYZER STATUS]",
+   "source_log": "sb26-7fbdac44_p0.log",
+   "source_log_sha256": "175085d0b1b82407ed623578c83d72aa4ad973859eca4b237d96a7873f781f48",
+   "sources": {
+    "sb26-7fbdac44_p0.log": "175085d0b1b82407ed623578c83d72aa4ad973859eca4b237d96a7873f781f48",
+    "sb26-7fbdac44_p0_provenance.jsonl": "a664ae8c3546ff79ac8142701f2cfc1bee4d288beefc9c3c5045761dea78bc57",
+    "sb26-7fbdac44_p0_turn_ledger.jsonl": "f85d475040ac920678faa17e4f2b9498d50d4bd0715fcd57b9b76df583e3e402"
+   },
+   "world": "sb26-7fbdac44"
+  }
+ ]
+}

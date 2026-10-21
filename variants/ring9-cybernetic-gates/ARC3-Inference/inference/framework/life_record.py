@@ -38,6 +38,7 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "target_registry": LEVEL, "target_router": LEVEL, "target_journal": LEVEL, "carry": LEVEL,
         "annotations": LEVEL, "_g0": LEVEL, "ego": LEVEL, "counter": LEVEL, "mu": LEVEL, "duck_budget": LEVEL,
         "_counter_prepared_from_ego": LEVEL,
+        "_free_play_frontier": LEVEL,  # WO-RUNTIME-01: rebuilt on a new level or mask law (its own scope key)
     },
     "_ActionSurfaceTarget": {"machine": GAME, "answer": LEVEL, "revision": LEVEL},
     "_EgoTarget": {"machine": GAME},
@@ -68,16 +69,19 @@ PERSISTENCE: dict[str, dict[str, str]] = {
         "_selection": TRANSIENT, "_chosen_members": LEVEL, "_selection_events": LEVEL, "_choice_handoffs": LEVEL,
         # G3 reset continuity (2026-10-11): a broken level record found while building the ledger.
         "_board_record_breaks": LEVEL,
+        "closed_unresolved": LEVEL,  # WO-RUNTIME-01: G3 closed CLOSED_UNRESOLVED on this level
     },
     "_ReactionTarget": {
         "machine": GAME, "revision": LEVEL, "_anatomies": LEVEL, "_answers": LEVEL, "_ordered_entities": LEVEL,
         "_seeded_from": LEVEL,
+        "_closed_chapters": LEVEL, "closed_unresolved": LEVEL,  # WO-RUNTIME-01: closed with the level's chapters
     },
     "_LeverStudyTarget": {
         "machine": GAME, "revision": LEVEL, "_action_count": LEVEL, "_answers": LEVEL, "_completed": LEVEL,
         "_events": LEVEL, "_interruptions": LEVEL, "_interventions": LEVEL, "_level_closed": LEVEL,
         "_life_restudies": LEVEL, "_ordered_entities": LEVEL, "_runs": LEVEL, "_active_run": TRANSIENT,
         "_seeded_from": LEVEL, "_g4_selection": TRANSIENT,  # B2: a choice is in flight until its run ends
+        "_closed_chapters": LEVEL, "closed_unresolved": LEVEL,  # WO-RUNTIME-01: closed with the level's chapters
     },
     "LeverRelationsTarget": {
         "machine": GAME, "revision": LEVEL, "_answer": LEVEL, "_events": LEVEL, "_level_closed": LEVEL,

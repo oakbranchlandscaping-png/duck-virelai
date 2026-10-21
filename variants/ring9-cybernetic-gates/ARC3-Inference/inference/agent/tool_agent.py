@@ -33,7 +33,7 @@ from inference.agent.prompts import (
 )
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
 from inference.agent.controller_turn import ControllerSession, run_controller_turn
-from inference.agent import provenance_capture
+from inference.agent import provenance_capture, sandbox_hints, turn_recovery
 from inference.agent.gate_artifacts import record_gate_answer, record_probe_outcome
 from inference.agent.memory_queries import gated_memory_query, orientation_refusal, record_notes
 from inference.framework.annotation_lane import (
@@ -536,6 +536,9 @@ class AnalyzerTurnResult:
     yielded_control: bool = False
     planned_stop: str = ""  # the built ladder is finished; the harness ends the game cleanly
     controlled_stop: str = ""  # a bounded runtime guard stopped work without a harness crash
+    yield_reason: str = ""  # WO-RUNTIME-01: why the turn yielded (the raw signal turn_recovery types)
+    turn_outcome: str = ""  # WO-RUNTIME-01: one of turn_recovery.OUTCOMES, set by turn_recovery.settle
+    recovery_reason: str = ""  # WO-RUNTIME-01: the typed reason of a non-progress outcome
 
 
 @dataclass(frozen=True)
@@ -2141,14 +2144,13 @@ class ToolAgent:
                 timeout=request_timeout_seconds if request_timeout_seconds is not None else self._timeout,
             )
 
-        response = post_chat(payload)
+        started, response = time.monotonic(), post_chat(payload)  # WO-RUNTIME-01: the request's own clock
         rate_limit_retries = 0
-        while (
-            response.status_code == 429
-            and not _is_permanently_oversized_rate_limit(response)
-            and rate_limit_retries < _RATE_LIMIT_MAX_RETRIES
-        ):
+        while (response.status_code == 429 and not _is_permanently_oversized_rate_limit(response)
+               and rate_limit_retries < _RATE_LIMIT_MAX_RETRIES):
             delay = _rate_limit_retry_delay(response)
+            if request_timeout_seconds is not None and time.monotonic() - started + delay >= request_timeout_seconds:
+                break  # WO-RUNTIME-01 (ruling D): no retry outlives the request's own bound
             rate_limit_retries += 1
             diagnostic_headers = {
                 name: response.headers.get(name)
@@ -2606,10 +2608,7 @@ class ToolAgent:
                 self._controller_decision_results[envelope.decision_id] = result_payload
             return result_payload
 
-        def _handle_virelai_query(
-            operation: str,
-            parameters: dict[str, Any],
-        ) -> dict[str, Any]:
+        def _handle_virelai_query(operation: str, parameters: dict[str, Any]) -> dict[str, Any]:
             nonlocal interaction_kind, repair_signature, repair_error
             nonlocal contract_repair_required_in_dispatch
             if getattr(self, "_turn_ledger", None) is not None:
@@ -2618,6 +2617,8 @@ class ToolAgent:
                 assert gate_machine is not None
                 from inference.framework.virelai_gates import GateContractError
 
+                if operation == "decline":  # WO-RUNTIME-01 (Q5): the selected Duck-owned question only
+                    return turn_recovery.decline(self, gate_machine, parameters)
                 memory_reply = gated_memory_query(self, state_path, gate_machine, operation, parameters)
                 if memory_reply is not None:
                     return memory_reply
@@ -2737,7 +2738,7 @@ class ToolAgent:
                 raise RuntimeError("Virelai did not return a JSON-like response.")
             return response
 
-        action_handler = provenance_capture.duck_action(self, state_path, _handle_action)  # WO-PE-01
+        action_handler = turn_recovery.watch_refusals(self, provenance_capture.duck_action(self, state_path, _handle_action))
         sandbox_result = run_sandboxed_python(
             code=code,
             timeout_seconds=self._python_timeout,
@@ -2747,14 +2748,10 @@ class ToolAgent:
             virelai_handler=_handle_virelai_query,
         )
 
-        action_results = [
-            item
-            for item in sandbox_result.get("action_results") or []
-            if isinstance(item, dict)
-        ]
+        action_results = [item for item in sandbox_result.get("action_results") or [] if isinstance(item, dict)]
         payload: dict[str, Any] = {"tool": "python"}
         rendered_stdout = str(sandbox_result.get("stdout", "") or "")
-        rendered_error = str(sandbox_result.get("error", "") or "")
+        rendered_error = sandbox_hints.transition_view_hint(str(sandbox_result.get("error", "") or ""))
         if rendered_error:
             payload["error"] = rendered_error
             if rendered_stdout:
@@ -2778,13 +2775,13 @@ class ToolAgent:
         if step_executed:
             self._last_step_summary = self._summarize_step_sequence(action_results)
             self._update_summarized_knowledge_from_step_summary()
-        return _ToolDispatchResult(
+        return turn_recovery.dispatch(self, _ToolDispatchResult(  # WO-RUNTIME-01: DECLINE and ACTION_REFUSED typed
             self._render_tool_payload(payload, truncate_fields=("stdout", "error", "result")),
             step_executed=step_executed,
             interaction_kind=interaction_kind,
             repair_signature=repair_signature,
             repair_error=repair_error,
-        )
+        ), step_executed)
 
     def _dispatch_tool(self, state_path: Path, name: str, arguments: dict[str, Any]) -> _ToolDispatchResult:
         self._ensure_session(state_path)
@@ -2927,11 +2924,9 @@ class ToolAgent:
         if ledger is None:
             return
         machine = self._ensure_gate_machine(state_path) if self._virelai_gates_enabled else None
-        ledger.finish(
-            gate_after=None if machine is None else machine.gate_id,
-            step_executed=step_executed,
-            outcome="step" if step_executed else (yielded_control_reason or "no_step"),
-        )
+        self._pending_ledger = (ledger, {  # WO-RUNTIME-01: written by turn_recovery.settle with the typed fields
+            "gate_after": None if machine is None else machine.gate_id, "step_executed": step_executed,
+            "outcome": "step" if step_executed else (yielded_control_reason or "no_step")})
         self._turn_ledger = None
 
     def _request_model_metadata(self) -> dict[str, Any]:
@@ -2951,7 +2946,12 @@ class ToolAgent:
             ),
         }
 
-    def analyze(
+    def analyze(self, state_path: Path, action_num: int, *args: Any, **kwargs: Any) -> AnalyzerTurnResult:
+        """WO-RUNTIME-01: the turn (``_analyze_turn``, unchanged in what it does and taking the same arguments), then
+        its typed outcome and, for a failed Duck turn, its bounded recovery (``turn_recovery.settle``)."""
+        return turn_recovery.settle(self, self._analyze_turn(state_path, action_num, *args, **kwargs), state_path)
+
+    def _analyze_turn(
         self,
         state_path: Path,
         action_num: int,
@@ -2979,6 +2979,7 @@ class ToolAgent:
         controller_result = run_controller_turn(self, state_path, action_num, analysis_step, analyzer_log)
         if controller_result is not None:
             return controller_result
+        turn_recovery.begin_duck_turn(self, state_path)  # WO-RUNTIME-01: what the turn is for, how it is bounded
         prompt_log = _resolve_prompt_log_path(state_path)
         current_frame, history_entries = load_runtime_state(state_path)
         automatic_virelai_update = self._automatic_virelai_update(
@@ -3035,6 +3036,9 @@ class ToolAgent:
             history_entries=history_entries,
             previous_step_summary=self._last_step_summary,
         )
+        automatic_virelai_update, controller_focus_update, controller_handoff, gate_context_update = (
+            turn_recovery.commit_sections(self, automatic_virelai_update, controller_focus_update, controller_handoff,
+                                          gate_context_update))  # Q1: the commit turn after a clock expiry
         self._turn_ledger = self._begin_turn_ledger(state_path, analysis_step, action_num, {
             "prompt_body": user_prompt, "automatic_update": automatic_virelai_update,
             "controller_focus": controller_focus_update, "gate_card": gate_context_update,
@@ -3068,6 +3072,14 @@ class ToolAgent:
             transcript_parts.append(_render_transcript_section(label, content))
             if transcript_updated is not None:
                 transcript_updated("".join(transcript_parts))
+
+        def snapshot_latest_request() -> None:  # the latest request's prompt log (one helper, three call sites)
+            _write_prompt_log_snapshot(
+                prompt_log, model_id=self._model.model_id, base_url=self._model.base_url,
+                display_action_num=display_action_num, analysis_step=analysis_step,
+                request_index=latest_request_index, messages=latest_request_messages, tools=latest_request_tools,
+                tool_choice=latest_request_tool_choice, transcript="".join(transcript_parts),
+            )
 
         append_transcript("SYSTEM PROMPT", self._system_prompt)
         append_transcript("USER PROMPT", user_prompt)
@@ -3188,8 +3200,9 @@ class ToolAgent:
                 )
                 try:
                     request_kwargs: dict[str, Any] = {"tools": tools}
-                    if request_timeout_seconds is not None:
-                        request_kwargs["request_timeout_seconds"] = request_timeout_seconds
+                    request_cap = turn_recovery.request_cap(self, request_timeout_seconds, turn_started_at)
+                    if request_cap is not None:  # ruling D: never longer than the turn's remaining allowance
+                        request_kwargs["request_timeout_seconds"] = request_cap
                     if semantic_checkpoint:
                         request_kwargs.update({
                             "tool_choice_override": "required",
@@ -3378,6 +3391,7 @@ class ToolAgent:
 
                 pending_no_progress_warning: str | None = None
                 pending_contract_repair: str | None = None
+                pending_action_repair: str | None = None
                 for tool_index, tool_call in enumerate(tool_calls):
                     function = tool_call.get("function", {}) if isinstance(tool_call, dict) else {}
                     tool_name = str(function.get("name", "")).strip()
@@ -3397,7 +3411,7 @@ class ToolAgent:
                         f"TOOL CALL: {tool_name}",
                         rendered_tool_call or (json.dumps(arguments, indent=2) if arguments else "{}"),
                     )
-                    dispatch = self._dispatch_tool(state_path, tool_name, arguments)
+                    dispatch = self._last_dispatch = self._dispatch_tool(state_path, tool_name, arguments)
                     if dispatch.step_executed:
                         step_executed = True
                     append_transcript(f"TOOL RESULT: {tool_name}", _render_tool_result_display(dispatch.content))
@@ -3435,6 +3449,16 @@ class ToolAgent:
                             break
                         pending_contract_repair = reason
                         pending_no_progress_warning = None
+                    elif dispatch.interaction_kind == "ACTION_REFUSED":  # an attempt, never an observation
+                        controlled_stop_reason, pending_action_repair = turn_recovery.action_refusal(self, dispatch)
+                        if controlled_stop_reason is not None:
+                            yielded_control_reason = "action_refused"
+                            append_transcript("ANALYZER STATUS", controlled_stop_reason)
+                            preserve_history = preserve_history and tool_index == len(tool_calls) - 1
+                            break
+                    elif dispatch.interaction_kind == "DECLINE":  # Q5: the turn ends with no further model call
+                        yielded_control_reason = "declined"
+                        break
                     elif made_progress:
                         self._reset_no_progress_tool_guard()
                         pending_no_progress_warning = None
@@ -3475,6 +3499,9 @@ class ToolAgent:
                     correction = contract_repair_prompt(error=pending_contract_repair)
                     append_transcript("USER PROMPT", correction)
                     messages.append({"role": "user", "content": correction})
+                elif pending_action_repair is not None and yielded_control_reason is None:
+                    append_transcript("USER PROMPT", pending_action_repair)
+                    messages.append({"role": "user", "content": pending_action_repair})
                 elif pending_no_progress_warning is not None and not made_progress:
                     self._no_progress_correction_issued = True
                     correction = no_progress_tool_prompt(
@@ -3532,19 +3559,9 @@ class ToolAgent:
         except requests.RequestException as exc:
             append_transcript("ANALYZER STATUS", f"request_error: {exc}")
             preserve_history = False
+            self._last_request_error = exc  # WO-RUNTIME-01: typed as a timeout, the turn clock, or a failed request
             if latest_request_messages is not None:
-                _write_prompt_log_snapshot(
-                    prompt_log,
-                    model_id=self._model.model_id,
-                    base_url=self._model.base_url,
-                    display_action_num=display_action_num,
-                    analysis_step=analysis_step,
-                    request_index=latest_request_index,
-                    messages=latest_request_messages,
-                    tools=latest_request_tools,
-                    tool_choice=latest_request_tool_choice,
-                    transcript="".join(transcript_parts),
-                )
+                snapshot_latest_request()
             log.warning("analyzer request failed at action %d: %s", display_action_num, exc)
             if bounded_checkpoint:
                 controlled_stop_reason = (
@@ -3564,18 +3581,7 @@ class ToolAgent:
             append_transcript("ANALYZER STATUS", f"error: {exc}")
             preserve_history = False
             if latest_request_messages is not None:
-                _write_prompt_log_snapshot(
-                    prompt_log,
-                    model_id=self._model.model_id,
-                    base_url=self._model.base_url,
-                    display_action_num=display_action_num,
-                    analysis_step=analysis_step,
-                    request_index=latest_request_index,
-                    messages=latest_request_messages,
-                    tools=latest_request_tools,
-                    tool_choice=latest_request_tool_choice,
-                    transcript="".join(transcript_parts),
-                )
+                snapshot_latest_request()
             log.warning("analyzer failed at action %d: %s", display_action_num, exc)
             return None
         finally:
@@ -3621,18 +3627,7 @@ class ToolAgent:
         )
         append_transcript("ANALYZER STATUS", status)
         if latest_request_messages is not None:
-            _write_prompt_log_snapshot(
-                prompt_log,
-                model_id=self._model.model_id,
-                base_url=self._model.base_url,
-                display_action_num=display_action_num,
-                analysis_step=analysis_step,
-                request_index=latest_request_index,
-                messages=latest_request_messages,
-                tools=latest_request_tools,
-                tool_choice=latest_request_tool_choice,
-                transcript="".join(transcript_parts),
-            )
+            snapshot_latest_request()
         if controlled_stop_reason and bounded_checkpoint and gate_machine is not None:
             # A compact G3 reachability answer received its bounded repair
             # allowance and still did not satisfy the contract.  Leave a
@@ -3660,4 +3655,5 @@ class ToolAgent:
             reasoning=captured_reasoning,
             yielded_control=yielded_control_reason is not None,
             controlled_stop=controlled_stop_reason or "",
+            yield_reason=yielded_control_reason or "",
         )

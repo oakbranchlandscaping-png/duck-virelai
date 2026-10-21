@@ -1,5 +1,8 @@
 """Prompt templates for the analyzer agent."""
 
+import json
+from typing import Any, Mapping
+
 from inference.utils.grid_utils import ARC_COLOR_LEGEND
 TOOL_CALL_FORMAT_GUIDANCE = (
     "When calling `python`, emit exactly the tool-call format shown elsewhere in this prompt for this model. "
@@ -184,7 +187,10 @@ GATED_COMPACT_TOOL_SESSION_ADDENDUM = COMPACT_TOOL_SESSION_ADDENDUM.replace(
 ).replace(
     "- Do not ration tool calls when the state is unclear. Spend extra tool calls to confirm what changed between frames and whether the last action affected gameplay state or only HUD elements such as countdown bars.\n",
     "- When the state is unclear, make each additional inspection answer a new concrete question. After the relevant observation is available, execute the binding probe or submit the required answer.\n",
-)
+) + (
+    "- If you cannot act on or answer the selected question, decline it with "
+    "`virelai('decline', question_id=<selected question id>)`. A decline is not an answer and ends your turn.\n"
+)  # WO-RUNTIME-01 (Q5)
 
 
 def no_progress_tool_prompt(*, gates_enabled: bool, reason: str) -> str:
@@ -202,6 +208,33 @@ def no_progress_tool_prompt(*, gates_enabled: bool, reason: str) -> str:
         f"{next_step} Another read-only Python call before progress will end this run with the "
         "diagnostic `no_progress_tool_loop`."
     )
+
+
+def action_repair_prompt(*, error: str, question_id: str | None) -> str:
+    """WO-RUNTIME-01: the one repair a refused action attempt receives in a turn (a second refusal ends the turn)."""
+    return (
+        "ACTION REPAIR\n"
+        f"Your action was refused before the environment moved: {error}\n"
+        "Supported call shape: action(['ACTION<n>'], decision={'probe_token': <token>, 'intent': <text>}); "
+        "ACTION6 takes integer row and col: action([{'action': 'ACTION6', 'row': r, 'col': c}], "
+        "decision={'probe_token': <token>}). The decision holds only probe_token and an optional intent. "
+        f"Selected question: {question_id or 'none'}. Correct the call once; a second refused action ends this turn."
+    )
+
+
+def commit_turn_prompt(*, question_id: str | None, capability: Any, template: Any) -> str:
+    """WO-RUNTIME-01 (Q1): after a clock expiry the next turn on the question permits only act, answer or decline."""
+    lines = [f"COMMIT TURN — selected question {question_id or 'none'}. Your last turn on it reached the turn clock.",
+             "This turn permits exactly one of: act, answer, or decline. Do not inspect again: a read-only call is "
+             "corrected once, and a second one ends the turn."]
+    if isinstance(capability, Mapping) and capability.get("probe_token"):
+        lines.append(f"Act: action([...], decision={{'probe_token': '{capability['probe_token']}'}}); admissible: "
+                     f"{list(capability.get('admissible_actions') or capability.get('actions') or [])}.")
+    if template is not None:
+        lines.append("Answer: virelai('gate_answer', answer=<this template, filled>): "
+                     + json.dumps(template, sort_keys=True, default=str)[:1200])
+    lines.append(f"Decline: virelai('decline', question_id='{question_id}').")
+    return "\n".join(lines)
 
 
 def contract_repair_prompt(*, error: str) -> str:

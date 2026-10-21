@@ -34,6 +34,7 @@ from inference.agent.runtime_state import (
     RUNTIME_STATE_FILENAME,
     write_runtime_state,
 )
+from inference.agent import turn_recovery
 from inference.agent.tool_agent import ToolAgent
 from inference.framework import provenance_hooks
 from inference.framework.kaggle import (
@@ -177,6 +178,8 @@ def _turn_ends_game(result: Any, run: Any) -> bool:
     """Raise on a failed analyzer turn; True when the turn planned the end of the game (R9-I02)."""
     if result is None:
         raise RuntimeError("Analyzer did not return a result.")
+    if getattr(result, "turn_outcome", "") in ("RECOVERABLE_NO_ACTION", "EXPLICIT_DECLINE"):
+        return False  # WO-RUNTIME-01: a recoverable Duck turn never ends the game; the controller resumes
     if result.fatal_failure:
         raise RuntimeError(f"Analyzer request failed permanently: {result.fatal_failure}")
     if getattr(result, "controlled_stop", ""):
@@ -589,10 +592,7 @@ class _HarnessGameSession:
         try:
             retry_analysis_step: int | None = None
             while not self.should_stop():
-                if (
-                    _is_engine_game_over(self.game)
-                    and self.last_engine_action != "RESET"
-                ):
+                if _is_engine_game_over(self.game) and self.last_engine_action != "RESET":
                     self._execute_auto_reset()
                     continue
 
@@ -628,7 +628,8 @@ class _HarnessGameSession:
                         )
                         self.write_viewer_payload()
                 self._write_l2a_interim_if_advanced()
-                if self._rest_after_controlled_stop(result):
+                if turn_recovery.recoverable(result):  # WO-RUNTIME-01: the analyzer settled it (ToolAgent.analyze)
+                    retry_analysis_step = None  # a new turn: the controller consumes the recovery first (no D-3 rest)
                     continue
                 if _turn_ends_game(result, run):
                     self._note_turn_end(result)
@@ -721,30 +722,6 @@ class _HarnessGameSession:
                 # Artifact emission must never turn a completed game into
                 # a harness crash; the existing run evidence remains valid.
                 pass
-
-    def _rest_after_controlled_stop(self, result: Any) -> bool:
-        """Director ruling D-3 (2026-10-07): in submission mode a controlled stop rests the level in play.
-
-        A bounded guard (a tool loop, a repair loop, an exhausted G3 checkpoint) used to end the game,
-        forfeiting the rest of its slice. With ``rest_on_controlled_stop`` it closes the level's gates
-        instead and Duck plays on freely with what was certified (ruling R-2). A second controlled stop
-        while already in normal play still ends the game.
-        """
-        reason = str(getattr(result, "controlled_stop", "") or "")
-        if not reason or getattr(result, "fatal_failure", None):
-            return False
-        if not getattr(self.solver, "rest_on_controlled_stop", False):
-            return False
-        machine = getattr(self.analyzer, "_gate_machine", None)
-        if machine is None or getattr(machine, "gate_id", None) == "PLAY-NORMAL":
-            return False
-        from inference.agent.tool_agent import _append_transcript_section
-        from inference.framework.play_gate import rest_in_play
-
-        note = f"controlled stop ({reason}) at {machine.gate_id}; the level rests in normal play (ruling D-3)"
-        rest_in_play(machine, note)
-        _append_transcript_section(self.transcript_path, "CONTROLLER", note)
-        return True
 
     def _idle_backoff(self) -> None:
         """SUB-2 D-2: after consecutive turns that executed nothing, wait a little longer each time."""
@@ -1197,7 +1174,7 @@ class HarnessSolver(Solver):
         default=DEFAULT_WHEELHOUSE_STAMP_TEXT, repr=False
     )
     cancel_drain_timeout_s: float = DEFAULT_CANCEL_DRAIN_TIMEOUT_SECONDS
-    rest_on_controlled_stop: bool = False  # SUB-2 D-3: True in submission mode (Director ruling 2026-10-07)
+    rest_on_controlled_stop: bool = False  # SUB-2 D-3; superseded by WO-RUNTIME-01 ruling B: accepted, no effect
     analyzer_factory: AnalyzerFactory | None = field(
         default=None, repr=False, compare=False
     )

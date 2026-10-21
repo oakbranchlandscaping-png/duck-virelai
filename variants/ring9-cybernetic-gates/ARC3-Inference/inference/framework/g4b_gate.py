@@ -15,7 +15,7 @@ import hashlib
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
-from inference.framework import lever_experiments
+from inference.framework import chapter_semantics, lever_experiments
 from inference.framework.cybernetic_targeting import GateAssessment, GoalContract, MemoryProduct
 from inference.framework.g4_guided import is_terminal, level_changed
 from inference.framework.g4_relations import (
@@ -123,8 +123,8 @@ class LeverRelationsTarget:
         if reactions is None or orbits is None:
             raise GateContractError("G4-B opens only after G4.1 and G4-A have emitted their products.")
         try:
-            self._regions = lever_regions(
-                reactions.payload.get("anatomies") or (), orbits.payload.get("orbits") or (),
+            self._regions = lever_regions(  # r3: a closed G4.1 chapter's observed geometry routes; no orbit is invented
+                chapter_semantics.region_rows(reactions.payload), orbits.payload.get("orbits") or (),
                 orbits.payload.get("lever_classes") or {},
             )
         except G4RelationError as exc:
@@ -355,7 +355,7 @@ class LeverRelationsTarget:
             product_type=PRODUCT_TYPE,
             target_id=RELATION_GATE_ID,
             revision=self.revision,
-            payload={
+            payload=chapter_semantics.with_sources(self.machine, {  # r3: region and orbit sources, when any gap
                 "scope": "G4B_LEVERS_TOGETHER",
                 "status": "COMPLETE" if self._answer is not None else "UNRESOLVED" if self._unresolved else "CLOSED_BY_LEVEL_BOUNDARY",
                 "certified_by": "RECORD" if self._from_record is not None else "DUCK" if self._answer is not None else None,
@@ -373,7 +373,7 @@ class LeverRelationsTarget:
                     "those predictions were made on; they are not universal laws."
                 ),
                 "digest_lines": self._digest_lines(acted),
-            },
+            }),
             dependencies=(ORBIT_GATE_ID,),
         ))
 

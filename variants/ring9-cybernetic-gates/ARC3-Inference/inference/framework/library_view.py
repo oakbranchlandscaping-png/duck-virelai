@@ -29,6 +29,7 @@ import weakref
 from typing import Any, Mapping, Sequence
 
 from inference.framework import win_episode_view
+from inference.framework.chapter_semantics import gate_label
 from inference.framework.world_model_v2 import LIVE_VIEW, seal, validate
 
 DIGEST_SCHEMA = "virelai-library-digest-v1"
@@ -272,7 +273,7 @@ def _digest_at(model: Mapping[str, Any], tier: tuple[int, int, int, int, int],
         "schema": DIGEST_SCHEMA,
         "revision": model["content_sha256"][:12],
         "goal": goal,
-        "gates": "; ".join(f"{gate['gate_id']} {gate['disposition']}" for gate in level["certified"]["gates"]),
+        "gates": "; ".join(gate_label(gate) for gate in level["certified"]["gates"]),  # r3: "settled with gaps"
         "certified": _findings(level, id_limit, (target or {}).get("subject")),
         "objects": _objects(level),
         "open_gaps": {"total": len(level["gaps"]), "kinds": shown},

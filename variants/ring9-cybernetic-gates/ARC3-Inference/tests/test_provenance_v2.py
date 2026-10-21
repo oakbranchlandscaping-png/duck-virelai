@@ -52,7 +52,8 @@ def _v2_journal(folder: Path, events=(G4_EVENT,)) -> bytes:
 
 def test_pv2_01_the_writer_is_v2_and_v1_is_frozen_with_its_own_vocabulary():
     aj = _aj()
-    assert (aj.SCHEMA, aj.V1_SCHEMA) == ("virelai-provenance-v2", "virelai-provenance-v1")
+    assert (aj.SCHEMA, aj.V2_SCHEMA, aj.V1_SCHEMA) == (  # WO-RUNTIME-01: the writer is v3; v2 and v1 are frozen
+        "virelai-provenance-v3", "virelai-provenance-v2", "virelai-provenance-v1")
     assert "G4_SELECTION" in aj.VALID and "G4_SELECTION" not in aj.VALID_V1
     assert "G4_EVENT" in aj.REASON_CODES and "G4_EVENT" not in aj.REASON_CODES_V1
     assert {key: aj.VALID[key] for key in aj.VALID_V1} == aj.VALID_V1  # v2 extends v1 and changes nothing in it
@@ -76,7 +77,7 @@ def test_pv2_03_a_v2_journal_holds_g4_selections_and_the_v1_reader_never_reinter
     assert (row["event"], row["disposition"], row["gate_id"]) == ("ADMISSION", "ADMITTED", "G4.2-LEVER-ORBITS")
     frozen = aj.read_journal_v1(tmp_path / pf.SIDECAR)
     assert frozen.status == "CORRUPT" and frozen.rows == [] and frozen.failure["code"] == "SCHEMA_INVALID"
-    assert "virelai-provenance-v2" in frozen.failure["detail"]
+    assert aj.SCHEMA in frozen.failure["detail"]  # WO-RUNTIME-01: the journal the writer writes is v3
     embedded = aj.verify_embedded_v1(read.rows, read.seal)
     assert embedded.status == "CORRUPT" and embedded.rows == []
 
@@ -111,21 +112,21 @@ def test_pv2_05_the_writer_continues_an_open_v1_journal_in_v1_and_refuses_g4_row
 def test_pv2_06_the_world_model_is_v8_and_the_frozen_v7_model_still_reads():
     wm = _wm()
     v7 = json.loads(V7_MODEL.read_text())
-    assert (wm.SCHEMA, wm.V8_SCHEMA, wm.V7_SCHEMA) == (  # WIN-01: the writer is v10; v8 and v7 are frozen
-        "virelai-world-model-v10", "virelai-world-model-v8", "virelai-world-model-v7")
+    assert (wm.SCHEMA, wm.V8_SCHEMA, wm.V7_SCHEMA) == (  # WO-RUNTIME-01: the writer is v11; v8 and v7 are frozen
+        "virelai-world-model-v11", "virelai-world-model-v8", "virelai-world-model-v7")
     assert v7["provenance"]["schema"] == "virelai-provenance-chapter-v1" and len(v7["provenance"]["rows"]) == 4
     wm.validate_v7(v7)
     assert wm.read_world_model(v7)["schema"] == "virelai-world-model-v7"
     assert wm._canonical(v7) == V7_MODEL.read_bytes()  # read back unchanged: the v7 bytes 0119a74 wrote
-    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v10"):
+    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v11"):
         wm.validate(v7)  # the v8 contract is never applied to a v7 artifact
 
 
 def test_pv2_07_a_v8_model_embeds_a_v2_journal_and_v7_never_accepts_one(tmp_path):
     wm = _wm()
     model = pf.sealed(pf.model("RUN_END"), _v2_journal(tmp_path))
-    assert model["schema"] == wm.SCHEMA and model["provenance"]["schema"] == "virelai-provenance-chapter-v2"
-    assert {row["schema"] for row in model["provenance"]["rows"]} == {"virelai-provenance-v2"}
+    assert model["schema"] == wm.SCHEMA and model["provenance"]["schema"] == "virelai-provenance-chapter-v3"  # RUNTIME-01
+    assert {row["schema"] for row in model["provenance"]["rows"]} == {"virelai-provenance-v3"}  # the writer's journal
     assert model["provenance"]["integrity"] == "SEALED"
     wm.validate(model)
     assert model["levels"][0]["provenance_index"]["selections"]  # G4 rows index as selections

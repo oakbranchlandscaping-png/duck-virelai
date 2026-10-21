@@ -31,6 +31,7 @@ import json
 from collections import Counter
 from typing import Any, Iterable, Mapping, Sequence
 
+from inference.framework.chapter_semantics import closure_text, settlement_note
 from inference.framework import lever_dossier_state
 from inference.framework.descriptive_events import cell_runs, run_cells
 from inference.framework.effect_typing import classify_effect_channel
@@ -327,6 +328,7 @@ def _laws(level: Mapping[str, Any]) -> list[dict[str, Any]]:
         role = roles.get(product_id) or {}
         mask = receipt.get("mask")
         note = G1_NOTE if gate == "G1-EGO" else (None if mask else G2_NOTE_NO_MASK) if gate == "G2-COUNTER" else OTHER_NOTE
+        note = settlement_note(((level.get("product_content") or {}).get(product_id) or {}).get("payload")) or note
         rows.append({"gate_id": gate, "product_id": product_id, "product_type": receipt.get("product_type"),
                      "revision": receipt.get("revision"), "payload_sha256": receipt.get("payload_sha256"),
                      "mode": role.get("mode"), "evidence_refs": list(role.get("evidence_refs") or ()),
@@ -363,6 +365,9 @@ def _n(value: Any) -> str:
 def _chapter_summary(name: str, chapter: Mapping[str, Any]) -> str:
     """A deterministic rendering of stored chapter facts (never new facts)."""
     facts = chapter.get("facts")
+    closure = next((closure_text(item) for item in chapter["open"] if item.get("kind") == "CHAPTER_CLOSED"), None)
+    if closure is not None:  # r3: why the chapter closed; a resource or interface gap is no finding about the world
+        return closure
     if chapter["integrity"]["status"] == "FAILED_CLOSED":
         return f"failed closed ({', '.join(chapter['integrity']['reasons'])}; was {chapter['prior_status']})"
     if facts is None:
@@ -474,6 +479,7 @@ def dossier_digest_lines(level: Mapping[str, Any], subject: Any) -> list[str]:
         lines.append(f"SELECTED LEVER {subject}: " + "; ".join(
             f"{name} {DOSSIER_CODES[chapters[name]['status']]}"
             + ("" if chapters[name]["status"] in ("COMPLETE", "NOT_BUILT") else f" {chapters[name]['basis']}")
+            + "".join(f"/{item['closure_class']}" for item in chapters[name]["open"] if item.get("kind") == "CHAPTER_CLOSED")
             for name in DOSSIER_CHAPTERS))
     return lines
 

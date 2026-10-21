@@ -123,6 +123,34 @@ tests = [
     "tests/test_lever_experiments_r2.py::test_t2_09_the_writer_is_v9_and_the_frozen_v8_model_from_ef8289d_still_reads",
 ]
 
+[T0.runtime-recovery]
+tests = [
+    "tests/test_runtime01_turns.py",             # WO-RUNTIME-01: typed outcomes, refusals, the commit turn, the caps
+    "tests/test_runtime01_schema.py",            # audit v3, turn ledger v2, world model v11, frozen v2/v10 readers
+    "tests/test_runtime01_exclusion.py",         # Q3: the counter exclusion region in G3
+    "tests/test_runtime01_chapters.py",          # r2: per-lever G4.1/G4.2 closure, partial products, dossiers
+    "tests/test_runtime01_semantics.py",         # r3: settlement apart from certification, closure classes, forgeries
+    # r3.1 (Sol): the ar25 and D22 reproductions only; the seven public-stop cases run in T2
+    "tests/test_runtime01_public_stops.py::test_ar25_reproduction_closes_the_refused_g3_question_and_g3_continues",
+    "tests/test_runtime01_public_stops.py::test_d22_reproduction_closes_g2_and_opens_g3",  # re86, sc25, wa30
+    "tests/test_runtime01_recovery.py::test_a_failed_duck_turn_in_normal_play_gets_exactly_one_controller_action",
+    "tests/test_runtime01_recovery.py::test_frontier_exhaustion_stops_cleanly_with_its_proof",
+    "tests/test_runtime01_recovery.py::test_hard_budget_two_closes_only_the_selected_gate_question",
+    "tests/test_runtime01_recovery.py::test_clock_budget_four_and_a_hard_failure_count_separately",
+    "tests/test_runtime01_recovery.py::test_progress_resets_both_counters",
+    "tests/test_runtime01_recovery.py::test_g3_entity_closure_closes_one_entity_only",
+    "tests/test_runtime01_recovery.py::test_cascade_only_where_the_downstream_gate_cannot_be_built",
+    "tests/test_runtime01_recovery.py::test_d22_no_legal_move_closes_the_gate_after_two_turns_and_never_rests",
+    "tests/test_runtime01_recovery.py::test_d2_a_stalled_controller_closes_the_refused_question_and_never_rests",
+    "tests/test_runtime01_frontier.py::test_ring7_ordering_is_ported_exactly",
+    "tests/test_runtime01_frontier.py::test_untried_is_legal_minus_tried_and_invalid_self_loops_count_as_tried",
+    # the nearest guards: the superseded rests, the 429 bound, the ledger and the run-end reason
+    "tests/test_sub2_submission_hardening.py",
+    "tests/test_r9_r24_g4_controller_first.py::test_d22_a_gate_with_no_legal_move_closes_unresolved_and_the_ladder_continues",
+    "tests/test_tool_agent_rate_limit.py",
+    "tests/test_wo_l2a_close.py",
+]
+
 # ---- T1 ----------------------------------------------------------------------------------------------------
 
 [T1.g3-directed]
@@ -141,6 +169,13 @@ tests = [
     "tests/test_g3_checkpoint.py",               # the G3 certificate
     "tests/test_library_census.py",              # the census the agenda reports through
     "tests/test_library_view.py",                # the live library and digest Duck reads
+    "tests/test_runtime01_exclusion.py",         # WO-RUNTIME-01 (Q3): G3 under an unresolved G2
+    # WO-RUNTIME-01: the G3, unresolved-G2 and cascade closures (the rest of the file is T0 runtime-recovery and T2)
+    "tests/test_runtime01_recovery.py::test_g3_entity_closure_closes_one_entity_only",
+    "tests/test_runtime01_recovery.py::test_cascade_only_where_the_downstream_gate_cannot_be_built",
+    "tests/test_runtime01_recovery.py::test_g2_in_a_navigation_world_after_an_unresolved_g1_is_built_not_cascaded",
+    "tests/test_runtime01_recovery.py::test_d22_no_legal_move_closes_the_gate_after_two_turns_and_never_rests",
+    "tests/test_runtime01_recovery.py::test_d2_a_stalled_controller_closes_the_refused_question_and_never_rests",
     # selection persistence and event logging
     "tests/test_r9_r16_life_record.py::test_d4_every_gate_machine_field_has_a_declared_persistence_tier",
     "tests/test_memory_m2.py::test_with_the_live_g3_choice_handoff_the_first_model_call_is_that_one_choice",
@@ -164,6 +199,7 @@ tests = [
     "tests/test_world_model_v6_dossier_records.py",  # WO-G4-DOSSIER-A on the records: page, digest line, report
     "tests/test_win_episode.py",                 # WO-WIN-01: the win episode in the census, report, pages and digest
     "tests/test_win_episode_r2.py",              # WIN-01 r2: the clear is a boundary; no v10-to-v9 downgrade
+    "tests/test_runtime01_schema.py",            # WO-RUNTIME-01: world model v11 and CLOSED_UNRESOLVED in the census
 ]
 
 [T1.paper-evidence]
@@ -192,4 +228,13 @@ tests = [
     "tests/test_lever_experiments_r2.py",        # B3 r2: typed closes against the evidence, world model v9, frozen v8
     "tests/test_win_episode.py",                 # WO-WIN-01: world model v10, its frozen v9 reader, the report and digest
     "tests/test_win_episode_r2.py",              # WIN-01 r2: the clear is a boundary; no v10-to-v9 downgrade
+    "tests/test_runtime01_turns.py",             # WO-RUNTIME-01: the turn ledger v2 and the typed outcomes
+    "tests/test_runtime01_schema.py",            # audit v3 and its frozen v2 reader
+    # WO-RUNTIME-01 r3: the census contract, closure classes and the forgeries (no full-world replay here)
+    "tests/test_runtime01_semantics.py::test_02_a_partial_gate_is_absent_from_the_certified_gates",
+    "tests/test_runtime01_semantics.py::test_10_a_forged_whole_gate_certification_is_refused_after_resealing",
+    "tests/test_runtime01_semantics.py::test_11_a_forged_completed_subject_is_refused_after_resealing_every_hash",
+    "tests/test_runtime01_semantics.py::test_12_every_closure_reason_maps_to_exactly_one_closure_class",
+    "tests/test_runtime01_semantics.py::test_13_a_resource_failure_and_an_evidence_failure_render_differently",
+    "tests/test_runtime01_semantics.py::test_16_the_frozen_v10_model_still_reads_unchanged",
 ]

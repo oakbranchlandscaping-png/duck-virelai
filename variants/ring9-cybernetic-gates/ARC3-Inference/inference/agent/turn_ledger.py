@@ -12,6 +12,11 @@ One JSON row per analyzer turn, written beside the other run artifacts as
 - wall seconds; recall queries Duck issued (by operation); whether an action executed.
 
 The ledger only observes. It never alters a prompt, a request or a decision.
+
+v2 (WO-RUNTIME-01, 2026-10-20): ``finish`` takes the turn's recovery fields (``turn_recovery.ledger_fields``: the
+selected question, why Duck owned the step, the typed outcome and reason, its class, count and commit status, the
+timeout bound of every request, and the recovery a controller row resolves). The sealed audit journal remains the
+authoritative recovery record; this row is operational evidence.
 """
 from __future__ import annotations
 
@@ -20,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "virelai-turn-ledger-v1"
+SCHEMA = "virelai-turn-ledger-v2"  # v2: the recovery fields (WO-RUNTIME-01)
 
 
 def _int(usage: Mapping[str, Any] | None, *keys: str) -> int | None:
@@ -68,10 +73,10 @@ class TurnLedger:
     def query(self, operation: str) -> None:
         self._row["recall_queries"].append(str(operation))
 
-    def finish(self, *, gate_after: str | None, step_executed: bool, outcome: str) -> dict[str, Any]:
+    def finish(self, *, gate_after: str | None, step_executed: bool, outcome: str, **extra: Any) -> dict[str, Any]:
         requests = self._row["requests"]
         row = {
-            **self._row,
+            **self._row, **extra,
             "gate_after": gate_after,
             "step_executed": bool(step_executed),
             "outcome": outcome,

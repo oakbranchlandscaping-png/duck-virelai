@@ -15,7 +15,9 @@ enumerated, and each resolves to exactly one origin:
   id).
 * ``GATE_DERIVED`` — only the declared closures below, each stated by the product's own payload, where no answer is
   expected: a counter search with no counter observed; a law, relation or orbit study closed by a level boundary or,
-  for law and relations, unresolved when Duck's budget was spent.
+  for law and relations, unresolved when Duck's budget was spent; and (WO-RUNTIME-01, ruling B) a G1, G2, G3, G4.1 or
+  G4.2 product closed CLOSED_UNRESOLVED with no answer (``UNRESOLVED_BASES``: its payload states ``status: UNRESOLVED``
+  and its ``unresolved_reason``; a G4.1 or G4.2 close that kept answers is still certified by them).
 * ``UNATTRIBUTED`` — everything else, with the reason. It always blocks COMPLETE.
 """
 from __future__ import annotations
@@ -38,6 +40,10 @@ GATE_DERIVED_BASES = {  # basis -> the one product type whose payload may state 
     "LAW_CLOSED_BY_LEVEL_BOUNDARY": "LeverReactionLawSet", "LAW_UNRESOLVED": "LeverReactionLawSet",
     "RELATIONS_CLOSED_BY_LEVEL_BOUNDARY": "LeverRelationSet", "RELATIONS_UNRESOLVED": "LeverRelationSet",
     "ORBITS_CLOSED_BY_LEVEL_BOUNDARY": "LeverOrbitSet"}
+UNRESOLVED_BASES = {"EgoLaw": "EGO_UNRESOLVED", "CounterGateProduct": "COUNTER_UNRESOLVED",  # WO-RUNTIME-01
+                    "LeverInventory": "INVENTORY_UNRESOLVED", "LeverEffectAnatomySet": "ANATOMY_UNRESOLVED",
+                    "LeverOrbitSet": "ORBITS_UNRESOLVED"}
+GATE_DERIVED_BASES.update({basis: product_type for product_type, basis in UNRESOLVED_BASES.items()})
 UNATTRIBUTED_BASES = frozenset({"NO_RETAINED_ANSWER", "ANSWER_DOES_NOT_DERIVE_PRODUCT", "NO_DECLARED_CLOSURE",
                                 "UNREGISTERED_PRODUCT_TYPE", "UNREGISTERED_ANSWER_SHAPE", "ANSWER_SHAPE_MISMATCH",
                                 "NON_JSON_ANSWER_FIELD", "PRODUCT_DIFFERS_FROM_RETAINED_STATE"})
@@ -210,6 +216,9 @@ def certifying_answers(machine: Any, product: Any) -> Origin:
     if adapter is None:
         return _unattributed("UNREGISTERED_PRODUCT_TYPE")
     payload = product.payload if isinstance(product.payload, Mapping) else {}
+    if product.product_type in UNRESOLVED_BASES and payload.get("status") == "UNRESOLVED" \
+            and payload.get("unresolved_reason") and not payload.get("answers") and payload.get("answer") is None:
+        return DERIVED, UNRESOLVED_BASES[product.product_type], "NONE", []
     try:
         return adapter(machine, product, payload)
     except shapes.AnswerProjectionError as exc:
@@ -248,5 +257,5 @@ def entry_problem(stored: Any) -> str | None:
                                          else "malformed reference" for ref in answers) if problem), None)
 
 
-__all__ = ["ADAPTERS", "CERTIFIED_BASES", "GATE_DERIVED_BASES", "ORIGINS", "UNATTRIBUTED_BASES", "certifying_answers",
-           "ego_law_id", "entry", "entry_problem", "record_answer_id", "record_relations_answer"]
+__all__ = ["ADAPTERS", "CERTIFIED_BASES", "GATE_DERIVED_BASES", "ORIGINS", "UNATTRIBUTED_BASES", "UNRESOLVED_BASES",
+           "certifying_answers", "ego_law_id", "entry", "entry_problem", "record_answer_id", "record_relations_answer"]

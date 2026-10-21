@@ -166,6 +166,30 @@ def _row(where: Mapping[str, Any], executor: str, operation: str, event: str, di
             "refs": pv.make_refs(**refs), "reason": reason}
 
 
+row = _row  # WO-RUNTIME-01: the recovery rows (``recovery_consume``) are built the same way
+
+
+def audit(agent: Any, state_path: Path, machine: Any, content: Mapping[str, Any]) -> dict[str, Any] | None:
+    """WO-RUNTIME-01: one audit-v3 row (TURN or GATE); fails open like every capture point (None when off)."""
+    if not _enabled(agent):
+        return None
+    try:
+        return _append(agent, state_path, machine, content)
+    except Exception as exc:  # noqa: BLE001
+        _record_failure(agent, state_path, exc)
+        return None
+
+
+def last_admission(agent: Any, executor: str) -> str | None:
+    """The last admitted probe's row id for ``executor`` (the controller's recovery action cites it)."""
+    return (getattr(agent, "_provenance_last_admission", None) or {}).get(executor)
+
+
+def last_refusal(agent: Any) -> str | None:
+    """The last refused admission row this turn (a recovery cites the existing refusal; it is never re-journalled)."""
+    return getattr(agent, "_provenance_last_refusal", None)
+
+
 # ---- probes -----------------------------------------------------------------------------------------------------
 
 @_guarded
@@ -174,9 +198,10 @@ def probe_refused(agent: Any, state_path: Path, machine: Any, where: Mapping[str
     if not _enabled(agent):
         return
     agent._provenance_admissions = getattr(agent, "_provenance_admissions", 0) + 1
-    _append(agent, state_path, machine, _row(where, executor, "PROBE", "ADMISSION", "REFUSED",
-                                             submitted=portable(machine, submitted),
-                                             reason={"code": code, "text": str(text)}))
+    written = _append(agent, state_path, machine, _row(where, executor, "PROBE", "ADMISSION", "REFUSED",
+                                                       submitted=portable(machine, submitted),
+                                                       reason={"code": code, "text": str(text)}))
+    agent._provenance_last_refusal = None if written is None else written["event_id"]
 
 
 @_guarded
@@ -190,6 +215,8 @@ def probe_admitted(agent: Any, state_path: Path, machine: Any, where: Mapping[st
     row = _append(agent, state_path, machine, _row(where, executor, "PROBE", "ADMISSION", "ADMITTED",
                                                    submitted=portable(machine, submitted), probe_id=probe.probe_id))
     agent._provenance_pending["admission_event_id"] = row["event_id"] if row else None
+    agent._provenance_last_admission = {**(getattr(agent, "_provenance_last_admission", None) or {}),
+                                        executor: row["event_id"] if row else None}
 
 
 @_guarded
@@ -361,6 +388,17 @@ def g3_choice_refused_early(agent: Any, state_path: Path, machine: Any, where: M
 
 # ---- session close ----------------------------------------------------------------------------------------------
 
+def _resolve_open_outcomes(agent: Any, state_path: Path, machine: Any, record: pv.ProvenanceJournal) -> None:
+    """A Duck turn's outcome still open when the run ends is resolved: no controller action, the run ended."""
+    for event_id, opened in list(record.chain.v3.open.items()):
+        where = {key: opened[key] for key in ("level", "life", "gate_id", "at_transition")}
+        audit(agent, state_path, machine, _row(
+            where, "CONTROLLER", "TURN", "RECOVERY", "NO_CONTROLLER_ACTION",
+            submitted={"turn_event_id": event_id, "resulting_event_id": None},
+            reason={"code": "RUN_ENDED", "text": "the run ended before the controller resolved this turn"},
+            question_id=opened["refs"]["question_id"]))
+
+
 def close_session(agent: Any, state_path: Path) -> list[tuple[str, str]]:
     """At every handled end: write pending G3 selection events, journal them, close an admitted probe that never
     executed, and seal. Returns the observer warnings to record; never raises."""
@@ -378,6 +416,7 @@ def close_session(agent: Any, state_path: Path) -> list[tuple[str, str]]:
         return warnings
     sync(agent, state_path, machine)
     probe_not_attempted(agent, state_path, machine, "EXECUTION_ERROR", "the session closed before it executed")
+    _resolve_open_outcomes(agent, state_path, machine, record)  # WO-RUNTIME-01: a recovery never stays open
     record.seal()
     if record.failed and not record.warned:
         record.warned = True
@@ -386,7 +425,8 @@ def close_session(agent: Any, state_path: Path) -> list[tuple[str, str]]:
 
 
 __all__ = [
-    "AnswerTrace", "close_session", "context", "portable", "duck_action", "g3_choice_refused_early", "journal",
+    "AnswerTrace", "audit", "close_session", "context", "portable", "duck_action", "g3_choice_refused_early",
+    "journal", "last_admission", "last_refusal", "row",
     "journal_path", "notes",
     "probe_admitted", "probe_executed", "probe_not_attempted", "probe_refused", "selection_event_count", "sync",
 ]

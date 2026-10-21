@@ -26,7 +26,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
-from inference.framework import lever_dossiers, provenance_hooks, win_episode
+from inference.framework import lever_dossiers, provenance_hooks, win_episode, world_model_v11
 from inference.framework.descriptive_events import cell_runs, describe_level, restrict_description, role_ref, witness_sha256
 from inference.framework.virelai_continuity import (
     ComponentObservation,
@@ -336,8 +336,8 @@ def _gate_dispositions(machine: Any | None) -> list[dict[str, Any]]:
     for contract in machine.target_registry.ordered():
         product = machine.target_journal.active_product(contract.target_id)
         if product is not None:
-            rows.append({"gate_id": contract.target_id, "disposition": "CERTIFIED", "product_id": product.product_id,
-                         "product_type": product.product_type, "revision": product.revision})
+            rows.append({"gate_id": contract.target_id, **world_model_v11.gate_fields(product),
+                         "product_id": product.product_id, "product_type": product.product_type, "revision": product.revision})
         elif contract.target_id == machine.gate_id:
             rows.append({"gate_id": contract.target_id, "disposition": "IN_PROGRESS"})
         else:
@@ -370,7 +370,7 @@ def _certified(machine: Any, steps: Mapping[str, tuple[ComponentObservation, ...
     gaps: list[dict[str, Any]] = []
     journal = machine.target_journal
     ego_product = journal.active_product("G1-EGO")
-    if ego_product is not None:
+    if ego_product is not None and not world_model_v11.unresolved(ego_product):  # a closed G1 certifies no EGO
         law = ego_product.payload
         refs, unverified = _resolvable(list(law.get("evidence_refs") or ()) + [law.get("demonstration_ref")], receipts)
         role = {"role": "EGO", "gate_id": "G1-EGO", "product_id": ego_product.product_id, "mode": law.get("mode"),

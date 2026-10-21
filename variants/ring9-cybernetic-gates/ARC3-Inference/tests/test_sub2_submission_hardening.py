@@ -103,11 +103,22 @@ def test_d1_the_solver_accepts_an_action7_step():
 
 # D-2 ----------------------------------------------------------------------------------------------
 
-def test_d2_a_refused_controller_probe_rests_the_level_instead_of_spinning(monkeypatch, tmp_path):
-    """The dry-run sequence: the environment refuses the probe, then its consumed token is replayed."""
+def test_d2_a_refused_controller_probe_closes_its_question_instead_of_spinning(monkeypatch, tmp_path):
+    """Superseded by WO-RUNTIME-01 (Director ruling Q2, D-2 inside ruling B; reviewed cause). Was
+    ``test_d2_a_refused_controller_probe_rests_the_level_instead_of_spinning``: the level rested in normal play. Now
+    only the stuck question (or, when it cannot close, its gate) closes CLOSED_UNRESOLVED and the ladder continues;
+    nothing rests and nothing spins. The real-machine reproduction is ``test_runtime01_public_stops`` (ar25)."""
+    from inference.framework import gate_closure
+
     _stub_executor(monkeypatch)
     machine = _Machine()
     calls = {"step_env": 0}
+    closed: list[str] = []
+
+    def close_stuck_gate(machine_, question, reason, history=()):  # the stand-in machine has no gate products
+        closed.append(reason)
+        machine_._gate = "G2-COUNTER"
+        return gate_closure.Closure("CLOSED", "GATE", "G1-EGO")
 
     def begin(state_path, machine_, decision, actions, executor):
         if calls["step_env"]:
@@ -118,13 +129,14 @@ def test_d2_a_refused_controller_probe_rests_the_level_instead_of_spinning(monke
         calls["step_env"] += 1
         return {"executed": False, "error": "Unknown action at index 1: 'ACTION7'"}
 
+    monkeypatch.setattr(gate_closure, "close_stuck_gate", close_stuck_gate)
     agent = _agent(machine, begin=begin, step_env=step_env)
     results = [_turn(agent, tmp_path) for _ in range(MAX_STALLED)]
     assert all(result is not None and not result.step_executed for result in results)
-    assert machine._adapters[PLAY].forced is None  # still within the guard
-    assert _turn(agent, tmp_path) is None  # the next turn is Duck's: the level rests in normal play
-    assert machine.gate_id == PLAY
-    assert "consecutive turns" in machine._adapters[PLAY].forced
+    assert not closed and machine._adapters[PLAY].forced is None  # still within the guard
+    _turn(agent, tmp_path)  # the next turn closes the stuck question's gate first
+    assert closed == ["CONTROLLER_STALLED"]
+    assert machine.gate_id == "G2-COUNTER" and machine._adapters[PLAY].forced is None  # the ladder continues
     assert calls["step_env"] == 1  # the refused action was never re-sent to the environment
 
 
@@ -165,20 +177,25 @@ def _stop(reason: str = "contract_repair_loop: Duck repeated a gate answer") -> 
     return SimpleNamespace(controlled_stop=reason, fatal_failure=None)
 
 
-def test_d3_in_submission_mode_a_controlled_stop_rests_the_level_in_play_once(tmp_path):
+def test_d3_superseded_a_settled_controlled_stop_is_recoverable_and_rests_nothing(tmp_path):
+    """Superseded by WO-RUNTIME-01 (Director ruling B; reviewed cause). Was
+    ``test_d3_in_submission_mode_a_controlled_stop_rests_the_level_in_play_once`` (``_rest_after_controlled_stop``,
+    removed). The agent settles the stop RECOVERABLE_NO_ACTION: the game goes on and no level rests."""
+    from inference.agent import turn_recovery
+
     machine = _Machine("G1-EGO")
-    session = _session(tmp_path, machine, rest=True)
-    assert session._rest_after_controlled_stop(_stop()) is True
-    assert machine.gate_id == PLAY
-    assert "ruling D-3" in machine._adapters[PLAY].forced
-    assert "ruling D-3" in session.transcript_path.read_text()
-    assert session._rest_after_controlled_stop(_stop("no_progress_tool_loop")) is False  # already in play
+    _session(tmp_path, machine, rest=True)
+    settled = SimpleNamespace(**vars(_stop()), planned_stop="", turn_outcome="RECOVERABLE_NO_ACTION",
+                              recovery_reason="CONTRACT_REPAIR_EXHAUSTED")
+    assert turn_recovery.recoverable(settled)
+    assert solver_module._turn_ends_game(settled, SimpleNamespace(solver_note=None)) is False
+    assert machine.gate_id == "G1-EGO" and machine._adapters[PLAY].forced is None
+    assert not hasattr(_HarnessGameSession, "_rest_after_controlled_stop")
 
 
 def test_d3_outside_submission_mode_a_controlled_stop_still_ends_the_game(tmp_path):
     machine = _Machine("G3-LEVERS")
-    session = _session(tmp_path, machine, rest=False)
-    assert session._rest_after_controlled_stop(_stop("g3_route_retry_exhausted")) is False
+    _session(tmp_path, machine, rest=False)
     assert machine._adapters[PLAY].forced is None
     run = SimpleNamespace(solver_note=None)
     result = SimpleNamespace(controlled_stop="g3_route_retry_exhausted", fatal_failure=None, planned_stop="")
@@ -186,6 +203,8 @@ def test_d3_outside_submission_mode_a_controlled_stop_still_ends_the_game(tmp_pa
 
 
 def test_d3_an_ordinary_turn_is_untouched(tmp_path):
-    session = _session(tmp_path, _Machine(), rest=True)
-    assert session._rest_after_controlled_stop(SimpleNamespace(controlled_stop="", fatal_failure=None)) is False
+    from inference.agent import turn_recovery
+
+    _session(tmp_path, _Machine(), rest=True)
+    assert not turn_recovery.recoverable(SimpleNamespace(controlled_stop="", fatal_failure=None))  # untyped: as before
     assert MAX_STALLED >= 2

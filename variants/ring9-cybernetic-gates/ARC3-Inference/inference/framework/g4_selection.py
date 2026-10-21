@@ -31,6 +31,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Mapping, Sequence
 
+from inference.framework import chapter_closure
+
 SCHEMA = "virelai-g4-selection-event-v1"
 REACTIONS, ORBITS = "G4-REACTIONS", "G4.2-LEVER-ORBITS"
 CHAPTERS = {REACTIONS: "EFFECTS", ORBITS: "ORBIT"}
@@ -82,7 +84,8 @@ def admission_candidates(machine: Any) -> tuple[dict[str, Any], ...]:
         return ()
     level, gate = int(machine.lives.level), machine.gate_id
     if gate == REACTIONS:  # listed for the agenda, head first; never Duck's to choose
-        pending = [entity for entity in adapter._ordered_entities if entity not in adapter._answers]
+        pending = [entity for entity in adapter._ordered_entities
+                   if entity not in adapter._answers and not chapter_closure.is_closed(adapter, entity)]  # r2
         rows = [(entity, "UNANSWERED", index == 0, False) for index, entity in enumerate(pending)]
     else:
         rows = _orbit_rows(adapter)
@@ -103,6 +106,8 @@ def _ended(adapter: Any, selection: Mapping[str, Any]) -> tuple[str, str] | None
         return "STALE", "the level closed this G4-A study"
     if entity in adapter._completed or entity in adapter._answers:
         return "FINISHED", "the chosen lever's run reached its endpoint"
+    if chapter_closure.is_closed(adapter, entity):  # WO-RUNTIME-01 r2: the chapter closed CLOSED_UNRESOLVED
+        return "STALE", "the chosen lever's chapter closed CLOSED_UNRESOLVED"
     runs = adapter._runs.get(entity, [])
     if len(runs) > int(selection["runs_at_admission"]) and not runs[-1].open:
         return "STALE", "the chosen run ended before its endpoint"

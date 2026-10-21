@@ -35,7 +35,8 @@ from inference.framework import product_origins as origins
 from inference.framework.answer_shapes import sha16  # re-exported: the census and tests hash with it
 
 CHAPTER_V1 = "virelai-provenance-chapter-v1"  # frozen: world models v4-v7, audit-v1 rows only
-CHAPTER_SCHEMA = "virelai-provenance-chapter-v2"  # world model v8: audit v1 or v2 rows
+CHAPTER_V2 = "virelai-provenance-chapter-v2"  # frozen: world models v8-v10, audit v1 or v2 rows
+CHAPTER_SCHEMA = "virelai-provenance-chapter-v3"  # world model v11 (WO-RUNTIME-01): audit v1, v2 or v3 rows
 PHASES = ("H1", "H2", "LIVE_VIEW")
 H2_INTEGRITY = ("SEALED", "OPEN", "CORRUPT", "UNAVAILABLE")
 CAPTURE = ("ENABLED", "DISABLED", "FAILED", "UNKNOWN")
@@ -43,7 +44,10 @@ UNAVAILABLE_REASONS = ("CAPTURE_DISABLED", "JOURNAL_MISSING", "JOURNAL_UNREADABL
                        "CHAPTER_COMPILE_FAILED")
 LIVE_VIEW = "LIVE_VIEW"
 FINAL_REASONS = frozenset({"RUN_END", "BUDGET_STOP", "CONTROLLED_STOP", "CRASH", "CANCELLED"})
-INDEX_KEYS = ("admissions", "executions", "answers", "selections", "annotations")
+INDEX_KEYS_V2 = ("admissions", "executions", "answers", "selections", "annotations")  # chapters v1 and v2
+INDEX_KEYS = (*INDEX_KEYS_V2, "turns", "closes")  # chapter v3: the TURN and GATE recovery rows
+CONTRACTS = {CHAPTER_V1: ((aj.V1_SCHEMA,), INDEX_KEYS_V2), CHAPTER_V2: (aj.V2_SCHEMAS, INDEX_KEYS_V2),
+             CHAPTER_SCHEMA: (aj.SCHEMAS, INDEX_KEYS)}  # each chapter: the audit schemas it embeds, its index keys
 FINDINGS = frozenset({
     "ADMISSION_UNCONSUMED", "EXECUTION_NOT_RECORDED", "EVIDENCE_WITHOUT_EXECUTION", "EXECUTION_WITHOUT_EVIDENCE",
     "EXECUTION_EVIDENCE_DISAGREES", "DUPLICATE_EVIDENCE_EXECUTION", "UNGATED_TRANSITION",
@@ -143,13 +147,13 @@ def _category(row: Mapping[str, Any]) -> str:
     if operation == "PROBE":
         return "admissions" if event == "ADMISSION" else "executions"
     return {"ANSWER": "answers", "G3_SELECTION": "selections", "G4_SELECTION": "selections",
-            "ANNOTATION": "annotations"}[operation]
+            "ANNOTATION": "annotations", "TURN": "turns", "GATE": "closes"}[operation]
 
 
-def indexes(levels: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]
+def indexes(levels: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]], keys: Sequence[str] = INDEX_KEYS
             ) -> tuple[dict[Any, dict[str, list[str]]], list[str]]:
     numbers = {level["level"] for level in levels}
-    index = {number: {key: [] for key in INDEX_KEYS} for number in numbers}
+    index = {number: {key: [] for key in keys} for number in numbers}
     unscoped = []
     for row in rows:
         if row["level"] in numbers:
@@ -475,11 +479,13 @@ def _expected_phase(persist_reason: Any) -> str:
     return LIVE_VIEW if persist_reason == LIVE_VIEW else "H2" if persist_reason in FINAL_REASONS else "H1"
 
 
-def validate_chapter(payload: Mapping[str, Any], *, frozen_v1: bool = False) -> None:
+def validate_chapter(payload: Mapping[str, Any], *, frozen_v1: bool = False, schema: str | None = None) -> None:
     """The provenance contract (pure): shape, the embedded journal re-verified, every derivable field recomputed.
-    ``frozen_v1``: the chapter-v1 contract of world models v4-v7 (audit-v1 rows only)."""
+    ``frozen_v1``: the chapter-v1 contract of world models v4-v7 (audit-v1 rows only); ``schema``: a frozen chapter
+    (v2: world models v8-v10) or, by default, the current one."""
     chapter = payload.get("provenance")
-    expected = CHAPTER_V1 if frozen_v1 else CHAPTER_SCHEMA
+    expected = CHAPTER_V1 if frozen_v1 else schema or CHAPTER_SCHEMA
+    accepted, keys = CONTRACTS[expected]
     _require(isinstance(chapter, Mapping) and chapter.get("schema") == expected,
              f"the model carries a {expected} provenance chapter")
     phase = chapter.get("phase")
@@ -488,7 +494,7 @@ def validate_chapter(payload: Mapping[str, Any], *, frozen_v1: bool = False) -> 
     _require(chapter.get("capture") in CAPTURE, "provenance.capture is a known value")
     levels = list(payload.get("levels") or ())
     rows = list(chapter.get("rows") or ()) if phase == "H2" else []
-    index, unscoped = indexes(levels, rows)
+    index, unscoped = indexes(levels, rows, keys)
     for level in levels:
         _require(level.get("provenance_index") == index[level["level"]],
                  f"level {level.get('level')}'s provenance_index does not partition the embedded rows")
@@ -507,7 +513,7 @@ def validate_chapter(payload: Mapping[str, Any], *, frozen_v1: bool = False) -> 
                                       and bool(_HEX64.fullmatch(str(reported["head_hash"])))),
                  "an H1 prefix is WRITER_REPORTED {event_count, head_hash}")
         return
-    _validate_h2(payload, chapter, rows, unscoped, (aj.V1_SCHEMA,) if frozen_v1 else aj.SCHEMAS)
+    _validate_h2(payload, chapter, rows, unscoped, accepted)
 
 
 def _validate_product_answers(level: Mapping[str, Any]) -> None:
@@ -596,6 +602,6 @@ def verify_sidecar(model: Mapping[str, Any], path: str | Path) -> dict[str, Any]
 
 
 __all__ = [
-    "CHAPTER_SCHEMA", "CHAPTER_V1", "FINAL_REASONS", "INDEX_KEYS", "ProvenanceChapterError", "attach", "cross_check", "default_for", "derive", "h1", "h2", "indexes", "live", "sha16",
+    "CHAPTER_SCHEMA", "CHAPTER_V1", "CHAPTER_V2", "CONTRACTS", "FINAL_REASONS", "INDEX_KEYS", "INDEX_KEYS_V2", "ProvenanceChapterError", "attach", "cross_check", "default_for", "derive", "h1", "h2", "indexes", "live", "sha16",
     "validate_chapter", "verdict", "verify_sidecar",
 ]

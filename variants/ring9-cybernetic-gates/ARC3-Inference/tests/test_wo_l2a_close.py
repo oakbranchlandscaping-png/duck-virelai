@@ -142,20 +142,36 @@ def test_a_controlled_stop_that_ends_the_run_is_persisted_as_such(tmp_path):
     assert _model(run)["manifest"]["persist_reason"] == "CONTROLLED_STOP"
 
 
-def test_a_controlled_stop_that_rests_the_gates_is_not_the_runs_end(tmp_path):
-    """Submission mode (D-3): the stop rests the level in normal play, and play resumes."""
-    script = [_stop(controlled_stop="contract-repair loop"), _rest_and_play, _stop(planned_stop="done")]
-    run = _live(tmp_path, script, rest_on_controlled_stop=True)
-    assert run.turns == [0, 1, 2]  # play resumed after the rest
-    assert run.agent._gate_machine.gate_id == PLAY
+_RECOVERABLE = {"turn_outcome": "RECOVERABLE_NO_ACTION", "recovery_reason": "CONTRACT_REPAIR_EXHAUSTED"}
+
+
+def test_a_recoverable_controlled_stop_is_not_the_runs_end_and_rests_nothing(tmp_path):
+    """Superseded D-3 (WO-RUNTIME-01, Director ruling B; reviewed cause). Was
+    ``test_a_controlled_stop_that_rests_the_gates_is_not_the_runs_end``: the stop rested the level in normal play.
+    Now the agent settles the stop RECOVERABLE_NO_ACTION, play resumes and no level rests (the gate is kept)."""
+    gates = []
+
+    def stopped(agent, machine, state_path):
+        gates.append(machine.gate_id)
+        return _turn(controlled_stop="contract-repair loop", **_RECOVERABLE)
+
+    def after(agent, machine, state_path):
+        gates.append(machine.gate_id)
+        return _rest_and_play(agent, machine, state_path)
+
+    run = _live(tmp_path, [stopped, after, _stop(planned_stop="done")], rest_on_controlled_stop=True)
+    assert run.turns == [0, 1, 2]  # play resumed after the stop
+    assert gates[0] == gates[1] != PLAY  # nothing rested the level between the two turns
     assert _model(run)["manifest"]["persist_reason"] == "RUN_END"
 
 
-def test_a_second_controlled_stop_in_normal_play_ends_the_run(tmp_path):
-    script = [_stop(controlled_stop="contract-repair loop"), _rest_and_play,
-              _stop(controlled_stop="no-progress tool loop")]
-    run = _live(tmp_path, script, rest_on_controlled_stop=True)
-    assert run.turns == [0, 1, 2]
+def test_a_controlled_stop_no_analyzer_settled_still_ends_the_run(tmp_path):
+    """Superseded D-3 (reviewed cause). Was ``test_a_second_controlled_stop_in_normal_play_ends_the_run``: in normal
+    play a failed Duck turn now earns a controller frontier action (ruling A, ``test_runtime01_recovery``). A stop no
+    analyzer typed (here a scripted one) ends the run exactly as before, submission mode or not: nothing rests."""
+    run = _live(tmp_path, [_stop(controlled_stop="no-progress tool loop")], rest_on_controlled_stop=True)
+    assert run.turns == [0]
+    assert run.agent._gate_machine.gate_id != PLAY
     assert _model(run)["manifest"]["persist_reason"] == "CONTROLLED_STOP"
 
 

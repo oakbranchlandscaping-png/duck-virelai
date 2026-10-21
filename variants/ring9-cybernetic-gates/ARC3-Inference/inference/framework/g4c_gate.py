@@ -20,6 +20,7 @@ import hashlib
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
+from inference.framework import chapter_semantics
 from inference.framework.cybernetic_targeting import GateAssessment, GoalContract, MemoryProduct
 from inference.framework.g4_relations import (
     CONTRADICTED, LAW_KIND, SUPPORTED, G4RelationError, Prediction, masked_address, validate_prediction,
@@ -240,7 +241,8 @@ class LeverLawTarget:
         self._events.append(event)
         if event["level_boundary"] is not None:
             self._level_closed = event["level_boundary"]
-        if pending.status == SUPPORTED:
+        if pending.status == SUPPORTED and chapter_semantics.prerequisites_present(  # r3: never on an unresolved lever
+                self.machine, pending, self._description().relations if self._relations._answer else ()):
             self._certified = pending
         if self._closed():
             self._emit_product()

@@ -383,13 +383,13 @@ def test_w22_the_frozen_v9_fixture_from_40940a8_reads_unchanged():
     wm = _wm()
     raw = gzip.decompress(V9_MODEL.read_bytes())
     v9 = json.loads(raw)
-    assert (wm.SCHEMA, wm.V9_SCHEMA) == ("virelai-world-model-v10", "virelai-world-model-v9")
+    assert (wm.SCHEMA, wm.V9_SCHEMA) == ("virelai-world-model-v11", "virelai-world-model-v9")
     assert v9["schema"] == wm.V9_SCHEMA and [level["state"] for level in v9["levels"]] == ["FROZEN", "OPEN"]
     assert not any("win_episode" in level for level in v9["levels"])  # v9 holds a clear but no episode
     wm.validate_v9(v9)
     assert wm.read_world_model(v9)["schema"] == wm.V9_SCHEMA
     assert wm._canonical(v9) == raw  # read back unchanged: the bytes 40940a8 wrote
-    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v10"):
+    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v11"):
         wm.validate(v9)  # the v10 contract is never applied to a v9 artifact
 
 
@@ -400,7 +400,7 @@ def test_w23_v9_refuses_v10_at_the_schema_boundary():
     with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v9"):
         wm.validate_v9(model)
     with pytest.raises(wm.WorldModelV2Error, match="unknown world model schema"):
-        wm.read_world_model({**model, "schema": "virelai-world-model-v11"})
+        wm.read_world_model({**model, "schema": "virelai-world-model-v12"})  # WO-RUNTIME-01: v11 is now the writer
 
 
 def test_w24_deterministic_recompilation_is_byte_identical():

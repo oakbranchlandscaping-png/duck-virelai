@@ -76,7 +76,8 @@ from inference.framework.lever_lifecycle import LifecycleJournal
 from inference.framework.lever_repeat import certified, grade_confirmation, repeat_reading
 from inference.framework.mu_bucket import MuBucket
 from inference.framework.g3_inventory import check_inventory_claims
-from inference.framework import g3_selection, g4_selection, mu_return
+from inference.framework import chapter_closure, chapter_semantics, counter_exclusion, g3_selection, g4_selection, mu_return
+from inference.framework.gate_closure import phase1_hold_reason as _phase1_hold_reason  # WO-RUNTIME-01: moved
 from inference.framework.g3_inheritance import G2NullInheritance, inherited_total_nulls
 from inference.framework.annotation_lane import AnnotationLane
 from inference.framework.memory_store import cell_bbox
@@ -131,21 +132,6 @@ RELATION_GATE_ID = "G4-B-LEVER-RELATIONS"
 LAW_GATE_ID = "G4-C-LEVER-LAW"
 PLAY_GATE_ID = "PLAY-NORMAL"  # R9-R24 D22: normal play after the gates (play_gate.py)
 G4_GATE_IDS = (REACTION_GATE_ID, ORBIT_GATE_ID, RELATION_GATE_ID, LAW_GATE_ID, PLAY_GATE_ID)
-
-
-def _phase1_hold_reason(payload: Mapping[str, Any]) -> str | None:
-    """Why Phase 2 (G4-B onward) may not open yet, or None when it may.
-
-    Held in ``_effective_target_id``: no gate after G4-A opens while this returns a reason.
-    Cross-level work is a separate gate (G9): a level transition closes the level's G4 study.
-    """
-    if payload.get("pending_lever_entities"):
-        return "Phase 1 is incomplete."
-    if payload.get("phase1_status") == "CLOSED_BY_LEVEL_BOUNDARY":
-        return "the level changed during Phase 1; cross-level work belongs to the G9 gate."
-    if not payload.get("lever_entities"):
-        return "no lever completed Phase 1 on this level."
-    return None
 
 
 _OPAQUE_ACTION = re.compile(r"^ACTION([0-9]+)$")
@@ -1671,6 +1657,7 @@ class CounterGateMachine:
             elif comparison.outcome == "SUPPORTED":
                 self._reject_candidate("COUNTER_MASK_IMPURE", violations)
             elif comparison.outcome == "CONTRADICTED":
+                counter_exclusion.note_contradicted(self)  # WO-RUNTIME-01 (Q3): no longer a plausible candidate
                 self.answer = None
                 self.pending_prediction = None
                 self.candidate = None
@@ -1716,7 +1703,7 @@ class CounterGateMachine:
                 }
                 self.stop_reason = "RATE_SUPPORTED_AWAITING_MIN_MAX_BOUNDARY"
         else:
-            self.candidate = self._candidate_from_recent_suffix()
+            self.candidate = counter_exclusion.note_candidate(self, self._candidate_from_recent_suffix())  # Q3 roster
             if self.candidate is not None and any(
                 item["candidate_id"] == self.candidate.candidate_id
                 for item in self._rejected_candidates
@@ -2371,7 +2358,8 @@ class _EgoTarget:
                 payload=asdict(law),
                 dependencies=(ACTION_METADATA_GATE_ID,),
             ))
-        elif self.machine.ego.status in {"REOPENED", "UNRESOLVED"}:
+        elif self.machine.ego.status in {"REOPENED", "UNRESOLVED"} and not getattr(
+                self.machine.ego, "closed_unresolved", None):  # WO-RUNTIME-01: a closed G1 keeps its product
             self.machine.target_journal.invalidate(GATE_ID, include_self=True)
 
     def snapshot(self) -> dict[str, Any]:
@@ -3963,9 +3951,7 @@ class _LeverTarget:
                 target_member_id=target_member_id,
                 target_cells=scope.target_cells,
                 counter_mask_cells=(
-                    ()
-                    if self.machine.counter.mask_law is None
-                    else self.machine.counter.mask_law.cells
+                    () if self.machine.counter.mask_law is None else self.machine.counter.mask_law.cells
                 ),
                 ego_motion_cells=scope.ego_expected_cells,
                 ego_confounded_cells=scope.ego_confounded_cells,
@@ -3985,6 +3971,7 @@ class _LeverTarget:
             )
         except LeverAttributionError as exc:
             raise GateContractError(f"G3 attribution requires lossless scoped evidence: {exc}") from exc
+        attribution = counter_exclusion.screen_g3(self.machine, attribution, lossless, scope.target_cells)  # Q3
         record = self.evidence.record(attribution)
         event["attribution"] = asdict(attribution)
         event["dossier"] = asdict(record)
@@ -5694,12 +5681,14 @@ class _ReactionTarget:
 
     def _current_entity(self) -> str | None:
         self._seed()
-        return next((item for item in self._ordered_entities if item not in self._answers), None)
+        return next((item for item in self._ordered_entities  # r2: a closed chapter is never served again
+                     if item not in self._answers and not chapter_closure.is_closed(self, item)), None)
 
     def assess(self) -> GateAssessment:
         self._seed()
         current = self._current_entity()
-        if current is None and self._answers and self.machine.target_journal.active_product(REACTION_GATE_ID) is None:
+        if current is None and (self._answers or chapter_closure.closed(self)) \
+                and self.machine.target_journal.active_product(REACTION_GATE_ID) is None:
             self._emit_anatomy_product()  # every lever explained, the product invalidated upstream (D15)
         product = self.machine.target_journal.active_product(REACTION_GATE_ID)
         if product is not None:
@@ -5745,27 +5734,27 @@ class _ReactionTarget:
             raise GateContractError(f"G4 reaction answer rejected: {exc}") from exc
         self._answers[current] = answer
         self.revision += 1
-        if len(self._answers) == len(self._ordered_entities):
+        if self._current_entity() is None:  # every lever answered or its chapter closed (WO-RUNTIME-01 r2)
             self._emit_anatomy_product()
         return answer
 
     def _emit_anatomy_product(self) -> None:
-        product_id = "G4-ANATOMY-" + hashlib.sha256(_canonical({
+        product_id = "G4-ANATOMY-" + hashlib.sha256(_canonical(chapter_closure.identity(self, {
             "entities": self._ordered_entities,
-            "answers": [self._answers[item].answer_id for item in self._ordered_entities],
-        }).encode()).hexdigest()[:16]
+            "answers": [self._answers[item].answer_id for item in self._ordered_entities if item in self._answers],
+        })).encode()).hexdigest()[:16]
         self.machine.target_journal.put(MemoryProduct(
             product_id=product_id,
             product_type="LeverEffectAnatomySet",
             target_id=REACTION_GATE_ID,
             revision=self.revision,
-            payload={
+            payload=chapter_closure.with_rows(self, {  # r2: the explicit unresolved rows, when any closed
                 "scope": "G4.0_BINDING_AND_G4.1_EFFECT_ANATOMY",
                 "lever_entities": list(self._ordered_entities),
                 "anatomies": [anatomy_payload(self._anatomies[item]) for item in self._ordered_entities],
-                "answers": [asdict(self._answers[item]) for item in self._ordered_entities],
+                "answers": [asdict(self._answers[item]) for item in self._ordered_entities if item in self._answers],
                 "open_questions": list(self._anatomies[self._ordered_entities[0]].open_questions),
-            },
+            }),
             dependencies=(LEVER_GATE_ID,),
         ))
 
@@ -5933,7 +5922,7 @@ class _LeverStudyTarget:
         product = self._reaction_product()
         interventions: dict[str, dict[str, Any]] = {}
         order: list[str] = []
-        for raw in product.payload.get("anatomies") or ():
+        for raw in chapter_semantics.region_rows(product.payload):  # r3: a closed G4.1 chapter's geometry, routed
             if not isinstance(raw, Mapping):
                 raise GateContractError("G4-A requires structured G4.1 anatomy rows.")
             entity_id = str(raw.get("entity_id") or "").strip()
@@ -5962,13 +5951,13 @@ class _LeverStudyTarget:
             return ()
         return tuple(
             item for item in self._ordered_entities
-            if item not in self._answers and item not in self._interruptions
+            if item not in self._answers and item not in self._interruptions and not chapter_closure.is_closed(self, item)
         )
 
     def _awaiting_answer(self) -> tuple[str, ...]:
         return tuple(
             item for item in self._ordered_entities
-            if item in self._completed and item not in self._answers
+            if item in self._completed and item not in self._answers and not chapter_closure.is_closed(self, item)
         )
 
     def _lever_for_action(self, action: Mapping[str, Any]) -> str | None:
@@ -6001,6 +5990,8 @@ class _LeverStudyTarget:
     def _lever_status(self, entity_id: str) -> str:
         if entity_id in self._answers:
             return "EXPLAINED"
+        if chapter_closure.is_closed(self, entity_id):  # WO-RUNTIME-01 r2: never offered or pressed again
+            return "CLOSED_UNRESOLVED"
         if entity_id in self._completed:
             return f"{self._completed[entity_id].status}_AWAITING_EXPLANATION"
         if self._active_run is not None and self._active_run.entity_id == entity_id:
@@ -6014,7 +6005,7 @@ class _LeverStudyTarget:
         if self._level_closed is not None:
             return False
         return any(
-            item not in self._completed and item not in self._interruptions
+            item not in self._completed and item not in self._interruptions and not chapter_closure.is_closed(self, item)
             for item in self._ordered_entities
         )
 
@@ -6023,7 +6014,8 @@ class _LeverStudyTarget:
     def assess(self) -> GateAssessment:
         self._seed()
         pending = self._pending()
-        if not pending and self._answers and self.machine.target_journal.active_product(ORBIT_GATE_ID) is None:
+        if not pending and (self._answers or chapter_closure.closed(self)) \
+                and self.machine.target_journal.active_product(ORBIT_GATE_ID) is None:
             self._emit_orbit_product()  # every lever studied, the product invalidated upstream (D15)
         product = self.machine.target_journal.active_product(ORBIT_GATE_ID)
         awaiting = self._awaiting_answer()
@@ -6219,7 +6211,7 @@ class _LeverStudyTarget:
     ) -> dict[str, Any]:
         active = self._active_run
         before, after = grids
-        if lever is None or lever in self._completed or lever in self._answers:
+        if lever is None or lever in self._completed or lever in self._answers or chapter_closure.is_closed(self, lever):
             if active is not None:
                 active.end("another action was taken")
                 self._active_run = None
@@ -6300,7 +6292,7 @@ class _LeverStudyTarget:
         pending = self._pending()
         unstudied = () if self._level_closed is None else tuple(
             item for item in self._ordered_entities
-            if item not in self._answers and item not in self._interruptions
+            if item not in self._answers and item not in self._interruptions and not chapter_closure.is_closed(self, item)
         )
         identity: dict[str, Any] = {
             "entities": completed,
@@ -6310,9 +6302,7 @@ class _LeverStudyTarget:
             identity["interrupted"] = interrupted
         if self._level_closed is not None:
             identity["level_closed"] = self._level_closed.get("evidence_ref")
-        product_id = "G4-ORBITS-" + hashlib.sha256(
-            _canonical(identity).encode()
-        ).hexdigest()[:16]
+        product_id = "G4-ORBITS-" + hashlib.sha256(_canonical(chapter_closure.identity(self, identity)).encode()).hexdigest()[:16]
         phase1_status = (
             "CLOSED_BY_LEVEL_BOUNDARY" if self._level_closed is not None
             else "IN_PROGRESS" if pending else "COMPLETE"
@@ -6322,7 +6312,7 @@ class _LeverStudyTarget:
             product_type="LeverOrbitSet",
             target_id=ORBIT_GATE_ID,
             revision=self.revision,
-            payload={
+            payload=chapter_closure.with_rows(self, {  # r2: the explicit unresolved rows, when any closed
                 "scope": "G4A_GUIDED_SINGLE_LEVER_STUDY",
                 "lever_entities": list(completed),
                 "pending_lever_entities": list(pending),
@@ -6349,7 +6339,7 @@ class _LeverStudyTarget:
                     "universal laws. Interrupted levers were cut off by a boundary and are "
                     "neither classified nor pending."
                 ),
-            },
+            }),
             dependencies=(REACTION_GATE_ID,),
         ))
 
@@ -6358,8 +6348,8 @@ class _LeverStudyTarget:
         entity_id = str(raw.get("entity_id") or "").strip()
         if entity_id not in self._ordered_entities:
             raise GateContractError(f"Unknown G4-A lever entity_id {entity_id!r}.")
-        if entity_id in self._answers:
-            raise GateContractError(f"{entity_id} is already explained.")
+        if entity_id in self._answers or chapter_closure.is_closed(self, entity_id):
+            raise GateContractError(f"{entity_id} is already explained or its chapter is closed CLOSED_UNRESOLVED.")
         run = self._completed.get(entity_id)
         if run is None:
             raise GateContractError(

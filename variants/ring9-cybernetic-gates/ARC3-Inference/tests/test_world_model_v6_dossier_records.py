@@ -25,7 +25,7 @@ import pytest
 import dossier_fixtures as fx
 import dossier_provenance_fixtures as pf
 
-WRITER = "virelai-world-model-v10"  # the writer since WO-WIN-01
+WRITER = "virelai-world-model-v11"  # the writer since WO-RUNTIME-01
 CHAPTERS = ("identity", "anatomy", "orbit", "limits", "relations", "law_tests", "open_items")
 RELATIONS, LAW = "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW"
 _SHARED: dict = {}

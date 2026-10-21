@@ -20,7 +20,7 @@ import json
 
 import pytest
 
-from inference.agent.controller_turn import duck_turn_allowed, rest_if_no_legal_move
+from inference.agent.controller_turn import duck_turn_allowed
 from inference.framework.annotation_lane import orientation_due, submit_notes
 from inference.framework.controller_executor import next_owned_step, return_to_mu_if_stuck
 from inference.framework.play_gate import DUCK_G4_TURNS_PER_LEVEL
@@ -199,13 +199,25 @@ def test_d22_a_level_won_in_play_is_receipted_free_play_and_the_next_level_opens
     assert run.machine.gate_id == "G0-ACTION-METADATA" and run.machine.duck_budget.snapshot()["used"] == 0
 
 
-def test_d22_a_gate_with_no_legal_move_rests_the_level_in_play_and_mu_is_checked_once_at_rest(monkeypatch):
+def test_d22_a_gate_with_no_legal_move_closes_unresolved_and_the_ladder_continues(monkeypatch):
+    """Superseded by WO-RUNTIME-01 (Director ruling Q2, 2026-10-20; reviewed cause): D22 no longer rests the level in
+    normal play. Was ``..._rests_the_level_in_play_and_mu_is_checked_once_at_rest``. Two consecutive no-move turns
+    close only that gate CLOSED_UNRESOLVED, its products kept; the ladder continues at the next constructible gate,
+    and the close reopens nothing in mu."""
+    from inference.agent import recovery_consume
+    from inference.agent.tool_agent import ToolAgent
+
     run = _drive_v7()
     machine = run.machine
+    assert machine.gate_id == RELATIONS
+    agent = ToolAgent(model="fixture-model", virelai_enabled=True, virelai_gates_enabled=True,
+                      controller_executor_enabled=True)
     real = machine.legal_move_status
     monkeypatch.setattr(machine, "legal_move_status", lambda: {**real(), "legal": False, "reason": "stand-in"})
-    assert "rests in normal play" in rest_if_no_legal_move(machine)
+    assert recovery_consume.no_legal_move(agent, None, machine) is None  # the first check only counts
+    assert "closed CLOSED_UNRESOLVED" in recovery_consume.no_legal_move(agent, None, machine)
     monkeypatch.setattr(machine, "legal_move_status", real)
-    assert machine.gate_id == PLAY and machine.legal_move_status()["legal"] is True
+    assert machine.target_journal.active_product(RELATIONS).payload["status"] == "UNRESOLVED"
+    assert machine.gate_id == LAW and machine.legal_move_status()["legal"] is True  # not rested: G4-C is built
+    assert machine._adapters[PLAY].forced is None
     assert return_to_mu_if_stuck(machine) is None and machine.mu.entries["E0028"]["status"] in {"OPEN", "ABSENT"}
-    assert machine._adapters[PLAY].rest_check_due() is False  # checked once for this set of products

@@ -164,7 +164,7 @@ def test_turn_ledger_records_the_card_sections_and_the_cost_of_the_turn(tmp_path
     rows = [json.loads(line) for line in (tmp_path / "tool_runtime_state_turn_ledger.jsonl").read_text().splitlines()]
     assert len(rows) == 1
     row = rows[0]
-    assert row["schema"] == "virelai-turn-ledger-v1"
+    assert row["schema"] == "virelai-turn-ledger-v2"  # WO-RUNTIME-01: v2 adds the typed outcome fields
     assert (row["executor"], row["analysis_step"], row["action_num"]) == ("DUCK", 3, 7)
     assert row["section_chars"] == {
         "prompt_body": 300, "automatic_update": 0, "controller_focus": 5, "gate_card": 1200,

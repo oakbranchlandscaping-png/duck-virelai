@@ -15,6 +15,7 @@ changes only the close's reason, re-chains the journal with the real writer and 
 from __future__ import annotations
 
 import json
+import re
 import pickle
 import subprocess
 import sys
@@ -170,15 +171,15 @@ def test_t2_08_a_finished_close_that_names_no_type_is_refused():
 def test_t2_09_the_writer_is_v9_and_the_frozen_v8_model_from_ef8289d_still_reads():
     wm = _wm()
     v8 = json.loads(V8_MODEL.read_text())
-    assert (wm.SCHEMA, wm.V9_SCHEMA, wm.V8_SCHEMA) == (  # WIN-01: the writer is v10; v9 and v8 are frozen
-        "virelai-world-model-v10", "virelai-world-model-v9", "virelai-world-model-v8")
+    assert (wm.SCHEMA, wm.V9_SCHEMA, wm.V8_SCHEMA) == (  # WO-RUNTIME-01: the writer is v11; v9 and v8 are frozen
+        "virelai-world-model-v11", "virelai-world-model-v9", "virelai-world-model-v8")
     assert v8["schema"] == wm.V8_SCHEMA and v8["provenance"]["schema"] == "virelai-provenance-chapter-v2"
     assert [r["refs"]["source_event"]["event"] for r in v8["provenance"]["rows"] if r["operation"] == "G4_SELECTION"] \
         == ["ADMITTED", "STALE"]
     wm.validate_v8(v8)
     assert wm.read_world_model(v8)["schema"] == wm.V8_SCHEMA
     assert wm._canonical(v8) == V8_MODEL.read_bytes()  # read back unchanged: the bytes ef8289d wrote
-    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v10"):
+    with pytest.raises(wm.WorldModelV2Error, match="schema must be virelai-world-model-v11"):
         wm.validate(v8)  # the v10 contract is never applied to a v8 artifact
 
 
@@ -192,8 +193,12 @@ def test_t2_10_v8_refuses_a_v9_artifact_at_the_schema_boundary_and_keeps_the_b2_
         wm.validate_v8(model)
     relabeled = dict(model, schema=wm.V8_SCHEMA)
     relabeled["content_sha256"] = wm.content_sha256(relabeled)
-    with pytest.raises(wm.WorldModelV2Error, match="ADMITTED selection .* is not G4-A's"):
-        wm.read_world_model(relabeled)  # the same artifact under v8's own rules: G4-B rows are not G4-A's
+    with pytest.raises(wm.WorldModelV2Error, match="provenance"):
+        wm.read_world_model(relabeled)  # WO-RUNTIME-01: the writer's chapter v3 is refused first by the v8 reader
+    from inference.framework.lever_dossier_selection import problems
+
+    found = problems(relabeled, experiments=False)  # the v8 selection rule itself, as v8's reader applies it
+    assert any(re.search("ADMITTED selection .* is not G4-A's", item) for item in found)  # G4-B rows are not G4-A's
 
 
 def test_t2_11_frozen_v8_never_runs_the_experiment_check_and_v9_always_does(monkeypatch):

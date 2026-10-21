@@ -57,11 +57,13 @@ class AnnotationLane:
 
 
 def orientation_due(machine: Any) -> bool:
+    from inference.framework.world_model_v11 import unresolved
+
     lane = getattr(machine, "annotations", None)
-    return (
-        lane is not None and not lane.oriented
-        and machine.target_journal.active_product(ORIENTATION_GATE) is not None
-    )
+    if lane is None or lane.oriented:
+        return False
+    product = machine.target_journal.active_product(ORIENTATION_GATE)
+    return product is not None and not unresolved(product)  # WO-RUNTIME-01: a closed G4.1 asks for no orientation
 
 
 def known_subjects(machine: Any) -> set[str]:

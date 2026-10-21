@@ -32,6 +32,7 @@ import copy
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
+from inference.framework import chapter_closure
 from inference.framework import lever_dossier_facts as F
 from inference.framework import lever_dossier_links as L
 from inference.framework import lever_dossier_provenance as P
@@ -43,6 +44,7 @@ FINAL_REASONS = frozenset({"BUDGET_STOP", "CONTROLLED_STOP", "RUN_END", "CRASH",
 LEVER_GROUNDED = "Is the LEVER claim grounded?"
 NULL_JOIN = {"status": "UNRESOLVED", "track_id": None, "basis": None}
 OK = {"status": "OK", "reasons": [], "refs": []}
+CHAPTER_CLOSED = "CHAPTER_CLOSED_UNRESOLVED"  # WO-RUNTIME-01 r2: one G4.1 / G4.2 lever chapter (``chapter_closure``)
 G3, G41, G4A, G4B, G4C = "G3-LEVERS", "G4-REACTIONS", "G4.2-LEVER-ORBITS", "G4-B-LEVER-RELATIONS", "G4-C-LEVER-LAW"
 
 
@@ -141,14 +143,16 @@ def gate_view(machine: Any) -> dict[str, Any] | None:
     return {
         "g3": _g3_view(adapters.get(G3), machine),
         "g41": {"anatomies": {e: F.plain(anatomy_payload(a)) for e, a in (getattr(g41, "_anatomies", None) or {}).items()},
-                "answers": {e: F.plain(asdict(a)) for e, a in (getattr(g41, "_answers", None) or {}).items()}},
+                "answers": {e: F.plain(asdict(a)) for e, a in (getattr(g41, "_answers", None) or {}).items()},
+                "closed": {} if g41 is None else F.plain(chapter_closure.closed(g41))},  # r2
         "g4a": {"ordered": list(getattr(g4a, "_ordered_entities", ()) or ()),
                 "runs": {e: [_run_view(r) for r in runs] for e, runs in (getattr(g4a, "_runs", None) or {}).items()},
                 "completed": {e: run.run_id for e, run in (getattr(g4a, "_completed", None) or {}).items()},
                 "answers": {e: F.plain(asdict(a)) for e, a in (getattr(g4a, "_answers", None) or {}).items()},
                 "interruptions": {e: F.plain(item) for e, item in (getattr(g4a, "_interruptions", None) or {}).items()},
                 "restudies": dict(getattr(g4a, "_life_restudies", None) or {}),
-                "level_closed": getattr(g4a, "_level_closed", None) is not None},
+                "level_closed": getattr(g4a, "_level_closed", None) is not None,
+                "closed": {} if g4a is None else F.plain(chapter_closure.closed(g4a))},  # r2
         "g4b": {"levers": levers, "predictions": predictions, "pressed": sorted(acted),
                 "conditions": F.plain(list(getattr(getattr(g4b, "_record", None), "conditions", ()) or ())),
                 "answer": None if answer is None else F.plain(asdict(answer)),
@@ -198,10 +202,12 @@ class _Products:
             return None, None, None, [{"kind": "PRODUCT_NOT_CERTIFYING", "product_id": pid, "origin": pair[0],
                                        "basis": "PRODUCT_CONTENT_UNREPRESENTABLE"}]
         payload = entry["payload"]
-        if pair in F.MAY_COMPLETE.get(chapter, ()):
-            return ("COMPLETE" if F.covers(chapter, payload, entity_id) else None), payload, ref, []
-        if pair in F.CLOSES.get(chapter, ()):
-            return ("CLOSED" if F.closes(chapter, payload, entity_id) else None), payload, ref, []
+        if pair in F.MAY_COMPLETE.get(chapter, ()) and F.covers(chapter, payload, entity_id):
+            return "COMPLETE", payload, ref, []
+        if pair in F.CLOSES.get(chapter, ()) and F.closes(chapter, payload, entity_id):  # r2: a closed G4 chapter too
+            return "CLOSED", payload, ref, []
+        if pair in F.MAY_COMPLETE.get(chapter, ()) or pair in F.CLOSES.get(chapter, ()):
+            return None, payload, ref, []
         if pair[0] == "GATE_DERIVED":  # a declared closure the matrix does not list here (orbit): per-lever retained state
             return None, payload, ref, []
         return None, None, None, [{"kind": "PRODUCT_NOT_CERTIFYING", "product_id": pid, "origin": pair[0], "basis": pair[1]}]
@@ -236,9 +242,22 @@ def _ref_kind(ref: Any, level: Mapping[str, Any]) -> str:
     return "EVIDENCE" if ref in receipts["evidence"] else "WITNESS" if ref in receipts["witnesses"] else "OTHER"
 
 
+def _closure_item(entity_id: str, payload: Any, view: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The closed chapter's typed closure record, from its stored product row, else from the gate's retained row."""
+    from inference.framework.chapter_semantics import ROWS, open_item
+
+    row = next((item for item in (payload or {}).get(ROWS) or () if item.get("entity_id") == entity_id),
+               (view.get("closed") or {}).get(entity_id))
+    return [] if row is None else [open_item(row)]
+
+
 def _anatomy(entity_id: str, products: _Products, g41: Mapping[str, Any], level: Mapping[str, Any]) -> dict:
     verdict, payload, ref, items = products.judge("anatomy", entity_id)
     retained = g41["anatomies"].get(entity_id)
+    if verdict == "CLOSED" or entity_id in g41.get("closed", {}):  # r2: one lever chapter, never certified
+        facts = None if retained is None else L.link_anatomy(F.anatomy_facts(retained), level)
+        return _chapter("CLOSED_UNRESOLVED", CHAPTER_CLOSED, "GATE_RETAINED" if facts else None, facts,
+                        open_items=[*items, *_closure_item(entity_id, payload, g41)])  # r3: why it closed
     if verdict == "COMPLETE":
         facts, answer = F.product_body("anatomy", payload, entity_id)
         chapter = _chapter("COMPLETE", "PRODUCT_CERTIFIED", "PRODUCT_CONTENT", L.link_anatomy(facts, level),
@@ -277,6 +296,9 @@ def _orbit(entity_id: str, products: _Products, g4a: Mapping[str, Any]) -> dict:
     history = [F.run_facts(view["run"]) for view in runs if view is not chosen]
     answer = g4a["answers"].get(entity_id)
     kwargs = {"history": history, "open_items": items}
+    if verdict == "CLOSED" or entity_id in g4a.get("closed", {}):  # r2: one lever chapter, never certified
+        kwargs["open_items"] = [*items, *_closure_item(entity_id, payload, g4a)]  # r3: why it closed
+        return _chapter("CLOSED_UNRESOLVED", CHAPTER_CLOSED, "GATE_RETAINED" if facts else None, facts, **kwargs)
     if completed is not None:
         basis = "ANSWER_ACCEPTED_AGGREGATE_OPEN" if answer else "RUN_CONFIRMED_EXPLANATION_PENDING"
         return _chapter("PRODUCT_PENDING", basis, "GATE_RETAINED", facts, answer=F.answer_ref(G4A, answer), **kwargs)

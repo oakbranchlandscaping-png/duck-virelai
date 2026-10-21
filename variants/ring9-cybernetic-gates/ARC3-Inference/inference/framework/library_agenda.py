@@ -29,6 +29,8 @@ import hashlib
 import json
 from typing import Any, Mapping
 
+from inference.framework import chapter_closure
+
 SCHEMA = "virelai-library-agenda-v1"
 G3 = "G3-LEVERS"
 PLAY = "PLAY-NORMAL"
@@ -75,7 +77,8 @@ OBLIGATION_KINDS = {"CONFIRMATION": "CONFIRM_WITNESS", "DOSSIER": "DOSSIER_ANSWE
 # A G4-B/G4-C product's own status (g4b_gate.py:353, g4c_gate.py:264), read as a disposition: only COMPLETE
 # answers the question; an unresolved or boundary close is a typed, closed question (Sol's review, 2026-10-11).
 PRODUCT_STATUS = {"COMPLETE": "ANSWERED", "UNRESOLVED": "CLOSED_UNRESOLVED",
-                  "CLOSED_BY_LEVEL_BOUNDARY": "CLOSED_BY_LEVEL_BOUNDARY"}
+                  "CLOSED_BY_LEVEL_BOUNDARY": "CLOSED_BY_LEVEL_BOUNDARY",
+                  "PARTIAL": "ANSWERED_PARTIAL"}  # WO-RUNTIME-01: settled with gaps; some chapters closed unresolved
 
 
 def _product_disposition(product: Any) -> str:
@@ -171,6 +174,7 @@ def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str,
         "G4-REACTIONS": set(getattr(adapters.get("G4-REACTIONS"), "_answers", None) or ()),
         "G4.2-LEVER-ORBITS": set(getattr(adapters.get("G4.2-LEVER-ORBITS"), "_completed", None) or ()),
     }
+    closed = {gate: set(chapter_closure.closed(adapters[gate])) if gate in adapters else set() for gate in answered}
     relations = journal.active_product("G4-B-LEVER-RELATIONS")
     pressed = set((relations.payload.get("pressed_levers") or ()) if relations is not None else ())
     law = journal.active_product("G4-C-LEVER-LAW")
@@ -189,8 +193,9 @@ def _g4_questions(machine: Any, level: int, levers: list[str]) -> list[dict[str,
                 disposition = "OPEN" if law is None else _product_disposition(law)
             elif gate == "G4-B-LEVER-RELATIONS":
                 disposition = _relations_disposition(relations, entity_id in pressed)
-            else:
-                disposition = "ANSWERED" if entity_id in answered[gate] else "OPEN"
+            else:  # WO-RUNTIME-01 r2: a closed chapter is typed, never offered again
+                disposition = ("CLOSED_UNRESOLVED" if entity_id in closed[gate]
+                               else "ANSWERED" if entity_id in answered[gate] else "OPEN")
             questions.append(_question(level, gate, entity_id, kind, text, disposition,
                                        prerequisites_missing=[] if inventory is not None else [G3],
                                        **({"admissible": True} if question_id(level, gate, entity_id, kind)
@@ -325,9 +330,14 @@ def census_agreement(agenda: Mapping[str, Any], model: Mapping[str, Any]) -> dic
                             gaps("NOT_REACHED", "NO_RESPONSE_YET")),
     }
     certified = {row["gate_id"]: row["disposition"] for row in level["certified"]["gates"]}
-    pairs["certified_gates"] = ({q["gate"] for q in agenda["questions"] if q["subject"] == f"LEVEL-{agenda['level']}"
-                                 and q["gate"] and q.get("product_id")},
+    gate_rows = [q for q in agenda["questions"] if q["subject"] == f"LEVEL-{agenda['level']}" and q["gate"]
+                 and q.get("product_id")]  # WO-RUNTIME-01: a product closed unresolved is not a certified one
+    pairs["certified_gates"] = ({q["gate"] for q in gate_rows if q["disposition"] not in ("CLOSED_UNRESOLVED", "ANSWERED_PARTIAL")},
                                 {gate for gate, disposition in certified.items() if disposition == "CERTIFIED"})
+    pairs["partial_gates"] = ({q["gate"] for q in gate_rows if q["disposition"] == "ANSWERED_PARTIAL"},  # r3: never certified
+                              {gate for gate, disposition in certified.items() if disposition == "PARTIAL"})
+    pairs["closed_gates"] = ({q["gate"] for q in gate_rows if q["disposition"] == "CLOSED_UNRESOLVED"},
+                             {gate for gate, disposition in certified.items() if disposition == "CLOSED_UNRESOLVED"})
     return {name: (sorted(a - b), sorted(b - a)) for name, (a, b) in pairs.items() if a != b}
 
 

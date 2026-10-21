@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from inference.framework.annotation_lane import orientation_block, orientation_due
+from inference.framework.gate_closure import render_closed
 from inference.framework.memory_store import cell_bbox as _bbox
 from inference.framework.recall import recall_key, recall_slot
 
@@ -428,19 +429,17 @@ def _digest_lines(machine: Any) -> list[tuple[str, str]]:
     if carry is not None and carry.line():
         lines.append(("G9-CARRY", f"[carry] {carry.line()}"))
     for row in machine.completed_gate_rows():
-        gate = row["gate_id"]
-        payload = row["answer"]
-        for text in _render_product(machine, gate, payload) or [f"certified {row['product_type']} rev {row['revision']}"]:
+        gate, payload = row["gate_id"], row["answer"]
+        rendered = render_closed(gate, payload, lambda: _render_product(machine, gate, payload))  # RUNTIME-01
+        for text in rendered or [f"certified {row['product_type']} rev {row['revision']}"]:
             lines.append((gate, f"[{gate}] {text}"))
     return lines
 
 
 def _render_product(machine: Any, gate: str, payload: Mapping[str, Any]) -> list[str]:
     if gate == "G0-ACTION-METADATA":
-        actions = [
-            f"{item.get('action')}{'(coordinates)' if item.get('requires_coordinates') else ''}"
-            for item in payload.get("action_metadata") or ()
-        ]
+        actions = [f"{item.get('action')}{'(coordinates)' if item.get('requires_coordinates') else ''}"
+                   for item in payload.get("action_metadata") or ()]
         return [f"actions: {', '.join(actions)}"]
     if gate == "G1-EGO":
         return [f"ego: {payload.get('mode')}"]

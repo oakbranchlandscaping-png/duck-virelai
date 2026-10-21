@@ -1,0 +1,523 @@
+{
+ "d22_g42": [
+  {
+   "eligible": [
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT"
+   ],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "ANSWERED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "CLOSED_UNRESOLVED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "OPEN_ACTIONABLE"
+   },
+   "g42": {
+    "order": [
+     "E0004",
+     "E0005"
+    ],
+    "pending": [
+     "E0005"
+    ],
+    "status": {
+     "E0004": "CLOSED_UNRESOLVED",
+     "E0005": "NOT_STARTED"
+    }
+   },
+   "gate": "G4.2-LEVER-ORBITS",
+   "selected": "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT",
+   "step": {
+    "action": {
+     "action": "ACTION6",
+     "col": 60,
+     "row": 32
+    },
+    "answer": null,
+    "gate": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "reason": "G4-A: run E0005 (NOT_STARTED)"
+   }
+  }
+ ],
+ "d2_g3": [
+  {
+   "eligible": [],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "OPEN",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "CLOSED_UNRESOLVED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "CLOSED_UNRESOLVED"
+   },
+   "g42": null,
+   "gate": "PLAY-NORMAL",
+   "selected": "Q:L1:PLAY-NORMAL:LEVEL-1:FREE_PLAY",
+   "step": {
+    "action": null,
+    "answer": null,
+    "gate": "PLAY-NORMAL",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "PLAY-NORMAL needs judgment"
+   }
+  }
+ ],
+ "g41_close_then_continue": [
+  {
+   "eligible": [],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "OPEN",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "OPEN",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "OPEN_ACTIONABLE",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "BLOCKED_BY_PREREQUISITE"
+   },
+   "g42": null,
+   "gate": "G4-REACTIONS",
+   "selected": "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS",
+   "step": {
+    "action": null,
+    "answer": {
+     "answer_kind": "LEVER_EFFECT_ANATOMY",
+     "competing_models": [
+      "A hidden process changed the region at the same moment as the click."
+     ],
+     "effect_channels": [
+      {
+       "bbox": [
+        1,
+        28,
+        27,
+        31
+       ],
+       "changed_cell_count": 108,
+       "channel_id": "CH-7963daeb49b6",
+       "detail_query": "virelai('reaction', id='E0004')",
+       "integer_transitions": [
+        [
+         3,
+         0,
+         108
+        ]
+       ],
+       "locality": "REMOTE",
+       "signed_integer_delta": -324,
+       "transform": "UNIFORM_VALUE_REWRITE"
+      },
+      {
+       "bbox": [
+        32,
+        46,
+        63,
+        55
+       ],
+       "changed_cell_count": 156,
+       "channel_id": "CH-0c4c8a51cfa0",
+       "detail_query": "virelai('reaction', id='E0004')",
+       "integer_transitions": [
+        [
+         0,
+         11,
+         12
+        ],
+        [
+         0,
+         3,
+         104
+        ],
+        [
+         0,
+         4,
+         12
+        ],
+        [
+         11,
+         3,
+         8
+        ],
+        [
+         11,
+         4,
+         4
+        ],
+        [
+         4,
+         3,
+         16
+        ]
+       ],
+       "locality": "REMOTE",
+       "signed_integer_delta": 384,
+       "transform": "COORDINATED_VALUE_REWRITE"
+      }
+     ],
+     "entity_id": "E0004",
+     "evidence_refs": [
+      "E-a6e6d7703fc81bbe",
+      "E-a0a02a48a424d121"
+     ],
+     "falsifier": "The same click from the same masked state produces a different exact residue.",
+     "intervention": {
+      "action": "ACTION6",
+      "col": 60,
+      "row": 24
+     },
+     "limitations": [
+      "This slice describes the witnessed transition, not a repeated reaction law.",
+      "Spatial channels are affected regions; persistent responder identity is not yet claimed.",
+      "Movement, growth, shrinkage, toggling, conditions, and reversibility remain unproven.",
+      "Controller-rendered from certified state; the certified content is the structured fields."
+     ],
+     "mechanism_explanation": "Lever E0004: CH-7963daeb49b6 rewrites 3->0 over 108 remote cells; CH-0c4c8a51cfa0 rewrites 0->11, 0->3, 0->4, 11->3, 11->4, 4->3 over 156 remote cells, counter changes masked.",
+     "record_refs": [
+      "G3-ANSWER-5c5c0a01b090d557",
+      "G4A-c52f247a5ad41314"
+     ]
+    },
+    "gate": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   }
+  },
+  {
+   "eligible": [],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "CLOSED_UNRESOLVED",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "OPEN",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "OPEN_ACTIONABLE",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "BLOCKED_BY_PREREQUISITE"
+   },
+   "g42": null,
+   "gate": "G4-REACTIONS",
+   "selected": "Q:L1:G4-REACTIONS:E0005:EFFECTS",
+   "step": {
+    "action": null,
+    "answer": {
+     "answer_kind": "LEVER_EFFECT_ANATOMY",
+     "competing_models": [
+      "A hidden process changed the region at the same moment as the click."
+     ],
+     "effect_channels": [
+      {
+       "bbox": [
+        1,
+        24,
+        27,
+        27
+       ],
+       "changed_cell_count": 108,
+       "channel_id": "CH-20fce046f243",
+       "detail_query": "virelai('reaction', id='E0005')",
+       "integer_transitions": [
+        [
+         0,
+         3,
+         108
+        ]
+       ],
+       "locality": "REMOTE",
+       "signed_integer_delta": 324,
+       "transform": "UNIFORM_VALUE_REWRITE"
+      },
+      {
+       "bbox": [
+        32,
+        50,
+        63,
+        59
+       ],
+       "changed_cell_count": 156,
+       "channel_id": "CH-90f4c1833953",
+       "detail_query": "virelai('reaction', id='E0005')",
+       "integer_transitions": [
+        [
+         11,
+         0,
+         12
+        ],
+        [
+         3,
+         0,
+         104
+        ],
+        [
+         3,
+         11,
+         8
+        ],
+        [
+         3,
+         4,
+         16
+        ],
+        [
+         4,
+         0,
+         12
+        ],
+        [
+         4,
+         11,
+         4
+        ]
+       ],
+       "locality": "REMOTE",
+       "signed_integer_delta": -384,
+       "transform": "COORDINATED_VALUE_REWRITE"
+      }
+     ],
+     "entity_id": "E0005",
+     "evidence_refs": [
+      "E-57cd463886964d73",
+      "E-b16a9fd602a653e5"
+     ],
+     "falsifier": "The same click from the same masked state produces a different exact residue.",
+     "intervention": {
+      "action": "ACTION6",
+      "col": 60,
+      "row": 32
+     },
+     "limitations": [
+      "This slice describes the witnessed transition, not a repeated reaction law.",
+      "Spatial channels are affected regions; persistent responder identity is not yet claimed.",
+      "Movement, growth, shrinkage, toggling, conditions, and reversibility remain unproven.",
+      "Controller-rendered from certified state; the certified content is the structured fields."
+     ],
+     "mechanism_explanation": "Lever E0005: CH-20fce046f243 rewrites 0->3 over 108 remote cells; CH-90f4c1833953 rewrites 11->0, 3->0, 3->11, 3->4, 4->0, 4->11 over 156 remote cells, counter changes masked.",
+     "record_refs": [
+      "G3-ANSWER-04fe2d8228e70245",
+      "G4A-8e94875bd2f8fa03"
+     ]
+    },
+    "gate": "G4-REACTIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4.1 anatomy from the certified channels"
+   }
+  },
+  {
+   "eligible": [],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "CLOSED_UNRESOLVED",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "ANSWERED_PARTIAL",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "OPEN_ACTIONABLE"
+   },
+   "g42": {
+    "order": [
+     "E0004",
+     "E0005"
+    ],
+    "pending": [
+     "E0004",
+     "E0005"
+    ],
+    "status": {
+     "E0004": "NOT_STARTED",
+     "E0005": "NOT_STARTED"
+    }
+   },
+   "gate": "G4.2-LEVER-ORBITS",
+   "selected": "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS",
+   "step": {
+    "action": {
+     "action": "ACTION6",
+     "col": 60,
+     "row": 24
+    },
+    "answer": null,
+    "gate": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "reason": "G4-A: run E0004 (NOT_STARTED)"
+   }
+  }
+ ],
+ "g42_close_awaiting": [
+  {
+   "eligible": [
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT"
+   ],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "ANSWERED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "ANSWERED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "OPEN_ACTIONABLE"
+   },
+   "g42": {
+    "order": [
+     "E0004",
+     "E0005"
+    ],
+    "pending": [
+     "E0004",
+     "E0005"
+    ],
+    "status": {
+     "E0004": "CONFIRMED_AWAITING_EXPLANATION",
+     "E0005": "NOT_STARTED"
+    }
+   },
+   "gate": "G4.2-LEVER-ORBITS",
+   "selected": "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT",
+   "step": {
+    "action": null,
+    "answer": null,
+    "gate": "G4.2-LEVER-ORBITS",
+    "kind": null,
+    "owner": "DUCK",
+    "reason": "the run of E0004 is confirmed: explaining it is Duck's"
+   }
+  },
+  {
+   "eligible": [
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT"
+   ],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "ANSWERED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "CLOSED_UNRESOLVED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "OPEN",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "OPEN_ACTIONABLE"
+   },
+   "g42": {
+    "order": [
+     "E0004",
+     "E0005"
+    ],
+    "pending": [
+     "E0005"
+    ],
+    "status": {
+     "E0004": "CLOSED_UNRESOLVED",
+     "E0005": "NOT_STARTED"
+    }
+   },
+   "gate": "G4.2-LEVER-ORBITS",
+   "selected": "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT",
+   "step": {
+    "action": {
+     "action": "ACTION6",
+     "col": 60,
+     "row": 32
+    },
+    "answer": null,
+    "gate": "G4.2-LEVER-ORBITS",
+    "kind": "ACTION",
+    "owner": "CONTROLLER",
+    "reason": "G4-A: run E0005 (NOT_STARTED)"
+   }
+  }
+ ],
+ "g42_close_last_then_g4b": [
+  {
+   "eligible": [],
+   "g4": {
+    "Q:L1:G4-REACTIONS:E0004:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:E0005:EFFECTS": "ANSWERED",
+    "Q:L1:G4-REACTIONS:LEVEL-1:LEVER_EFFECTS": "ANSWERED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0004:ORBIT": "ANSWERED",
+    "Q:L1:G4.2-LEVER-ORBITS:E0005:ORBIT": "CLOSED_UNRESOLVED",
+    "Q:L1:G4.2-LEVER-ORBITS:LEVEL-1:LEVER_ORBITS": "ANSWERED_PARTIAL"
+   },
+   "g42": {
+    "order": [
+     "E0004",
+     "E0005"
+    ],
+    "pending": [],
+    "status": {
+     "E0004": "EXPLAINED",
+     "E0005": "CLOSED_UNRESOLVED"
+    }
+   },
+   "gate": "G4-B-LEVER-RELATIONS",
+   "selected": "Q:L1:G4-B-LEVER-RELATIONS:LEVEL-1:LEVER_RELATIONS",
+   "step": {
+    "action": null,
+    "answer": {
+     "answer_id": "G4B-REC-615da1328c801049",
+     "answer_kind": "LEVER_RELATIONS_FROM_RECORD",
+     "coupled_groups": [
+      [
+       "E0004",
+       "E0005"
+      ]
+     ],
+     "description": "2 levers, 13 recorded presses on this level. Levers acting on one shared region: none. Regions that change each other: {E0004,E0005}. One-way reach: none. Presses that changed nothing outside the counter: {E0004}. Effective presses per lever: E0004 5, E0005 6.",
+     "epistemic_limit": "Each relation is the recorded effects of one lever's presses on this level, from the boards they were taken on; it is not a law for boards not yet seen.",
+     "evidence_basis": "RECORDED_TRANSITIONS",
+     "missing_conditions": [],
+     "one_way_reach": {},
+     "relations": [
+      {
+       "claim": "pressing E0004 changed [E0004, E0005] x4; [E0004, E0005]+elsewhere x1; nothing x2",
+       "evidence_refs": [
+        "E-6060d0fd43a6d3b9",
+        "E-d5ab70df2bb49b42",
+        "E-9f61757f1abff474",
+        "E-3e803834ca8171b8",
+        "E-8567594f0af8351f",
+        "E-fe94251b6ab50e3f",
+        "E-eabc51cf62d9fbb5"
+       ],
+       "kind": "RECORDED_EFFECTS",
+       "levers": [
+        "E0004",
+        "E0005"
+       ],
+       "transitions": [
+        7,
+        8,
+        16,
+        17,
+        18,
+        19,
+        20
+       ]
+      },
+      {
+       "claim": "pressing E0005 changed [E0004, E0005] x4; [E0004, E0005]+elsewhere x2",
+       "evidence_refs": [
+        "E-92db34c1ab33255f",
+        "E-0ea77fe746df2cc5",
+        "E-72035196de057947",
+        "E-898f2febf1126ac5",
+        "E-8a49758bb7811f9e",
+        "E-b87e9603d6b61b2f"
+       ],
+       "kind": "RECORDED_EFFECTS",
+       "levers": [
+        "E0005",
+        "E0004"
+       ],
+       "transitions": [
+        9,
+        10,
+        21,
+        22,
+        23,
+        24
+       ]
+      }
+     ],
+     "shared_regions": []
+    },
+    "gate": "G4-B-LEVER-RELATIONS",
+    "kind": "ANSWER",
+    "owner": "CONTROLLER",
+    "reason": "G4-B: the level's record certifies the relations (ruling G-1)"
+   }
+  }
+ ]
+}
