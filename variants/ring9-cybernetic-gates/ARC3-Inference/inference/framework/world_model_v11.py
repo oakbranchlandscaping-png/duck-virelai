@@ -13,7 +13,10 @@ What v11 adds over v10, and nothing else:
   explicit ``unresolved_lever_chapters`` rows beside the answered levers (``chapter_closure``);
 * (revision 3) such a row also states the product's ``settlement_status``, ``knowledge_status`` and subject counts,
   agrees with the stored product (``chapter_semantics.gate_problems``: never CERTIFIED), and the product keeps the
-  settlement/knowledge contract (``chapter_semantics.payload_problems``).
+  settlement/knowledge contract (``chapter_semantics.payload_problems``);
+* (WO-RUNTIME-01A) a gate row whose stored product states ``status: UNRESOLVED`` with its ``unresolved_reason`` is
+  ``CLOSED_UNRESOLVED``, never ``CERTIFIED``: a repair failure certifies nothing (the gate-level twin of revision 3's
+  chapter rule).
 
 A model below v11 holds no ``CLOSED_UNRESOLVED`` or ``PARTIAL`` gate row (a relabelled v11 artifact is refused by the
 frozen readers, as WIN-01 r2 refuses a relabelled episode).
@@ -59,6 +62,18 @@ def _gate_rows(level: Any) -> list:
     return [row for row in gates or () if isinstance(row, Mapping)]
 
 
+def _closed_rows_certified(level: Any, rows: list) -> list[str]:
+    """01A: a CERTIFIED gate row whose stored product was closed CLOSED_UNRESOLVED (a repair failure, not knowledge)."""
+    content = level.get("product_content") or {}
+    payloads = {row.get("gate_id"): (content.get(row.get("product_id")) or {}).get("payload") for row in rows
+                if row.get("disposition") == "CERTIFIED" and isinstance(content.get(row.get("product_id")), Mapping)}
+    return [f"level {level.get('level')}: {gate} is CERTIFIED, but its product is UNRESOLVED "
+            f"({payload.get('unresolved_reason')}): a closed gate certifies nothing"
+            for gate, payload in sorted(payloads.items())
+            if isinstance(payload, Mapping) and payload.get("status") == "UNRESOLVED"
+            and payload.get("unresolved_reason")]
+
+
 def problems(levels: Any, *, current: bool) -> list[str]:
     """v11 (``current``): the disposition vocabulary and no certifying role on a closed gate; below v11: no
     ``CLOSED_UNRESOLVED`` row at all."""
@@ -78,6 +93,7 @@ def problems(levels: Any, *, current: bool) -> list[str]:
         found.extend(f"level {level.get('level')}: CLOSED_UNRESOLVED {gate} names no product"
                      for gate, row in sorted(closed.items()) if not row.get("product_id"))
         found.extend(gate_problems(level))  # revision 3: the row agrees with its product's settlement and knowledge
+        found.extend(_closed_rows_certified(level, rows))  # WO-RUNTIME-01A
         for role in (level.get("certified") or {}).get("roles") or ():
             gate = role.get("gate_id")
             if gate in closed and UNRESOLVED_ROLE_GATES.get(gate) == role.get("role"):

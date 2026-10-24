@@ -33,7 +33,7 @@ from inference.agent.prompts import (
 )
 from inference.agent.scientist_note import extract_scientist_note as _extract_scientist_note
 from inference.agent.controller_turn import ControllerSession, run_controller_turn
-from inference.agent import provenance_capture, sandbox_hints, turn_recovery
+from inference.agent import provenance_capture, repair_obligation, sandbox_hints, turn_recovery
 from inference.agent.gate_artifacts import record_gate_answer, record_probe_outcome
 from inference.agent.memory_queries import gated_memory_query, orientation_refusal, record_notes
 from inference.framework.annotation_lane import (
@@ -3423,10 +3423,7 @@ class ToolAgent:
                         }
                     )
                     made_progress = dispatch.step_executed or self._gate_transitioned_this_turn
-                    if (
-                        self._contract_repair_required
-                        and dispatch.interaction_kind not in {"CONTRACT_REPAIR", "GATE_TRANSITION"}
-                    ):
+                    if repair_obligation.stops_turn(self, dispatch):  # WO-RUNTIME-01A: never on an executed action
                         controlled_stop_reason = (
                             "contract_repair_loop: Duck inspected or acted instead of correcting "
                             "the rejected gate answer."

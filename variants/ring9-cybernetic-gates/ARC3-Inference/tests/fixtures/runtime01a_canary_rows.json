@@ -1,0 +1,203 @@
+{
+ "schema": "virelai-runtime01a-canary-rows-v1",
+ "source_commit": "8b47c737ad6868f7babbee481ef230035f994b5b",
+ "package_sha256": "6a62f6533b05ae868df86239c1f8f588b4a94a4eaeda37bf813a0d10879de53f",
+ "note": "Exported lines of runs/kaggle-ring9-runtime01-canary-8b47c73-v2/output each WO-RUNTIME-01A reproduction follows; every line is pinned by its sha256.",
+ "contract_repair": {
+  "dc22": {
+   "pattern": "dc22",
+   "finished_note": "controlled_stop: contract_repair_loop: Duck inspected or acted instead of correcting the rejected gate answer.",
+   "journal": [
+    {
+     "source": "artifacts/dc22-fdcac232_p0_provenance.jsonl",
+     "sha256": "8215c6799cc77d66504affee94400594149cd468a4ef70280020546ba5ec8c10",
+     "line": "{\"at_transition\":95,\"disposition\":\"RECOVERABLE_NO_ACTION\",\"effective\":null,\"event\":\"OUTCOME\",\"event_hash\":\"686bc029cce5772a1f8f88dfc368fab84cbd6f5756755fed7d9743a3d453332d\",\"event_id\":\"PV-e728a7eeec21d8a4\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G4.2-LEVER-ORBITS\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"52376a0fe04a551df21ddcf88d9a0af9af5913844549386bc32f4f2bb50505f0\",\"reason\":{\"code\":\"CONTRACT_REPAIR_EXHAUSTED\",\"text\":\"CONTRACT_REPAIR_EXHAUSTED\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G4.2-LEVER-ORBITS:E0010:ORBIT\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"dc22-fdcac232\",\"run_stem\":\"dc22-fdcac232_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":384,\"submitted\":{\"commit_turn\":true,\"owned_because\":\"the NAV run of E0010 is confirmed: explaining it is Duck's\",\"refusal_event_id\":\"PV-94d037a789410afd\"}}"
+    },
+    {
+     "source": "artifacts/dc22-fdcac232_p0_provenance.jsonl",
+     "sha256": "ecd7bf5d9b24b4e85fe9a00d8dcb1131c97dcd9b1daeb4cc7ec6b77a744b22b4",
+     "line": "{\"at_transition\":95,\"disposition\":\"CLOSED_UNRESOLVED\",\"effective\":null,\"event\":\"CLOSE\",\"event_hash\":\"4e45a8d9323102d2d4a32b1be28eed8038db8592f5e3fa4ff85fbe200b3a4d62\",\"event_id\":\"PV-4f995e6dd75a6f8e\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G4.2-LEVER-ORBITS\",\"level\":1,\"life\":1,\"operation\":\"GATE\",\"previous_event_hash\":\"686bc029cce5772a1f8f88dfc368fab84cbd6f5756755fed7d9743a3d453332d\",\"reason\":{\"code\":\"HARD_BUDGET_SPENT\",\"text\":\"CHAPTER E0010 closes unresolved: HARD_BUDGET_SPENT\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G4.2-LEVER-ORBITS:E0010:ORBIT\",\"source_event\":null,\"subject\":\"E0010\"},\"run\":{\"game_id\":\"dc22-fdcac232\",\"run_stem\":\"dc22-fdcac232_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":385,\"submitted\":{\"budget\":2,\"cascaded\":[],\"class\":\"HARD\",\"history\":[\"PV-39384ec90e7a7da7\",\"PV-e728a7eeec21d8a4\"],\"scope\":\"CHAPTER\"}}"
+    },
+    {
+     "source": "artifacts/dc22-fdcac232_p0_provenance.jsonl",
+     "sha256": "85e1b20648fa1870bfb9eb9579723a71e8c186e48e8be43d78e8d349293ec2a5",
+     "line": "{\"at_transition\":95,\"disposition\":\"CLOSED_UNRESOLVED\",\"effective\":null,\"event\":\"RECOVERY\",\"event_hash\":\"4077286e5ce123bd456742496da79fef5358c4302147e3b0ae0403e7b378cd34\",\"event_id\":\"PV-81fd7ea567b50d7c\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G4.2-LEVER-ORBITS\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"4e45a8d9323102d2d4a32b1be28eed8038db8592f5e3fa4ff85fbe200b3a4d62\",\"reason\":{\"code\":\"HARD_BUDGET_SPENT\",\"text\":\"CLOSED_UNRESOLVED after CONTRACT_REPAIR_EXHAUSTED\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G4.2-LEVER-ORBITS:E0010:ORBIT\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"dc22-fdcac232\",\"run_stem\":\"dc22-fdcac232_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":386,\"submitted\":{\"resulting_event_id\":\"PV-4f995e6dd75a6f8e\",\"turn_event_id\":\"PV-e728a7eeec21d8a4\"}}"
+    },
+    {
+     "source": "artifacts/dc22-fdcac232_p0_provenance.jsonl",
+     "sha256": "142cfb16a52fa6a488ecadc020f54b486856cc33edae20e5745f499e571b7cdc",
+     "line": "{\"at_transition\":95,\"disposition\":\"ADMITTED\",\"effective\":null,\"event\":\"ADMISSION\",\"event_hash\":\"6fcbfdc24a505f98c6cdfa89d3cef67368d7576c76ceace47a6e040d8d11f3b6\",\"event_id\":\"PV-809edd87fc6e2284\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G4.2-LEVER-ORBITS\",\"level\":1,\"life\":1,\"operation\":\"PROBE\",\"previous_event_hash\":\"4077286e5ce123bd456742496da79fef5358c4302147e3b0ae0403e7b378cd34\",\"reason\":null,\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":\"G4.2-LEVER-ORBITS:GUIDED:14\",\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"dc22-fdcac232\",\"run_stem\":\"dc22-fdcac232_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":387,\"submitted\":{\"actions\":[{\"action\":\"ACTION6\",\"col\":21,\"row\":22}],\"decision\":{\"intent\":\"First press of E0011 to begin orbit study\",\"probe_token\":\"CAPABILITY:G4.2-LEVER-ORBITS:GUIDED:14:R19\"}}}"
+    },
+    {
+     "source": "artifacts/dc22-fdcac232_p0_provenance.jsonl",
+     "sha256": "ccea12f38c7828cd8caa07aeab45f794c525f0ab677a2e44bcf604b97722be02",
+     "line": "{\"at_transition\":95,\"disposition\":\"EXECUTED\",\"effective\":null,\"event\":\"EXECUTION\",\"event_hash\":\"abc82a8a29a4b8b02c481c36683ff71ba424394e9e008aa38a28ea7425843baf\",\"event_id\":\"PV-1ab47098cae48ff6\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G4.2-LEVER-ORBITS\",\"level\":1,\"life\":1,\"operation\":\"PROBE\",\"previous_event_hash\":\"6fcbfdc24a505f98c6cdfa89d3cef67368d7576c76ceace47a6e040d8d11f3b6\",\"reason\":null,\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":\"PV-809edd87fc6e2284\",\"answer_id\":null,\"evidence_id\":\"E-d7d9c2148faedc83\",\"executed_transition\":96,\"note_ids\":null,\"probe_id\":\"G4.2-LEVER-ORBITS:GUIDED:14\",\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"dc22-fdcac232\",\"run_stem\":\"dc22-fdcac232_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":388,\"submitted\":null}"
+    }
+   ],
+   "ledger": [
+    {
+     "source": "artifacts/dc22-fdcac232_p0_turn_ledger.jsonl",
+     "sha256": "6b23dc4c6d4027372778cdf9cf988b8f95f75ecf92db10cd823cda1f0d7c792b",
+     "line": "{\"action_num\": 95, \"analysis_step\": 161, \"budget_exhausted\": true, \"card_chars\": 4827, \"commit_turn\": true, \"executor\": \"DUCK\", \"failure_class\": \"HARD\", \"gate_after\": \"G4.2-LEVER-ORBITS\", \"gate_before\": \"G4.2-LEVER-ORBITS\", \"generated_tokens\": 1693, \"next_executor\": \"CONTROLLER\", \"outcome\": \"contract_repair_loop\", \"owned_because\": \"the NAV run of E0010 is confirmed: explaining it is Duck's\", \"prompt_tokens_max\": 10055, \"question_id\": \"Q:L1:G4.2-LEVER-ORBITS:E0010:ORBIT\", \"recall_queries\": [], \"recovery_count\": 2, \"recovery_event_id\": \"PV-e728a7eeec21d8a4\", \"recovery_reason\": \"CONTRACT_REPAIR_EXHAUSTED\", \"request_count\": 1, \"request_timeouts\": [59.999], \"requests\": [{\"generated_tokens\": 1693, \"prompt_tokens\": 10055}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 1248, \"gate_card\": 0, \"prompt_body\": 3579}, \"step_executed\": false, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"RECOVERABLE_NO_ACTION\", \"wall_seconds\": 55.209}"
+    },
+    {
+     "source": "artifacts/dc22-fdcac232_p0_turn_ledger.jsonl",
+     "sha256": "587141e846ccf4ce21e458a50ecdc35963c1ef6b13f46457ec6bdff18bced46f",
+     "line": "{\"action_num\": 95, \"analysis_step\": 162, \"budget_exhausted\": false, \"card_chars\": 13930, \"commit_turn\": false, \"executor\": \"DUCK\", \"failure_class\": null, \"gate_after\": \"G4.2-LEVER-ORBITS\", \"gate_before\": \"G4.2-LEVER-ORBITS\", \"generated_tokens\": 321, \"next_executor\": null, \"outcome\": \"step\", \"owned_because\": \"no evidence-bounded route to E0011\", \"prompt_tokens_max\": 16195, \"question_id\": \"Q:L1:G4.2-LEVER-ORBITS:E0011:ORBIT\", \"recall_queries\": [], \"recovery_count\": 0, \"recovery_event_id\": null, \"recovery_reason\": \"\", \"request_count\": 1, \"request_timeouts\": [59.999], \"requests\": [{\"generated_tokens\": 321, \"prompt_tokens\": 16195}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 194, \"gate_card\": 10157, \"prompt_body\": 3579}, \"step_executed\": true, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"ACTION_EXECUTED\", \"wall_seconds\": 12.135}"
+    }
+   ]
+  },
+  "ka59": {
+   "pattern": "ka59",
+   "finished_note": "controlled_stop: contract_repair_loop: Duck inspected or acted instead of correcting the rejected gate answer.",
+   "journal": [
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_provenance.jsonl",
+     "sha256": "976e7e35ce9bdceb5a1c1f4e1ce2349c61101ce0b7f20b4dc1f1a372a5a9f1ba",
+     "line": "{\"at_transition\":29,\"disposition\":\"RECOVERABLE_NO_ACTION\",\"effective\":null,\"event\":\"OUTCOME\",\"event_hash\":\"da59e980148948e3bb3a45a9cb675c63e8f8a0c9b742fe58b37f3a223c0397b6\",\"event_id\":\"PV-9676923212eb41f8\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"4c6b162922aebcd9087a779babe440a03e6aa4b4105be92d32c10c55e2bb0dc2\",\"reason\":{\"code\":\"CONTRACT_REPAIR_EXHAUSTED\",\"text\":\"CONTRACT_REPAIR_EXHAUSTED\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"ka59-38d34dbb\",\"run_stem\":\"ka59-38d34dbb_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":85,\"submitted\":{\"commit_turn\":true,\"owned_because\":\"the G2 trigger record is IRREGULAR: the discriminating prediction is Duck's\",\"refusal_event_id\":\"PV-d34b8b529c146f76\"}}"
+    },
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_provenance.jsonl",
+     "sha256": "da0dc238b258fee6374b42812fecb220db22d8972f40512dddf9a4e97f3e79b4",
+     "line": "{\"at_transition\":29,\"disposition\":\"CLOSED_UNRESOLVED\",\"effective\":null,\"event\":\"CLOSE\",\"event_hash\":\"fc7fad218bac2f5ea054944f13b3653b25f265b85975b808c5de24587bded70e\",\"event_id\":\"PV-bf1ec33b11cbdbcf\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"GATE\",\"previous_event_hash\":\"da59e980148948e3bb3a45a9cb675c63e8f8a0c9b742fe58b37f3a223c0397b6\",\"reason\":{\"code\":\"HARD_BUDGET_SPENT\",\"text\":\"GATE G2-COUNTER closes unresolved: HARD_BUDGET_SPENT\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"ka59-38d34dbb\",\"run_stem\":\"ka59-38d34dbb_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":86,\"submitted\":{\"budget\":2,\"cascaded\":[],\"class\":\"HARD\",\"history\":[\"PV-dff876dd7d155182\",\"PV-9676923212eb41f8\"],\"scope\":\"GATE\"}}"
+    },
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_provenance.jsonl",
+     "sha256": "8451c16dcf25ffc6874d1da7ad6bc0b94a3c75b247c81200c7176a491ae1c83e",
+     "line": "{\"at_transition\":29,\"disposition\":\"CLOSED_UNRESOLVED\",\"effective\":null,\"event\":\"RECOVERY\",\"event_hash\":\"4729b3e95c4ccf4609337886238699f834540f80a54b32ab9abf8f9ec69c0ac4\",\"event_id\":\"PV-d8870b981392f810\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"fc7fad218bac2f5ea054944f13b3653b25f265b85975b808c5de24587bded70e\",\"reason\":{\"code\":\"HARD_BUDGET_SPENT\",\"text\":\"CLOSED_UNRESOLVED after CONTRACT_REPAIR_EXHAUSTED\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"ka59-38d34dbb\",\"run_stem\":\"ka59-38d34dbb_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":87,\"submitted\":{\"resulting_event_id\":\"PV-bf1ec33b11cbdbcf\",\"turn_event_id\":\"PV-9676923212eb41f8\"}}"
+    },
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_provenance.jsonl",
+     "sha256": "8cf42be66898afe783b9b2e03cb8b0a830fdfafb47c8c0ab3231428fbb8b7b46",
+     "line": "{\"at_transition\":29,\"disposition\":\"REFUSED\",\"effective\":{\"answer_id\":\"G2-COUNTER-EXPLANATION-1\",\"bookkeeping_reason\":\"Every action type (ACTION1-ACTION4, ACTION6 at arbitrary locations) produces the identical +1 W/-1 c rewrite on row 63, regardless of where the action targets. This invariant response to structurally different interventions indicates a global action counter rather than a targeted spatial effect.\",\"candidate_id\":\"CERTIFIED: the controller fills this field\",\"competing_models\":[\"Each action carries a hidden weight that always sums to exactly 1 cell per invocation, rather than a uniform +1 rule.\"],\"conditions\":[],\"evidence_refs\":\"CERTIFIED: the controller fills this field\",\"falsifier\":\"An action that changes the counter by more or fewer than 1 cell, or that does not change it despite being a valid action (outside of known object-interaction exceptions).\",\"limitations\":[\"The consequence at source minimum/replacement maximum (c=0, W=64) is unobserved.\"],\"mechanism\":\"Row 63 is a 64-cell horizontal bar initially all c. Each valid action converts the leftmost remaining c cell to W, progressing left-to-right at exactly 1 cell per action. The total (c+W) remains 64 throughout. One exception (T23) produced no counter tick but instead removed a B pixel, suggesting that clicking on certain objects can override the counter.\",\"novel_prediction\":{\"action\":{\"action\":\"ACTION1\"},\"because\":\"The counter has rewritten 19 of 64 cells. The next action will continue left-to-right progression, converting cell [63, 45] from c to W.\",\"expected_parameters\":{\"amount\":1,\"rewrite\":\"c:45->44, W:19->20\"},\"novelty\":\"This is a prospective transition from the current state (step 29, c=45, W=19) to a new state not yet witnessed.\",\"predicate\":\"COUNTER_REWRITE\",\"scope\":\"CERTIFIED: the controller fills this field\"},\"tracked_variable\":\"Total number of valid actions taken on this level, displayed as a left-to-right fill of row 63 where each action converts one c (charcoal) cell to W (white).\",\"trigger\":\"IRREGULAR\",\"trigger_options\":{\"record\":{\"admissible_claims\":[\"IRREGULAR\"],\"class\":\"IRREGULAR\",\"effective_transitions_with_tick\":0,\"effective_transitions_without_tick\":0,\"null_transitions_with_tick\":2,\"null_transitions_without_tick\":1,\"transition_count\":3},\"rule\":\"IRREGULAR: the counter ticks on most actions but not all; T23 (ACTION6 at 31,28) produced no counter tick but removed a B pixel instead.\"}},\"event\":\"ADMISSION\",\"event_hash\":\"c7b30c43f4ce60c56d3430a8727b6991a4e83d45a90c4938f7ce4139232c4b6d\",\"event_id\":\"PV-8ac2d4d57a773eac\",\"executor\":\"DUCK\",\"field_sources\":{\"answer_id\":\"SUBMITTER\",\"bookkeeping_reason\":\"SUBMITTER\",\"candidate_id\":\"SUBMITTER\",\"competing_models\":\"SUBMITTER\",\"conditions\":\"SUBMITTER\",\"evidence_refs\":\"CONTROLLER_FILLED\",\"falsifier\":\"SUBMITTER\",\"limitations\":\"SUBMITTER\",\"mechanism\":\"SUBMITTER\",\"novel_prediction\":\"SUBMITTER\",\"tracked_variable\":\"SUBMITTER\",\"trigger\":\"SUBMITTER\",\"trigger_options\":\"SUBMITTER\"},\"gate_id\":\"G3-LEVERS\",\"level\":1,\"life\":1,\"operation\":\"ANSWER\",\"previous_event_hash\":\"55732ba7f9dc95d88b92bfddfa0cb6d6b34294eeb0f6a4bfa6e33f17754a3d7b\",\"reason\":{\"code\":\"GATE_CONTRACT\",\"text\":\"G3 dossier answers require target_member_id.\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":\"G2-COUNTER-EXPLANATION-1\",\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"ka59-38d34dbb\",\"run_stem\":\"ka59-38d34dbb_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":89,\"submitted\":{\"answer_id\":\"G2-COUNTER-EXPLANATION-1\",\"bookkeeping_reason\":\"Every action type (ACTION1-ACTION4, ACTION6 at arbitrary locations) produces the identical +1 W/-1 c rewrite on row 63, regardless of where the action targets. This invariant response to structurally different interventions indicates a global action counter rather than a targeted spatial effect.\",\"candidate_id\":\"CERTIFIED: the controller fills this field\",\"competing_models\":[\"Each action carries a hidden weight that always sums to exactly 1 cell per invocation, rather than a uniform +1 rule.\"],\"conditions\":[],\"evidence_refs\":\"CERTIFIED: the controller fills this field\",\"falsifier\":\"An action that changes the counter by more or fewer than 1 cell, or that does not change it despite being a valid action (outside of known object-interaction exceptions).\",\"limitations\":[\"The consequence at source minimum/replacement maximum (c=0, W=64) is unobserved.\"],\"mechanism\":\"Row 63 is a 64-cell horizontal bar initially all c. Each valid action converts the leftmost remaining c cell to W, progressing left-to-right at exactly 1 cell per action. The total (c+W) remains 64 throughout. One exception (T23) produced no counter tick but instead removed a B pixel, suggesting that clicking on certain objects can override the counter.\",\"novel_prediction\":{\"action\":{\"action\":\"ACTION1\"},\"because\":\"The counter has rewritten 19 of 64 cells. The next action will continue left-to-right progression, converting cell [63, 45] from c to W.\",\"expected_parameters\":{\"amount\":1,\"rewrite\":\"c:45->44, W:19->20\"},\"novelty\":\"This is a prospective transition from the current state (step 29, c=45, W=19) to a new state not yet witnessed.\",\"predicate\":\"COUNTER_REWRITE\",\"scope\":\"CERTIFIED: the controller fills this field\"},\"tracked_variable\":\"Total number of valid actions taken on this level, displayed as a left-to-right fill of row 63 where each action converts one c (charcoal) cell to W (white).\",\"trigger\":\"IRREGULAR\",\"trigger_options\":{\"record\":{\"admissible_claims\":[\"IRREGULAR\"],\"class\":\"IRREGULAR\",\"effective_transitions_with_tick\":0,\"effective_transitions_without_tick\":0,\"null_transitions_with_tick\":2,\"null_transitions_without_tick\":1,\"transition_count\":3},\"rule\":\"IRREGULAR: the counter ticks on most actions but not all; T23 (ACTION6 at 31,28) produced no counter tick but removed a B pixel instead.\"}}}"
+    },
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_provenance.jsonl",
+     "sha256": "86341b20d77e53a96e78f4d89dc434fd128c5f8feed7d7685ecf81cdabec5ab5",
+     "line": "{\"at_transition\":29,\"disposition\":\"ADMITTED\",\"effective\":null,\"event\":\"ADMISSION\",\"event_hash\":\"41f7e63e00d98656057d42826fa1401b1141115214a6857bd192a7193e051571\",\"event_id\":\"PV-d6a6e81d73038f0c\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G3-LEVERS\",\"level\":1,\"life\":1,\"operation\":\"PROBE\",\"previous_event_hash\":\"c7b30c43f4ce60c56d3430a8727b6991a4e83d45a90c4938f7ce4139232c4b6d\",\"reason\":null,\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":\"G3-LEVERS:CLICK:1\",\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"ka59-38d34dbb\",\"run_stem\":\"ka59-38d34dbb_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":90,\"submitted\":{\"actions\":[{\"action\":\"ACTION6\",\"col\":28,\"row\":31}],\"decision\":{\"probe_token\":\"CAPABILITY:G3-LEVERS:CLICK:1:R1\"}}}"
+    },
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_provenance.jsonl",
+     "sha256": "6a33032013b335715cbd4fc33fcf13eb8f9cb26efe2af895ce72935377f0c00e",
+     "line": "{\"at_transition\":29,\"disposition\":\"EXECUTED\",\"effective\":null,\"event\":\"EXECUTION\",\"event_hash\":\"65d66d5a7795edc7aa4bca8ea69ca10bb6440df75713ca61dd54ec7aa07015a1\",\"event_id\":\"PV-17b8f1205d9ecc75\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G3-LEVERS\",\"level\":1,\"life\":1,\"operation\":\"PROBE\",\"previous_event_hash\":\"41f7e63e00d98656057d42826fa1401b1141115214a6857bd192a7193e051571\",\"reason\":null,\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":\"PV-d6a6e81d73038f0c\",\"answer_id\":null,\"evidence_id\":\"E-f163a623563cc37f\",\"executed_transition\":30,\"note_ids\":null,\"probe_id\":\"G3-LEVERS:CLICK:1\",\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"ka59-38d34dbb\",\"run_stem\":\"ka59-38d34dbb_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":91,\"submitted\":null}"
+    }
+   ],
+   "ledger": [
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_turn_ledger.jsonl",
+     "sha256": "a7256f4bdbb44e0e9447f05d27f41b9397c11a95a84f5b3be214509d65b68e4e",
+     "line": "{\"action_num\": 29, \"analysis_step\": 39, \"budget_exhausted\": true, \"card_chars\": 4967, \"commit_turn\": true, \"executor\": \"DUCK\", \"failure_class\": \"HARD\", \"gate_after\": \"G2-COUNTER\", \"gate_before\": \"G2-COUNTER\", \"generated_tokens\": 1101, \"next_executor\": \"CONTROLLER\", \"outcome\": \"contract_repair_loop\", \"owned_because\": \"the G2 trigger record is IRREGULAR: the discriminating prediction is Duck's\", \"prompt_tokens_max\": 10472, \"question_id\": \"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\", \"recall_queries\": [\"gate_answer\"], \"recovery_count\": 2, \"recovery_event_id\": \"PV-9676923212eb41f8\", \"recovery_reason\": \"CONTRACT_REPAIR_EXHAUSTED\", \"request_count\": 1, \"request_timeouts\": [59.999], \"requests\": [{\"generated_tokens\": 1101, \"prompt_tokens\": 10472}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 1599, \"gate_card\": 0, \"prompt_body\": 3368}, \"step_executed\": false, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"RECOVERABLE_NO_ACTION\", \"wall_seconds\": 36.166}"
+    },
+    {
+     "source": "artifacts/ka59-38d34dbb_p0_turn_ledger.jsonl",
+     "sha256": "a352422620c5a56f9add9a07ed45641df74167e5ab8ebe9dd2971064423e1a51",
+     "line": "{\"action_num\": 29, \"analysis_step\": 40, \"budget_exhausted\": false, \"card_chars\": 9789, \"commit_turn\": false, \"executor\": \"DUCK\", \"failure_class\": null, \"gate_after\": \"G3-LEVERS\", \"gate_before\": \"G3-LEVERS\", \"generated_tokens\": 944, \"next_executor\": null, \"outcome\": \"step\", \"owned_because\": \"G3 choice: several rows are eligible; choose one with virelai('next_probe', question_id=...), or the controller takes the coverage head\", \"prompt_tokens_max\": 16539, \"question_id\": \"Q:L1:G3-LEVERS:E0001:IS_LEVER\", \"recall_queries\": [\"gate_answer\"], \"recovery_count\": 0, \"recovery_event_id\": null, \"recovery_reason\": \"\", \"request_count\": 2, \"request_timeouts\": [59.988, 33.027], \"requests\": [{\"generated_tokens\": 773, \"prompt_tokens\": 15510}, {\"generated_tokens\": 171, \"prompt_tokens\": 16539}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 294, \"gate_card\": 6127, \"prompt_body\": 3368}, \"step_executed\": true, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"ACTION_EXECUTED\", \"wall_seconds\": 32.904}"
+    }
+   ]
+  },
+  "sc25": {
+   "pattern": "sc25",
+   "finished_note": "controlled_stop: contract_repair_loop: Duck inspected or acted instead of correcting the rejected gate answer.",
+   "journal": [],
+   "ledger": [
+    {
+     "source": "artifacts/sc25-635fd71a_p0_turn_ledger.jsonl",
+     "sha256": "873ecd0c64ffe1a11fafe53a7de26b35b7bac4aacec28a666144a4c3f68c5be1",
+     "line": "{\"action_num\": 75, \"analysis_step\": 123, \"budget_exhausted\": true, \"card_chars\": 3888, \"commit_turn\": true, \"executor\": \"DUCK\", \"failure_class\": \"HARD\", \"gate_after\": \"G4.2-LEVER-ORBITS\", \"gate_before\": \"G4.2-LEVER-ORBITS\", \"generated_tokens\": 1261, \"next_executor\": \"CONTROLLER\", \"outcome\": \"contract_repair_loop\", \"owned_because\": \"no evidence-bounded route to E0007\", \"prompt_tokens_max\": 12701, \"question_id\": \"Q:L1:G4.2-LEVER-ORBITS:E0007:ORBIT\", \"recall_queries\": [\"gate_answer\", \"gate_answer\", \"next_probe\"], \"recovery_count\": 2, \"recovery_event_id\": null, \"recovery_reason\": \"CONTRACT_REPAIR_EXHAUSTED\", \"request_count\": 3, \"request_timeouts\": [59.999, 33.753, 21.888], \"requests\": [{\"generated_tokens\": 775, \"prompt_tokens\": 10830}, {\"generated_tokens\": 342, \"prompt_tokens\": 11979}, {\"generated_tokens\": 144, \"prompt_tokens\": 12701}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 486, \"gate_card\": 0, \"prompt_body\": 3402}, \"step_executed\": false, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"RECOVERABLE_NO_ACTION\", \"wall_seconds\": 43.449}"
+    },
+    {
+     "source": "artifacts/sc25-635fd71a_p0_turn_ledger.jsonl",
+     "sha256": "3d299f2391e7e68bc567474d8cdfcda3ba0fa13b43536cd72c697e02b64158b9",
+     "line": "{\"action_num\": 75, \"analysis_step\": 124, \"budget_exhausted\": false, \"card_chars\": 13339, \"commit_turn\": false, \"executor\": \"DUCK\", \"failure_class\": \"HARD\", \"gate_after\": \"G4.2-LEVER-ORBITS\", \"gate_before\": \"G4.2-LEVER-ORBITS\", \"generated_tokens\": 491, \"next_executor\": \"CONTROLLER\", \"outcome\": \"contract_repair_loop\", \"owned_because\": \"no evidence-bounded route to E0008\", \"prompt_tokens_max\": 18413, \"question_id\": \"Q:L1:G4.2-LEVER-ORBITS:E0008:ORBIT\", \"recall_queries\": [], \"recovery_count\": 1, \"recovery_event_id\": null, \"recovery_reason\": \"CONTRACT_REPAIR_EXHAUSTED\", \"request_count\": 1, \"request_timeouts\": [59.999], \"requests\": [{\"generated_tokens\": 491, \"prompt_tokens\": 18413}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 194, \"gate_card\": 9743, \"prompt_body\": 3402}, \"step_executed\": false, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"RECOVERABLE_NO_ACTION\", \"wall_seconds\": 17.374}"
+    },
+    {
+     "source": "artifacts/sc25-635fd71a_p0_turn_ledger.jsonl",
+     "sha256": "36c0835acd19cac067e66ea16e3b1069e2a9c36a32b73317fc6ac7877f4e6015",
+     "line": "{\"action_num\": 75, \"analysis_step\": 125, \"budget_exhausted\": false, \"card_chars\": 13339, \"commit_turn\": false, \"executor\": \"DUCK\", \"failure_class\": null, \"gate_after\": \"G4.2-LEVER-ORBITS\", \"gate_before\": \"G4.2-LEVER-ORBITS\", \"generated_tokens\": 177, \"next_executor\": null, \"outcome\": \"step\", \"owned_because\": \"no evidence-bounded route to E0008\", \"prompt_tokens_max\": 23164, \"question_id\": \"Q:L1:G4.2-LEVER-ORBITS:E0008:ORBIT\", \"recall_queries\": [], \"recovery_count\": 0, \"recovery_event_id\": null, \"recovery_reason\": \"\", \"request_count\": 1, \"request_timeouts\": [59.991], \"requests\": [{\"generated_tokens\": 177, \"prompt_tokens\": 23164}], \"schema\": \"virelai-turn-ledger-v2\", \"section_chars\": {\"automatic_update\": 0, \"controller_focus\": 0, \"controller_handoff\": 194, \"gate_card\": 9743, \"prompt_body\": 3402}, \"step_executed\": true, \"turn_clock_expired\": false, \"turn_clock_seconds\": 60.0, \"turn_outcome\": \"ACTION_EXECUTED\", \"wall_seconds\": 7.325}"
+    }
+   ]
+  }
+ },
+ "d22": {
+  "g50t": {
+   "gate": "G2-COUNTER",
+   "journal": [
+    {
+     "source": "artifacts/g50t-5849a774_p0_provenance.jsonl",
+     "sha256": "df493a78a70cf580ee4672a202f9e058c889c3c4c2b9392385411fd304e019c5",
+     "line": "{\"at_transition\":13,\"disposition\":\"NO_LEGAL_MOVE\",\"effective\":null,\"event\":\"RECOVERY_CHECK\",\"event_hash\":\"221a88aadb13ee9b954366929ffc342ecb85566991743cc61ebe698a5059dbae\",\"event_id\":\"PV-b7ecf13118fb971d\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"GATE\",\"previous_event_hash\":\"a3e8b2e05ebccaae725764402eb5039fbb5dc2c653e9c61bb9c427bab2cd83ee\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"WAIT_FOR_REPRESENTATION_OR_NEW_ACTION offers no probe, answer or end\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"g50t-5849a774\",\"run_stem\":\"g50t-5849a774_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":46,\"submitted\":null}"
+    },
+    {
+     "source": "artifacts/g50t-5849a774_p0_provenance.jsonl",
+     "sha256": "54436831993dfb33aa5ed87e90d2d8671a4dc8c9a0254d6aac305b1da42e0f43",
+     "line": "{\"at_transition\":13,\"disposition\":\"RECOVERABLE_NO_ACTION\",\"effective\":null,\"event\":\"OUTCOME\",\"event_hash\":\"d3cdd12a4f843d9999cb549d420a13c0ca96c2ad26c4b0919a445aa5e3a7efc3\",\"event_id\":\"PV-8e85662e31d2e8e2\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"221a88aadb13ee9b954366929ffc342ecb85566991743cc61ebe698a5059dbae\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"NO_LEGAL_CONTROLLER_MOVE\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"g50t-5849a774\",\"run_stem\":\"g50t-5849a774_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":47,\"submitted\":{\"commit_turn\":false,\"owned_because\":\"G2 offers no active target or exact counter probe\",\"refusal_event_id\":\"PV-f8ae9e89b7096a98\"}}"
+    }
+   ],
+   "writer_failure": "JournalFault: SCHEMA_INVALID: audit v3: a D22 or D-2 close cites its recovery checks (rule 5)",
+   "provenance": [
+    "OPEN",
+    "INCOMPLETE"
+   ]
+  },
+  "re86": {
+   "gate": "G3-LEVERS",
+   "journal": [
+    {
+     "source": "artifacts/re86-8af5384d_p0_provenance.jsonl",
+     "sha256": "801af6ac686bf3dc20a4536210947861ad167d497093b628962b83b51b113923",
+     "line": "{\"at_transition\":12,\"disposition\":\"NO_LEGAL_MOVE\",\"effective\":null,\"event\":\"RECOVERY_CHECK\",\"event_hash\":\"e51616a2a9cf881fdca7e7e049172bc7b5bed040d67a798105f63fe538dab1eb\",\"event_id\":\"PV-722177767799b01a\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G3-LEVERS\",\"level\":1,\"life\":1,\"operation\":\"GATE\",\"previous_event_hash\":\"fb70c8624b9777e2e140f9b44aac56aaea52edd78a7ca8df54b72368c63ab491\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"WAIT_FOR_DISCRIMINATING_EVIDENCE offers no probe, answer or end\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"re86-8af5384d\",\"run_stem\":\"re86-8af5384d_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":175,\"submitted\":null}"
+    },
+    {
+     "source": "artifacts/re86-8af5384d_p0_provenance.jsonl",
+     "sha256": "12c7102e78f44080e7d18b989e7764d24d864c507ac225e15a9230769a982ed4",
+     "line": "{\"at_transition\":12,\"disposition\":\"RECOVERABLE_NO_ACTION\",\"effective\":null,\"event\":\"OUTCOME\",\"event_hash\":\"83c58d93f0aa0047add4ca817fae1bd9c88b8e3f34f478e348d8d59c0582d6e3\",\"event_id\":\"PV-ba425e082695bef2\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G3-LEVERS\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"e51616a2a9cf881fdca7e7e049172bc7b5bed040d67a798105f63fe538dab1eb\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"NO_LEGAL_CONTROLLER_MOVE\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G3-LEVERS:LEVEL-1:LEVER_INVENTORY\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"re86-8af5384d\",\"run_stem\":\"re86-8af5384d_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":176,\"submitted\":{\"commit_turn\":false,\"owned_because\":\"G3 NAV needs an answer or has no active target\",\"refusal_event_id\":\"PV-3c4e2e37458da987\"}}"
+    }
+   ],
+   "writer_failure": "JournalFault: SCHEMA_INVALID: audit v3: a D22 or D-2 close cites its recovery checks (rule 5)",
+   "provenance": [
+    "OPEN",
+    "INCOMPLETE"
+   ]
+  },
+  "sc25": {
+   "gate": "G2-COUNTER",
+   "journal": [
+    {
+     "source": "artifacts/sc25-635fd71a_p0_provenance.jsonl",
+     "sha256": "4df3a55e121c2aa406af8c745e8f5707881977b90dea7c2b810fec496187b916",
+     "line": "{\"at_transition\":31,\"disposition\":\"NO_LEGAL_MOVE\",\"effective\":null,\"event\":\"RECOVERY_CHECK\",\"event_hash\":\"7a98835fefeae85626860109b4035f0fcb15585060ba1046a8b43b5af546a71c\",\"event_id\":\"PV-a3846ca0b86f20ff\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"GATE\",\"previous_event_hash\":\"6976af5e1cb73eb18358035d00d591adf05b4527d2e9b80d19067e5e127dee29\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"WAIT_FOR_REPRESENTATION_OR_NEW_ACTION offers no probe, answer or end\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"sc25-635fd71a\",\"run_stem\":\"sc25-635fd71a_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":84,\"submitted\":null}"
+    },
+    {
+     "source": "artifacts/sc25-635fd71a_p0_provenance.jsonl",
+     "sha256": "a3b11d649b004e714598b65905733e0234b6fd39d13ee3c6b124c347ee452590",
+     "line": "{\"at_transition\":31,\"disposition\":\"RECOVERABLE_NO_ACTION\",\"effective\":null,\"event\":\"OUTCOME\",\"event_hash\":\"a92bf3bd5ec35c7b498b19b18d9c1d4ebd1a8eb52878a3c7535493d38b6cba7a\",\"event_id\":\"PV-84ac2e0d7976d2db\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"7a98835fefeae85626860109b4035f0fcb15585060ba1046a8b43b5af546a71c\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"NO_LEGAL_CONTROLLER_MOVE\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"sc25-635fd71a\",\"run_stem\":\"sc25-635fd71a_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":85,\"submitted\":{\"commit_turn\":false,\"owned_because\":\"the frozen G2 prediction was contradicted; G2 offers no active target or exact counter probe\",\"refusal_event_id\":\"PV-5e87a3e5b95b7092\"}}"
+    }
+   ],
+   "writer_failure": "JournalFault: SCHEMA_INVALID: audit v3: a D22 or D-2 close cites its recovery checks (rule 5)",
+   "provenance": [
+    "OPEN",
+    "INCOMPLETE"
+   ]
+  },
+  "wa30": {
+   "gate": "G2-COUNTER",
+   "journal": [
+    {
+     "source": "artifacts/wa30-ee6fef47_p0_provenance.jsonl",
+     "sha256": "132cef58e65f1a2f0c47b578877b3722b8fe9c77e3b55d04ec42c743d10c02a1",
+     "line": "{\"at_transition\":12,\"disposition\":\"NO_LEGAL_MOVE\",\"effective\":null,\"event\":\"RECOVERY_CHECK\",\"event_hash\":\"013672360436678a1c01f892953ce6c503ffee6d95305311d63fe512d3eec05b\",\"event_id\":\"PV-7ba40c25f8ab845f\",\"executor\":\"CONTROLLER\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"GATE\",\"previous_event_hash\":\"b3fff3e12a0ae928395e4d31c525df0d7a5820e293cf501cbabc664a3cebabbc\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"WAIT_FOR_REPRESENTATION_OR_NEW_ACTION offers no probe, answer or end\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":null,\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"wa30-ee6fef47\",\"run_stem\":\"wa30-ee6fef47_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":36,\"submitted\":null}"
+    },
+    {
+     "source": "artifacts/wa30-ee6fef47_p0_provenance.jsonl",
+     "sha256": "d08571edabcead4bfe3a6d6dc08e50b9ac4d5b4f136eb0f2ff8f7798dba7a490",
+     "line": "{\"at_transition\":12,\"disposition\":\"RECOVERABLE_NO_ACTION\",\"effective\":null,\"event\":\"OUTCOME\",\"event_hash\":\"be1243bf25ca6dcb81fd59a08d4f3f724c8d14b111d3b4e0eaf1f30a4505616e\",\"event_id\":\"PV-a81741879005fb6a\",\"executor\":\"DUCK\",\"field_sources\":null,\"gate_id\":\"G2-COUNTER\",\"level\":1,\"life\":1,\"operation\":\"TURN\",\"previous_event_hash\":\"013672360436678a1c01f892953ce6c503ffee6d95305311d63fe512d3eec05b\",\"reason\":{\"code\":\"NO_LEGAL_CONTROLLER_MOVE\",\"text\":\"NO_LEGAL_CONTROLLER_MOVE\"},\"record\":\"EVENT\",\"refs\":{\"admission_event_id\":null,\"answer_id\":null,\"evidence_id\":null,\"executed_transition\":null,\"note_ids\":null,\"probe_id\":null,\"question_id\":\"Q:L1:G2-COUNTER:LEVEL-1:COUNTER\",\"source_event\":null,\"subject\":null},\"run\":{\"game_id\":\"wa30-ee6fef47\",\"run_stem\":\"wa30-ee6fef47_p0\"},\"schema\":\"virelai-provenance-v3\",\"seq\":37,\"submitted\":{\"commit_turn\":false,\"owned_because\":\"G2 offers no active target or exact counter probe\",\"refusal_event_id\":\"PV-dfcd599d3810a822\"}}"
+    }
+   ],
+   "writer_failure": "JournalFault: SCHEMA_INVALID: audit v3: a D22 or D-2 close cites its recovery checks (rule 5)",
+   "provenance": [
+    "OPEN",
+    "INCOMPLETE"
+   ]
+  }
+ }
+}

@@ -149,6 +149,9 @@ tests = [
     "tests/test_r9_r24_g4_controller_first.py::test_d22_a_gate_with_no_legal_move_closes_unresolved_and_the_ladder_continues",
     "tests/test_tool_agent_rate_limit.py",
     "tests/test_wo_l2a_close.py",
+    # WO-RUNTIME-01A: the obligation, the D22 close and the strict v3 rules (the seven-world reproductions, ~55-90 s
+    # each, run in T2 only: one of them alone exceeds the T0 target)
+    "tests/test_runtime01a_rules.py",
 ]
 
 # ---- T1 ----------------------------------------------------------------------------------------------------

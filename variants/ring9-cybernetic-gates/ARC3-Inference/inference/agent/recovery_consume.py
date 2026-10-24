@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from inference.agent import provenance_capture
+from inference.agent import provenance_capture, repair_obligation
 
 PLAY_GATE, G0 = "PLAY-NORMAL", "G0-ACTION-METADATA"
 NO_LEGAL_MOVE_TURNS = 2  # Q2: D22 closes after two consecutive no-move turns
@@ -102,14 +102,41 @@ def _close(agent: Any, state_path: Any, machine: Any, token: Mapping[str, Any]) 
     code = ("DECLINED" if token.get("decline") else "NO_LEGAL_CONTROLLER_MOVE"
             if token.get("reason") == "NO_LEGAL_CONTROLLER_MOVE" else _CLOSE_REASON.get(str(token.get("class")), "HARD_BUDGET_SPENT"))
     cause = code if token.get("decline") or code == "NO_LEGAL_CONTROLLER_MOVE" else str(token.get("reason") or code)
-    closure = close_selected(machine, token.get("question_id"), code, list(token.get("history") or ()), cause)
+    history, kind = list(token.get("history") or ()), None if token.get("decline") else token.get("class")
+    if code == "NO_LEGAL_CONTROLLER_MOVE":  # WO-RUNTIME-01A: a D22 close cites its recovery checks (rule 5), classless
+        history, kind = _d22_checks(agent, state_path, machine), None
+        if history is None:
+            return  # the gate has a legal move after all: nothing is checked, nothing closes; ``resolve`` records
+    closure = close_selected(machine, token.get("question_id"), code, history, cause)
     if closure.status == "CLOSED":
-        close_id = _close_row(agent, state_path, machine, closure, code, token.get("question_id"),
-                              list(token.get("history") or ()), None if token.get("decline") else token.get("class"))
+        repair_obligation.discharge(agent)  # WO-RUNTIME-01A: a closed question owes no answer
+        close_id = _close_row(agent, state_path, machine, closure, code, token.get("question_id"), history, kind)
         _recovery(agent, state_path, machine, token, "CLOSED_UNRESOLVED", resulting=close_id, code=code)
     else:
         return  # nothing to close (already closed or gone): the ordinary turn decides, ``resolve`` records it
     agent._controller.pending = None
+
+
+def _d22_checks(agent: Any, state_path: Any, machine: Any) -> list | None:
+    """WO-RUNTIME-01A: the ``RECOVERY_CHECK`` rows a watchdog close cites: the session's pending no-move checks of this
+    gate, level and life; with none pending, one fresh check of the board now; ``None`` when a legal move exists (no
+    check is fabricated). The Duck ``OUTCOME`` is never cited: its ``RECOVERY`` names the close."""
+    session, where = agent._controller, _where(machine)
+    record = provenance_capture.journal(agent, state_path)
+    rows = record.chain.v3.rows if record is not None else {}
+    scope = (where["gate_id"], where["level"], where["life"])
+    pending = [item for item in getattr(session, "no_move", ()) or () if item in rows
+               and (rows[item]["gate_id"], rows[item]["level"], rows[item]["life"]) == scope]
+    session.no_move = []
+    if pending:
+        return pending
+    status = machine.legal_move_status()
+    if status.get("legal", True):
+        return None
+    check = _row(machine, "CONTROLLER", "GATE", "RECOVERY_CHECK", "NO_LEGAL_MOVE", "NO_LEGAL_CONTROLLER_MOVE",
+                 str(status.get("reason") or "no probe, no acceptable answer and no declared end"), question=None)
+    written = provenance_capture.audit(agent, state_path, machine, check)
+    return [] if written is None else [written["event_id"]]
 
 
 # ---- consumption ---------------------------------------------------------------------------------------------------
@@ -207,6 +234,7 @@ def _closed_note(agent: Any, state_path: Any, machine: Any, code: str, history: 
     gate, question = machine.gate_id, turn_recovery.selected_question(machine)
     closure = close_stuck_gate(machine, question, code, history)  # r2: the exact question, the gate's head, the gate
     if closure.status == "CLOSED":
+        repair_obligation.discharge(agent)  # WO-RUNTIME-01A: a closed question owes no answer
         _close_row(agent, state_path, machine, closure, code, question, history, None)
         return f"{gate}: {code}; {closure.scope.lower()} {closure.subject or closure.gate_id} closed CLOSED_UNRESOLVED; " \
                f"the ladder continues at {machine.gate_id}"
