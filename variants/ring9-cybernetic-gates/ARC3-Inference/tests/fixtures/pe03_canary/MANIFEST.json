@@ -1,0 +1,28 @@
+{
+ "models": {
+  "g50t-5849a774": {
+   "content_sha256": "50acc3beba11cefbeed59f0cb5f3e4ec6ccc1e7fbadbf77ec14a42c70a905bfc",
+   "file": "g50t-5849a774_world_model.json.gz",
+   "source_sha256": "f15bee5504f0ad511581734c81780f950d890c59125588478071d5054c2ce771"
+  },
+  "ka59-38d34dbb": {
+   "content_sha256": "86b71b6b19a2380cc9ed037d2bb53a7c2b3336fbb4512f8c38a2220b3aa2d9e3",
+   "file": "ka59-38d34dbb_world_model.json.gz",
+   "source_sha256": "885ad5e0011c0aa58afdfc31b2c2a272d37de7241db998cfc6bf2a274c1bfcec"
+  },
+  "vc33-5430563c": {
+   "content_sha256": "c1534c8d8f46d015612a041846cd3d8ae1450c95904cf5b6318cfbd57a72086c",
+   "file": "vc33-5430563c_world_model.json.gz",
+   "source_sha256": "f1dc3d4a752672933cde15ac53af2404ea75fe1a1ed704faf5b37f5551e9858f"
+  }
+ },
+ "note": "Sealed v11 world models from the Runtime-01 canary at 8b47c73 (runs/_cowork_xfer/runtime01/canary*), copied unchanged and gzipped (-n). Chosen by content: vc33 (3 levels, an observed clear, Duck answers admitted and refused, composite levers), ka59 (Duck answers refused), g50t (provenance OPEN / INCOMPLETE: measured, never refused).",
+ "recordings": {
+  "vc33-5430563c.sweep.golden.jsonl.gz": {
+   "source": "virelai-golden recordings/sweep-b/vc33-5430563c.sweep.seed0-0.golden.jsonl (2026-09, golden play, policy SWEEP)",
+   "source_sha256": "27b00ae8e252ea2347f60b90c50cf20c2c889a6de2ae362aa0f1185559dda513",
+   "use": "PE-03C: the key-authoring frame view; its level-1 entry frame equals the vc33 canary model's"
+  }
+ },
+ "schema": "pe03-canary-fixtures-v1"
+}

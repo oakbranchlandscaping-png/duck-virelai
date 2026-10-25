@@ -123,6 +123,13 @@ tests = [
     "tests/test_lever_experiments_r2.py::test_t2_09_the_writer_is_v9_and_the_frozen_v8_model_from_ef8289d_still_reads",
 ]
 
+[T0.paper-claims]
+tests = [  # WO-PE-03B/C/D: claim projection, key contract and mapping, the five-category grader (offline only)
+    "tests/test_pe03b_projection.py",
+    "tests/test_pe03c_keys.py",
+    "tests/test_pe03d_grader.py",
+]
+
 [T0.runtime-recovery]
 tests = [
     "tests/test_runtime01_turns.py",             # WO-RUNTIME-01: typed outcomes, refusals, the commit turn, the caps
@@ -210,6 +217,9 @@ tests = [
     "tests/test_provenance_capture.py",          # WO-PE-01: provenance capture
     "tests/test_world_model_v4_provenance.py",   # WO-PE-02: the journal absorbed into schema v4
     "tests/test_world_model_v5_product_content.py",  # WO-PE-03A: schema-v5 product content
+    "tests/test_pe03b_projection.py",            # WO-PE-03B: atomic claims from the sealed v11 model
+    "tests/test_pe03c_keys.py",                  # WO-PE-03C: the key contract, validator, mapping, frame view
+    "tests/test_pe03d_grader.py",                # WO-PE-03D: the five-category grader and its exits
     "tests/test_world_model_v6_dossiers.py",     # WO-G4-DOSSIER-A: schema-v6 lever dossiers, provenance facts
     "tests/test_world_model_v6_dossier_records.py",  # WO-G4-DOSSIER-A on the records: stops, submitter, links
     "tests/test_gated_python_bridge.py",         # Duck's gated tool paths
