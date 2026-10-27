@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If this research prototype informs your work, please cite the repository and release commit."
+title: "Virelai / Cybernetic Duck: an evidence-first semantic library for interactive agents"
+type: software
+authors:
+  - family-names: Kaskin
+    given-names: Stephen
+year: 2026
+license: MIT-0
+repository-code: "https://github.com/oakbranchlandscaping-png/duck-virelai"
+url: "https://github.com/oakbranchlandscaping-png/duck-virelai"
